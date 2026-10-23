@@ -104,7 +104,7 @@
 
   const RETRY_MS = 5000;
   const LOAD_TIMEOUT_MS = 15000;
-  const CAPTION_MS = 5000;
+  const CAPTION_FADE_MS = 500;
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
@@ -288,15 +288,26 @@
 
   function hideCaption() {
     clearTimeout(captionTimer);
+    captionTimer = null;
     captionEl.classList.remove("show");
   }
 
   function showCaption(photo) {
+    const text = state.settings.captions && photo.caption ? photo.caption : "";
+    const shown = captionEl.classList.contains("show");
+    if (shown && !captionTimer && captionEl.textContent === text) return;
     hideCaption();
-    if (!state.settings.captions || !photo.caption) return;
-    captionEl.textContent = photo.caption;
-    captionEl.classList.add("show");
-    captionTimer = setTimeout(hideCaption, CAPTION_MS);
+    if (!text) return;
+    if (!shown) {
+      captionEl.textContent = text;
+      captionEl.classList.add("show");
+      return;
+    }
+    captionTimer = setTimeout(function () {
+      captionTimer = null;
+      captionEl.textContent = text;
+      captionEl.classList.add("show");
+    }, CAPTION_FADE_MS);
   }
 
   function preload(token) {
