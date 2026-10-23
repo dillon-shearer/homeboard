@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="/static/admin.css">
 </head>
 <body>
+<div id="toast" class="toast" role="alert" hidden></div>
 <main>
 <header class="top">
 <h1>Home Board</h1>
@@ -71,6 +72,23 @@
 <a href="/docs">API docs</a>
 </footer>
 </main>
+<div id="sheet" class="sheet" hidden>
+<div id="sheet-backdrop" class="sheet-backdrop"></div>
+<div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Photo options">
+<div id="sheet-actions" class="sheet-list">
+<button type="button" id="sheet-edit">Edit caption</button>
+<button type="button" id="sheet-delete" class="danger">Delete</button>
+<button type="button" id="sheet-cancel">Cancel</button>
+</div>
+<div id="sheet-caption" class="sheet-list" hidden>
+<input id="caption-input" type="text" placeholder="Caption" aria-label="Caption" enterkeyhint="done">
+<div class="sheet-row">
+<button type="button" id="caption-cancel">Cancel</button>
+<button type="button" id="caption-save" class="primary">Save</button>
+</div>
+</div>
+</div>
+</div>
 <script src="/static/admin.js"></script>
 </body>
 </html>
