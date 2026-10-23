@@ -72,6 +72,7 @@ fi
 
 echo "== Installing packages"
 systemctl stop homeboard-api.service 2>/dev/null || true
+trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync
