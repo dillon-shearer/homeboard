@@ -54,7 +54,7 @@ def test_subscriber_receives_published_event():
 
 def test_events_stream_starts_with_hello(client):
     client.app.state.sse_limit = 0
-    with client.stream("GET", "/api/events") as r:
+    with client.stream("GET", "/api/events", headers={"Accept": "text/event-stream"}) as r:
         assert r.headers["content-type"].startswith("text/event-stream")
         assert r.headers["cache-control"] == "no-cache"
         assert r.headers["x-accel-buffering"] == "no"

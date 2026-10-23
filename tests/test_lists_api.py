@@ -135,7 +135,7 @@ def test_clear_done(client):
 def test_add_item_emits_lists_changed(client):
     lid = _list_id(client, "Publix")
     client.app.state.sse_limit = 1
-    with client.stream("GET", "/api/events") as r:
+    with client.stream("GET", "/api/events", headers={"Accept": "text/event-stream"}) as r:
         client.post(f"/api/lists/{lid}/items", json={"text": "Milk"})
         body = "".join(r.iter_text())
     assert "event: lists_changed" in body

@@ -1,6 +1,6 @@
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from app import settings
@@ -11,6 +11,8 @@ FITS = ("contain", "cover")
 LIST_KINDS = ("checklist", "notes")
 LIST_NAME_MAX = 60
 ITEM_TEXT_MAX = 200
+EVENT_TITLE_MAX = 120
+REPEATS = ("never", "weekly", "monthly", "yearly")
 _UNSET = object()
 
 
@@ -314,3 +316,69 @@ def clear_done(conn: sqlite3.Connection, list_id: int) -> int:
     with conn:
         cur = conn.execute("DELETE FROM list_items WHERE list_id = ? AND done = 1", (list_id,))
     return cur.rowcount
+
+
+def _check_date(value) -> str:
+    return date.fromisoformat(value).isoformat()
+
+
+def _check_time(value) -> str | None:
+    if value is None:
+        return None
+    return time.fromisoformat(value).isoformat(timespec="minutes")
+
+
+def _check_repeat(repeat) -> str:
+    if repeat not in REPEATS:
+        raise ValueError("repeat must be one of never, weekly, monthly, yearly")
+    return repeat
+
+
+def list_events(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM events ORDER BY date, time, id").fetchall()
+
+
+def get_event(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM events WHERE id = ?", (id,)).fetchone()
+
+
+def create_event(conn: sqlite3.Connection, title, day, at=None, repeat="never") -> sqlite3.Row:
+    values = (
+        _clean_text(title, EVENT_TITLE_MAX, "title"),
+        _check_date(day),
+        _check_time(at),
+        _check_repeat(repeat),
+        _now(),
+    )
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO events (title, date, time, repeat, created_at) VALUES (?, ?, ?, ?, ?)",
+            values,
+        )
+    return get_event(conn, cur.lastrowid)
+
+
+def update_event(conn: sqlite3.Connection, id: int, **changes) -> sqlite3.Row | None:
+    checks = {
+        "title": lambda v: _clean_text(v, EVENT_TITLE_MAX, "title"),
+        "date": _check_date,
+        "time": _check_time,
+        "repeat": _check_repeat,
+    }
+    unknown = set(changes) - set(checks)
+    if unknown:
+        raise ValueError(f"unknown event fields: {', '.join(sorted(unknown))}")
+    fields = {k: checks[k](v) for k, v in changes.items()}
+    if fields:
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        with conn:
+            conn.execute(f"UPDATE events SET {sets} WHERE id = ?", (*fields.values(), id))
+    return get_event(conn, id)
+
+
+def delete_event(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    row = get_event(conn, id)
+    if row is not None:
+        with conn:
+            conn.execute("DELETE FROM events WHERE id = ?", (id,))
+    return row

@@ -202,8 +202,11 @@ def test_tunnel_admin_does_not_count_as_display(client, monkeypatch):
     monkeypatch.setattr(events, "subscribe", spy)
     client.app.state.sse_limit = 0
     login(client, "letmein")
-    assert client.get("/api/events", headers=TUNNEL).status_code == 200
-    assert client.get("/api/events").status_code == 200
+    assert (
+        client.get("/api/events", headers={**TUNNEL, "Accept": "text/event-stream"}).status_code
+        == 200
+    )
+    assert client.get("/api/events", headers={"Accept": "text/event-stream"}).status_code == 200
     assert hosts[0] is None
     assert hosts[1] is not None
 
