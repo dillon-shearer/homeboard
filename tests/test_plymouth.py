@@ -84,14 +84,22 @@ def test_install_sets_up_the_boot_screen():
 
 def test_plymouth_quit_keeps_the_last_frame():
     lines = (DEPLOY / "plymouth" / "plymouth-quit.conf").read_text(encoding="utf-8").splitlines()
-    assert lines == [
-        "[Unit]",
-        "After=homeboard-api.service nginx.service",
-        "",
-        "[Service]",
-        "ExecStart=",
-        "ExecStart=-/usr/bin/plymouth quit --retain-splash",
-    ]
+    assert lines[:4] == ["[Unit]", "After=homeboard-api.service nginx.service", "", "[Service]"]
+    assert lines[5:] == ["ExecStart=", "ExecStart=-/usr/bin/plymouth quit --retain-splash"]
+    hold = lines[4]
+    assert hold.startswith("ExecStartPre=-/bin/sh -c '")
+    for needle in ["/run/plymouth/pid", "ps -o etimes=", "-lt 2 ]", "$$pid"]:
+        assert needle in hold
+
+
+def test_shutdown_splash_stays_up_two_seconds():
+    lines = (
+        (DEPLOY / "plymouth" / "plymouth-shutdown.conf").read_text(encoding="utf-8").splitlines()
+    )
+    assert lines == ["[Service]", "ExecStartPost=/bin/sleep 2"]
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert "for unit in plymouth-halt plymouth-poweroff plymouth-reboot; do" in text
+    assert '"/etc/systemd/system/$unit.service.d/homeboard.conf"' in text
 
 
 def test_kiosk_starts_after_plymouth_quits():

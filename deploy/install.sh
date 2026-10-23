@@ -153,6 +153,10 @@ install -d "$THEME_DIR"
 install -m 644 "$APP_DIR"/deploy/plymouth/homeboard/* "$THEME_DIR"/
 install -d /etc/systemd/system/plymouth-quit.service.d
 install -m 644 "$APP_DIR"/deploy/plymouth/plymouth-quit.conf /etc/systemd/system/plymouth-quit.service.d/homeboard.conf
+for unit in plymouth-halt plymouth-poweroff plymouth-reboot; do
+    install -d "/etc/systemd/system/$unit.service.d"
+    install -m 644 "$APP_DIR"/deploy/plymouth/plymouth-shutdown.conf "/etc/systemd/system/$unit.service.d/homeboard.conf"
+done
 plymouth-set-default-theme -R homeboard
 if [ -f "$CMDLINE_TXT" ]; then
     if [ ! -e "$CMDLINE_TXT.homeboard.bak" ]; then
