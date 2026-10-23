@@ -208,7 +208,7 @@ def test_photo_list_error_shows_and_try_again_reloads():
         const fixed = { error: $("grid-error").hidden, tiles: $("grid").querySelectorAll(".tile").length, retry: $("grid-retry").disabled };
         console.log(JSON.stringify({ failed: failed, busy: busy, fixed: fixed }));
         """,
-        setup='server.photos = { ok: false, status: 500, body: {} };',
+        setup="server.photos = { ok: false, status: 500, body: {} };",
     )
     assert r["failed"] == {"error": False, "empty": True, "retry": False}
     assert r["busy"] is True
