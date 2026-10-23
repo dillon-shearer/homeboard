@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>homeboard</title>
+<link rel="stylesheet" href="/static/display.css">
+</head>
+<body>
+<img id="layer-a" class="layer" alt=""{% if empty %} hidden{% endif %}>
+<img id="layer-b" class="layer" alt=""{% if empty %} hidden{% endif %}>
+{% if empty %}
+<div id="empty">
+<div class="name">homeboard</div>
+<div class="qr">{{ qr_svg | safe }}</div>
+<div class="url">{{ admin_url }}</div>
+{% if ip_url %}<div class="url ip">{{ ip_url }}</div>{% endif %}
+</div>
+{% endif %}
+<div id="caption"></div>
+<div id="clock"></div>
+<script src="/static/display.js"></script>
+</body>
+</html>
