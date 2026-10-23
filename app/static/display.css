@@ -77,11 +77,11 @@ html, body {
 
 #caption {
   position: fixed;
-  left: 2vh;
-  bottom: 2vh;
-  max-width: 70vw;
-  font-size: 3.5vh;
-  text-shadow: 0 0 0.8vh #000, 0 0 0.3vh #000;
+  left: 4vh;
+  bottom: 4vh;
+  max-width: 60vw;
+  font-size: 5vh;
+  text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   opacity: 0;
   transition: opacity 0.5s;
 }
@@ -92,10 +92,10 @@ html, body {
 
 #clock {
   position: fixed;
-  right: 2vh;
-  bottom: 2vh;
-  font-size: 3.5vh;
+  right: 4vh;
+  bottom: 4vh;
+  font-size: 5vh;
   font-weight: 600;
-  text-shadow: 0 0 0.8vh #000, 0 0 0.3vh #000;
+  text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   opacity: 0.85;
 }
