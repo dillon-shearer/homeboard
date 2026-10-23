@@ -11,9 +11,11 @@ from app import settings
 pillow_heif.register_heif_opener()
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-LONG_EDGE = settings.LONG_EDGE
+SCREEN_WIDTH = settings.SCREEN_WIDTH
+SCREEN_HEIGHT = settings.SCREEN_HEIGHT
 THUMB_EDGE = 400
 JPEG_QUALITY = 85
+FULL_JPEG_QUALITY = 92
 ALLOWED_FORMATS = {"JPEG", "PNG", "HEIF", "HEIC", "WEBP"}
 
 
@@ -47,8 +49,17 @@ def _fit(img: Image.Image, edge: int) -> Image.Image:
     return img.resize(size, Image.Resampling.LANCZOS)
 
 
-def _save(img: Image.Image, path: Path) -> None:
-    img.save(path, "JPEG", quality=JPEG_QUALITY, progressive=True, optimize=True)
+def _cover(img: Image.Image, width: int, height: int) -> Image.Image:
+    w, h = img.size
+    scale = max(width / w, height / h)
+    if scale >= 1:
+        return img
+    size = (max(1, round(w * scale)), max(1, round(h * scale)))
+    return img.resize(size, Image.Resampling.LANCZOS)
+
+
+def _save(img: Image.Image, path: Path, quality: int = JPEG_QUALITY) -> None:
+    img.save(path, "JPEG", quality=quality, progressive=True, optimize=True)
 
 
 def process_upload(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
@@ -62,12 +73,12 @@ def process_upload(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
     if img.format not in ALLOWED_FORMATS:
         raise ImageError("unsupported format")
     img = _to_rgb(ImageOps.exif_transpose(img))
-    full = _fit(img, LONG_EDGE)
+    full = _cover(img, SCREEN_WIDTH, SCREEN_HEIGHT)
     thumb = _fit(full, THUMB_EDGE)
     stem = uuid.uuid4().hex
     filename = f"{stem}.jpg"
     thumb_name = f"{stem}_t.jpg"
-    _save(full, Path(photos_dir) / filename)
+    _save(full, Path(photos_dir) / filename, FULL_JPEG_QUALITY)
     _save(thumb, Path(thumbs_dir) / thumb_name)
     return ProcessedImage(filename, thumb_name, full.width, full.height)
 
