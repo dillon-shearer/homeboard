@@ -25,6 +25,7 @@ class SettingsPatch(BaseModel):
     captions: bool | None = None
     channel: str | None = None
     channel_timeout_min: int | None = None
+    lists_screen_id: int | None = None
 
 
 class DisplayCurrent(BaseModel):
@@ -40,6 +41,7 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "captions": bool(row["captions"]),
         "channel": row["channel"],
         "channel_timeout_min": row["channel_timeout_min"],
+        "lists_screen_id": row["lists_screen_id"],
         "updated_at": row["updated_at"],
     }
 
@@ -64,6 +66,8 @@ def get_settings(conn: Conn):
 @router.put("/settings")
 def put_settings(body: SettingsPatch, conn: Conn):
     fields = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if "lists_screen_id" in body.model_fields_set:
+        fields["lists_screen_id"] = body.lists_screen_id
     try:
         row = db.update_settings(conn, **fields)
     except ValueError as e:
@@ -117,6 +121,7 @@ def status(request: Request, conn: Conn):
         "photo_count": len(db.list_photos(conn)),
         "current_photo_id": db.get_current_photo_id(conn),
         "channel": db.get_settings(conn)["channel"],
+        "lists_screen_id": db.get_settings(conn)["lists_screen_id"],
         "hostname": hostname,
         "ip": lan_ip(),
         "disk_free_bytes": shutil.disk_usage(request.app.state.photos_dir).free,

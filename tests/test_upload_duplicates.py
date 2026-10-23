@@ -83,7 +83,7 @@ def test_migration_0003_on_existing_database(tmp_path):
             " VALUES ('old.jpg', 'old_t.jpg', 10, 800, 600, '2026-01-01T00:00:00+00:00')"
         )
         conn.commit()
-        assert db.migrate(conn) == 6
+        assert db.migrate(conn) == 7
         row = conn.execute("SELECT * FROM photos").fetchone()
         assert row["filename"] == "old.jpg"
         assert row["source_sha256"] is None

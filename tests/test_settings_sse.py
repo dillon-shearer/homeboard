@@ -28,6 +28,7 @@ def test_put_interval_persists(client):
         "captions",
         "channel",
         "channel_timeout_min",
+        "lists_screen_id",
         "updated_at",
     }
 
@@ -73,13 +74,14 @@ def test_events_stream_starts_with_hello(client):
     assert events.subscribers == set()
 
 
-def test_status_has_eight_keys(client):
+def test_status_has_nine_keys(client):
     body = client.get("/api/status").json()
     assert set(body) == {
         "display_connected",
         "photo_count",
         "current_photo_id",
         "channel",
+        "lists_screen_id",
         "hostname",
         "ip",
         "disk_free_bytes",

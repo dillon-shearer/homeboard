@@ -14,12 +14,15 @@ SETTINGS_FIELDS = (
     "captions",
     "channel",
     "channel_timeout_min",
+    "lists_screen_id",
 )
 FITS = ("contain", "cover")
 CHANNELS = ("photos", "calendar", "lists")
 CHANNEL_TIMEOUTS = (0, 2, 5, 10, 30)
 LIST_KINDS = ("checklist", "notes")
 LIST_NAME_MAX = 60
+SCREEN_NAME_MAX = 60
+DEFAULT_SCREEN_NAME = "Lists"
 ITEM_TEXT_MAX = 200
 EVENT_TITLE_MAX = 120
 REPEATS = ("never", "weekly", "monthly", "yearly")
@@ -169,6 +172,8 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
         v = fields["channel_timeout_min"]
         if isinstance(v, bool) or v not in CHANNEL_TIMEOUTS:
             raise ValueError("channel_timeout_min must be one of 0, 2, 5, 10, 30")
+    if "lists_screen_id" in fields:
+        fields["lists_screen_id"] = _check_screen_id(conn, fields["lists_screen_id"])
     for k in ("transition", "shuffle", "captions"):
         if k in fields:
             fields[k] = int(fields[k])
@@ -217,25 +222,33 @@ def get_list(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
 def create_list(conn: sqlite3.Connection, name, kind="checklist") -> sqlite3.Row:
     name = _clean_text(name, LIST_NAME_MAX, "name")
     kind = _check_kind(kind)
+    first = conn.execute("SELECT id FROM tv_screens ORDER BY sort_order, id LIMIT 1").fetchone()
     with conn:
         cur = conn.execute(
-            "INSERT INTO lists (name, kind, sort_order, created_at)"
-            " VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM lists), ?)",
-            (name, kind, _now()),
+            "INSERT INTO lists (name, kind, screen_id, sort_order, created_at)"
+            " VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM lists), ?)",
+            (name, kind, first["id"] if first else None, _now()),
         )
     return get_list(conn, cur.lastrowid)
 
 
 def update_list(
-    conn: sqlite3.Connection, id: int, name=_UNSET, kind=_UNSET, show_on_tv=_UNSET
+    conn: sqlite3.Connection,
+    id: int,
+    name=_UNSET,
+    kind=_UNSET,
+    show_on_tv=_UNSET,
+    screen_id=_UNSET,
 ) -> sqlite3.Row | None:
     fields = {}
     if name is not _UNSET:
         fields["name"] = _clean_text(name, LIST_NAME_MAX, "name")
     if kind is not _UNSET:
         fields["kind"] = _check_kind(kind)
-    if show_on_tv is not _UNSET:
-        fields["show_on_tv"] = int(show_on_tv)
+    if screen_id is not _UNSET:
+        fields["screen_id"] = _check_screen_id(conn, screen_id)
+    elif show_on_tv is not _UNSET:
+        fields["screen_id"] = _first_screen_id(conn) if show_on_tv else None
     if fields:
         sets = ", ".join(f"{k} = ?" for k in fields)
         with conn:
@@ -261,6 +274,81 @@ def reorder_lists(conn: sqlite3.Connection, ids) -> None:
     with conn:
         for n, lid in enumerate(ordered + rest, start=1):
             conn.execute("UPDATE lists SET sort_order = ? WHERE id = ?", (n * 10, lid))
+
+
+def _check_screen_id(conn: sqlite3.Connection, screen_id) -> int | None:
+    if screen_id is None:
+        return None
+    if get_screen(conn, screen_id) is None:
+        raise ValueError(f"unknown screen id: {screen_id}")
+    return screen_id
+
+
+def _first_screen_id(conn: sqlite3.Connection) -> int:
+    screens = list_screens(conn)
+    if screens:
+        return screens[0]["id"]
+    return create_screen(conn, DEFAULT_SCREEN_NAME)["id"]
+
+
+def list_screens(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM tv_screens ORDER BY sort_order, id").fetchall()
+
+
+def get_screen(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM tv_screens WHERE id = ?", (id,)).fetchone()
+
+
+def screen_list_ids(conn: sqlite3.Connection, id: int) -> list[int]:
+    return [
+        r["id"]
+        for r in conn.execute(
+            "SELECT id FROM lists WHERE screen_id = ? ORDER BY sort_order, id", (id,)
+        )
+    ]
+
+
+def create_screen(conn: sqlite3.Connection, name) -> sqlite3.Row:
+    name = _clean_text(name, SCREEN_NAME_MAX, "name")
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO tv_screens (name, sort_order, created_at)"
+            " VALUES (?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM tv_screens), ?)",
+            (name, _now()),
+        )
+    return get_screen(conn, cur.lastrowid)
+
+
+def update_screen(conn: sqlite3.Connection, id: int, name=_UNSET) -> sqlite3.Row | None:
+    if name is not _UNSET:
+        name = _clean_text(name, SCREEN_NAME_MAX, "name")
+        with conn:
+            conn.execute("UPDATE tv_screens SET name = ? WHERE id = ?", (name, id))
+    return get_screen(conn, id)
+
+
+def delete_screen(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    row = get_screen(conn, id)
+    if row is not None:
+        with conn:
+            conn.execute("UPDATE lists SET screen_id = NULL WHERE screen_id = ?", (id,))
+            conn.execute(
+                "UPDATE settings SET lists_screen_id = NULL WHERE lists_screen_id = ?", (id,)
+            )
+            conn.execute("DELETE FROM tv_screens WHERE id = ?", (id,))
+    return row
+
+
+def reorder_screens(conn: sqlite3.Connection, ids) -> None:
+    ordered = list(dict.fromkeys(int(i) for i in ids))
+    known = [r["id"] for r in list_screens(conn)]
+    unknown = [i for i in ordered if i not in known]
+    if unknown:
+        raise ValueError(f"unknown screen ids: {unknown}")
+    rest = [i for i in known if i not in set(ordered)]
+    with conn:
+        for n, sid in enumerate(ordered + rest, start=1):
+            conn.execute("UPDATE tv_screens SET sort_order = ? WHERE id = ?", (n * 10, sid))
 
 
 def list_items(conn: sqlite3.Connection, list_id: int) -> list[sqlite3.Row]:
