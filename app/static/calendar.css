@@ -18,25 +18,62 @@
 
 .month {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
 }
 
 .month .nav {
+  flex: none;
   min-width: 44px;
   padding: 4px 8px;
 }
 
 .month .today {
+  flex: none;
   min-width: 0;
+  padding: 4px 8px;
   margin-left: auto;
 }
 
-#month-select {
-  flex: 0 1 10em;
+#month-select, #year-select {
+  flex: 1 1 0;
   min-width: 0;
+  max-width: 10em;
+}
+
+#year-select {
+  min-width: 4.5em;
+}
+
+@media (max-width: 359px) {
+  .w95-body {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .w95-group:has(> .month) {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .month {
+    gap: 2px;
+  }
+
+  .month .today {
+    padding: 4px 2px;
+    font-size: 0.85em;
+  }
+
+  .month .w95-select {
+    padding-left: 2px;
+  }
+
+  #month-select, #year-select {
+    min-width: 4em;
+  }
 }
 
 .cal-head, .cal-grid {
