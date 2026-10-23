@@ -57,8 +57,13 @@ function el(id) {
   });
   return e;
 }
-const els = { "layer-a": el("layer-a"), "layer-b": el("layer-b"), caption: el("caption"), clock: el("clock") };
-globalThis.document = { getElementById: (id) => els[id] || null, body: { insertBefore() {} } };
+const els = {
+  "layer-a": el("layer-a"), "layer-b": el("layer-b"), caption: el("caption"), clock: el("clock"),
+  channel: el("channel"), swipe: el("swipe"),
+};
+globalThis.document = {
+  getElementById: (id) => els[id] || null, body: { insertBefore() {} }, addEventListener() {},
+};
 globalThis.window = globalThis;
 
 const server = {

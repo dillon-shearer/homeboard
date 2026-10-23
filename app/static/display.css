@@ -103,3 +103,19 @@ html, body {
   text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   opacity: 0.85;
 }
+
+#channel {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  background: #000;
+  z-index: 10;
+}
+
+#swipe {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+}

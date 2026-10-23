@@ -20,7 +20,16 @@ def test_put_interval_persists(client):
     assert events.last_event == "settings_changed"
     body = client.get("/api/settings").json()
     assert body["interval_s"] == 30
-    assert set(body) == {"interval_s", "transition", "fit", "shuffle", "captions", "updated_at"}
+    assert set(body) == {
+        "interval_s",
+        "transition",
+        "fit",
+        "shuffle",
+        "captions",
+        "channel",
+        "channel_timeout_min",
+        "updated_at",
+    }
 
 
 def test_put_interval_out_of_range_is_422(client):
@@ -64,12 +73,13 @@ def test_events_stream_starts_with_hello(client):
     assert events.subscribers == set()
 
 
-def test_status_has_seven_keys(client):
+def test_status_has_eight_keys(client):
     body = client.get("/api/status").json()
     assert set(body) == {
         "display_connected",
         "photo_count",
         "current_photo_id",
+        "channel",
         "hostname",
         "ip",
         "disk_free_bytes",

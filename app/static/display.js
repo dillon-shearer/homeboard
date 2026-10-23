@@ -1,8 +1,17 @@
 (function (root) {
   "use strict";
 
-  const DEFAULTS = { interval_s: 20, transition: true, fit: "contain", shuffle: false, captions: false };
+  const DEFAULTS = {
+    interval_s: 20,
+    transition: true,
+    fit: "contain",
+    shuffle: false,
+    captions: false,
+    channel: "photos",
+    channel_timeout_min: 5,
+  };
   const MAX_BACKOFF_S = 30;
+  const CHANNELS = ["photos", "calendar", "lists"];
 
   function applySettings(prev, incoming) {
     const base = Object.assign({}, DEFAULTS, prev || {});
@@ -13,7 +22,21 @@
     if ("fit" in s) out.fit = s.fit === "cover" ? "cover" : "contain";
     if ("shuffle" in s) out.shuffle = !!s.shuffle;
     if ("captions" in s) out.captions = !!s.captions;
+    if (CHANNELS.indexOf(s.channel) !== -1) out.channel = s.channel;
+    if (typeof s.channel_timeout_min === "number" && s.channel_timeout_min >= 0) {
+      out.channel_timeout_min = s.channel_timeout_min;
+    }
     return out;
+  }
+
+  function nextChannel(channel, step) {
+    const n = CHANNELS.length;
+    const i = Math.max(0, CHANNELS.indexOf(channel));
+    return CHANNELS[(((i + (step === undefined ? 1 : step)) % n) + n) % n];
+  }
+
+  function shouldReturn(now, last, timeoutMin, channel) {
+    return channel !== "photos" && timeoutMin > 0 && now - last > timeoutMin * 60000;
   }
 
   function shuffleIds(ids, avoidFirst, rand) {
@@ -96,6 +119,9 @@
     resumeOrder: resumeOrder,
     nextBackoff: nextBackoff,
     formatClock: formatClock,
+    CHANNELS: CHANNELS,
+    nextChannel: nextChannel,
+    shouldReturn: shouldReturn,
   };
 
   root.Slideshow = Slideshow;
@@ -105,11 +131,15 @@
   const RETRY_MS = 5000;
   const LOAD_TIMEOUT_MS = 15000;
   const CAPTION_FADE_MS = 500;
+  const IDLE_CHECK_MS = 15000;
+  const SWIPE_PX = 80;
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
   const captionEl = document.getElementById("caption");
   const clockEl = document.getElementById("clock");
+  const channelEl = document.getElementById("channel");
+  const swipeEl = document.getElementById("swipe");
 
   const state = {
     photos: [],
@@ -133,6 +163,8 @@
   };
   let captionTimer = null;
   let backoff = 1;
+  let lastActivity = Date.now();
+  let touchStart = null;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -165,6 +197,63 @@
       l.classList.toggle("instant", !state.settings.transition);
     });
     if (!state.settings.captions) hideCaption();
+    applyChannel();
+  }
+
+  function applyChannel() {
+    const channel = state.settings.channel;
+    if (channel === "photos") {
+      channelEl.hidden = true;
+      swipeEl.hidden = true;
+      if (channelEl.getAttribute("src") !== "about:blank") channelEl.src = "about:blank";
+      return;
+    }
+    const url = "/tv/" + channel;
+    if (channelEl.getAttribute("src") !== url) channelEl.src = url;
+    channelEl.hidden = false;
+    swipeEl.hidden = false;
+  }
+
+  function setChannel(channel) {
+    if (channel === state.settings.channel) return;
+    state.settings = applySettings(state.settings, { channel: channel });
+    applyChannel();
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: channel }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+    }).catch(function () {
+      loadSettings();
+    });
+  }
+
+  function markActivity() {
+    lastActivity = Date.now();
+  }
+
+  function onTouchStart(e) {
+    markActivity();
+    const t = e.changedTouches[0];
+    touchStart = t ? { x: t.clientX, y: t.clientY } : null;
+  }
+
+  function onTouchEnd(e) {
+    markActivity();
+    const t = e.changedTouches[0];
+    if (!touchStart || !t) return;
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) {
+      setChannel(nextChannel(state.settings.channel, dx < 0 ? 1 : -1));
+    }
+  }
+
+  function checkIdle() {
+    const s = state.settings;
+    if (shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, s.channel)) setChannel("photos");
   }
 
   function setSettings(data) {
@@ -429,8 +518,16 @@
       onSettingsChanged();
       onPhotosChanged();
     });
-    es.addEventListener("photos_changed", onPhotosChanged);
-    es.addEventListener("settings_changed", onSettingsChanged);
+    es.addEventListener("photos_changed", function () {
+      markActivity();
+      onPhotosChanged();
+    });
+    es.addEventListener("settings_changed", function () {
+      markActivity();
+      onSettingsChanged();
+    });
+    es.addEventListener("lists_changed", markActivity);
+    es.addEventListener("events_changed", markActivity);
     es.onerror = function () {
       es.close();
       setTimeout(connect, backoff * 1000);
@@ -447,6 +544,9 @@
   function start() {
     applyDom();
     updateClock();
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchend", onTouchEnd, { passive: true });
+    setInterval(checkIdle, IDLE_CHECK_MS);
     Promise.all([loadResume(), loadSettings()]).then(loadPhotos).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);
       connect();
