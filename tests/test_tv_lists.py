@@ -1,50 +1,24 @@
-import base64
 import json
 import re
-import shutil
-import socket
 import subprocess
-import threading
 import time
 from pathlib import Path
 
 import httpx
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
-from PIL import Image
-from websockets.sync.client import connect
 
 from app.main import create_app
+from tests.chrome import _Chrome, needs_chrome, needs_node, server  # noqa: F401
 
-STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
-TV_JS = STATIC / "tv_lists.js"
+APP = Path(__file__).resolve().parent.parent / "app"
+STATIC = APP / "static"
+SCREEN_JS = STATIC / "tv_screen.js"
 TV_CSS = STATIC / "tv.css"
-
-CHROME_PATHS = [
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-]
-
-
-def _chrome():
-    for name in ("google-chrome", "chromium", "chromium-browser", "chrome"):
-        found = shutil.which(name)
-        if found:
-            return found
-    for path in CHROME_PATHS:
-        if Path(path).exists():
-            return path
-    return None
-
-
-needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-needs_chrome = pytest.mark.skipif(_chrome() is None, reason="chrome not installed")
 
 
 def _node(body):
-    script = f"const T = require({json.dumps(str(TV_JS))});\n{body}"
+    script = f"const T = require({json.dumps(str(SCREEN_JS))});\n{body}"
     out = subprocess.run(
         ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
     )
@@ -57,38 +31,16 @@ def client(tmp_path):
         yield c
 
 
-def test_tv_lists_route_links_styles_through_static_url(client):
-    r = client.get("/tv/lists")
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("text/html")
-    for name in ("win95.css", "tv.css", "tv_lists.js"):
-        version = int((STATIC / name).stat().st_mtime)
-        url = f"/static/{name}?v={version}"
-        assert url in r.text, name
-        assert client.get(url).status_code == 200
-    assert "display.js" not in r.text
-
-
-def test_tv_lists_markup_has_ids_the_script_uses(client):
-    page = client.get("/tv/lists").text
-    assert 'class="w95-titlebar"' in page
-    assert '<span id="title" class="w95-title-text">Lists</span>' in page
-    js = TV_JS.read_text(encoding="utf-8")
-    ids = set(re.findall(r'getElementById\("([\w-]+)"\)', js))
-    assert {"cards", "clock", "list-count", "today", "title"} <= ids
-    for name in ids:
-        assert f'id="{name}"' in page, name
-
-
-def test_tv_lists_js_listens_for_changes():
-    js = TV_JS.read_text(encoding="utf-8")
-    assert 'addEventListener("lists_changed", load)' in js
-    assert 'addEventListener("settings_changed", load)' in js
-    assert '"/api/events"' in js
-    assert '"/api/lists"' in js
-    assert '"/api/screens"' in js
-    assert '"/api/settings"' in js
-    assert "MAX_ITEMS" not in js
+def test_old_tv_pages_are_gone(client):
+    assert client.get("/tv/lists").status_code == 404
+    assert client.get("/tv/calendar").status_code == 404
+    for path in (
+        APP / "templates" / "tv_lists.html",
+        APP / "templates" / "tv_calendar.html",
+        STATIC / "tv_lists.js",
+        STATIC / "tv_calendar.js",
+    ):
+        assert not path.exists(), path
 
 
 def test_tv_css_hides_cursor_and_uses_vh_fonts():
@@ -101,6 +53,15 @@ def test_tv_css_hides_cursor_and_uses_vh_fonts():
         assert size.strip().endswith("vh"), size
 
 
+def test_kiosk_swipe_layer_lets_taps_through():
+    css = (STATIC / "display.css").read_text(encoding="utf-8")
+    block = re.search(r"#swipe \{([^}]*)\}", css).group(1)
+    assert "pointer-events: none" in block
+    js = (STATIC / "display.js").read_text(encoding="utf-8")
+    assert "channelEl.onload = hookFrame" in js
+    assert "contentDocument" in js
+
+
 @needs_node
 def test_sort_items_puts_pinned_then_open_then_done_by_sort_order():
     result = _node(
@@ -111,271 +72,252 @@ def test_sort_items_puts_pinned_then_open_then_done_by_sort_order():
         "{text: 'pin', done: false, pinned: true, sort_order: 50},"
         "{text: 'open a', done: false, pinned: false, sort_order: 10},"
         "{text: 'done a', done: true, pinned: false, sort_order: 20}];"
-        "console.log(JSON.stringify({same: globalThis.TvLists === T, has: 'MAX_ITEMS' in T,"
-        " order: T.sortItems(items).map(i => i.text)}))"
-    )
-    assert result["same"] is True
-    assert result["has"] is False
-    assert result["order"] == ["pin", "open a", "open b", "done pin", "done a", "done b"]
-
-
-@needs_node
-def test_visible_lists_filters_by_screen_and_keeps_done_only_lists():
-    result = _node(
-        "const screens = [{id: 7, name: 'B', sort_order: 2}, {id: 3, name: 'A', sort_order: 1}];"
-        "const lists = ["
-        "{id: 1, name: 'Shop', screen_id: 3, items: ["
-        "{id: 1, text: 'milk', done: false, pinned: false, sort_order: 10},"
-        "{id: 2, text: 'eggs', done: true, pinned: false, sort_order: 5},"
-        "{id: 3, text: 'dog food', done: false, pinned: true, sort_order: 30}]},"
-        "{id: 2, name: 'Done', screen_id: 3, items: ["
-        "{id: 4, text: 'x', done: true, pinned: true, sort_order: 10}]},"
-        "{id: 3, name: 'Empty', screen_id: 3, items: []},"
-        "{id: 4, name: 'Other', screen_id: 7, items: ["
-        "{id: 5, text: 'y', done: false, pinned: false, sort_order: 10}]},"
-        "{id: 5, name: 'Hidden', screen_id: null, items: ["
-        "{id: 6, text: 'z', done: false, pinned: false, sort_order: 10}]}];"
-        "const f = out => out.map(l => [l.name, l.items.map(i => i.text)]);"
-        "console.log(JSON.stringify({first: f(T.visibleLists(lists, screens, null)),"
-        " seven: f(T.visibleLists(lists, screens, 7)),"
-        " none: f(T.visibleLists(lists, [], null)),"
-        " title: T.currentScreen(screens, null).name,"
+        "console.log(JSON.stringify({order: T.sortItems(items).map(i => i.text),"
         " more: [T.moreLabel(3, 2), T.moreLabel(1, 0)]}))"
     )
-    assert result["first"] == [["Shop", ["dog food", "milk", "eggs"]], ["Done", ["x"]]]
-    assert result["seven"] == [["Other", ["y"]]]
-    assert result["none"] == []
-    assert result["title"] == "A"
+    assert result["order"] == ["pin", "open a", "open b", "done pin", "done a", "done b"]
     assert result["more"] == ["+3 more, 2 done", "+1 more"]
 
 
 @needs_node
-def test_clock_and_date_format():
+def test_lists_helpers_pick_lists_per_size():
     result = _node(
-        "const d = new Date(2026, 9, 24, 14, 5);"
-        "console.log(JSON.stringify([T.formatClock(d), T.formatDate(d),"
-        " T.countLabel(1), T.countLabel(2)]))"
+        "const lists = ["
+        "{id: 1, name: 'Publix', tv_open: true, items: ["
+        "{text: 'a', done: false}, {text: 'b', done: true}, {text: 'c', done: false}]},"
+        "{id: 2, name: 'BJs', tv_open: false, items: []},"
+        "{id: 3, name: 'Chores', tv_open: true, items: [{text: 'x', done: false}]}];"
+        "const ids = out => out.map(l => l.id);"
+        "const w = (w, h, list_id) => ({w, h, list_id: list_id === undefined ? null : list_id});"
+        "console.log(JSON.stringify({"
+        " one: ids(T.shownLists(lists, w(1, 1, 2))),"
+        " oneGone: ids(T.shownLists(lists, w(1, 1, 9))),"
+        " oneNull: ids(T.shownLists(lists, w(1, 1))),"
+        " wide: ids(T.shownLists(lists, w(2, 1))),"
+        " tall: ids(T.shownLists(lists, w(1, 2))),"
+        " full: ids(T.shownLists(lists, w(2, 2))),"
+        " tabsFull: ids(T.tabLists(lists, w(2, 2))),"
+        " tabsWide: ids(T.tabLists(lists, w(2, 1))),"
+        " labels: lists.map(T.tabLabel),"
+        " split: [T.splitTracks(3), T.splitTracks(0)]}))"
     )
-    assert result == ["2:05 pm", "Saturday, October 24", "1 list", "2 lists"]
+    assert result["one"] == [2]
+    assert result["oneGone"] == [] and result["oneNull"] == []
+    assert result["wide"] == [1, 3] and result["tall"] == [1, 3]
+    assert result["full"] == [1, 3]
+    assert result["tabsFull"] == [2] and result["tabsWide"] == []
+    assert result["labels"] == ["Publix 2", "BJs 0", "Chores 1"]
+    assert result["split"] == ["repeat(3, minmax(0, 1fr))", "repeat(1, minmax(0, 1fr))"]
 
 
-def _free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+def _lists(base):
+    return {lst["name"]: lst for lst in httpx.get(f"{base}/api/lists").json()}
 
 
-@pytest.fixture
-def server(tmp_path):
-    port = _free_port()
-    config = uvicorn.Config(
-        create_app(tmp_path / "data"), host="127.0.0.1", port=port, log_level="error"
-    )
-    srv = uvicorn.Server(config)
-    thread = threading.Thread(target=srv.run, daemon=True)
-    thread.start()
-    base = f"http://127.0.0.1:{port}"
-    for _ in range(100):
-        if srv.started:
-            break
-        time.sleep(0.05)
-    yield base
-    srv.should_exit = True
-    thread.join(timeout=10)
+def _screens(base):
+    return {s["name"]: s for s in httpx.get(f"{base}/api/screens").json()}
 
 
-def _seed(base):
+def _seed_three(base):
     with httpx.Client(base_url=base) as c:
-        publix = c.post("/api/lists", json={"name": "Publix"}).json()
+        lists = _lists(base)
+        publix, bjs = lists["Publix"], lists["BJs"]
         for text in ("Paper towels", "Rotisserie chicken", "Olive oil"):
             c.post(f"/api/lists/{publix['id']}/items", json={"text": text})
         pin = c.post(f"/api/lists/{publix['id']}/items", json={"text": "Dog food"}).json()
         c.patch(f"/api/items/{pin['id']}", json={"pinned": True})
-        notes = c.post("/api/lists", json={"name": "Message board", "kind": "notes"}).json()
-        for text in ("Plumber comes Tuesday 9am", "Water the plants Thursday"):
-            c.post(f"/api/lists/{notes['id']}/items", json={"text": text})
-
-
-class _Chrome:
-    def __init__(self, profile, width, height):
-        self.proc = subprocess.Popen(
-            [
-                _chrome(),
-                "--headless=new",
-                "--disable-gpu",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--remote-debugging-port=0",
-                f"--user-data-dir={profile}",
-                f"--window-size={width},{height}",
-                "about:blank",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        port_file = Path(profile) / "DevToolsActivePort"
-        for _ in range(200):
-            if port_file.exists() and port_file.read_text().strip():
-                break
-            time.sleep(0.05)
-        port = port_file.read_text().split()[0]
-        pages = httpx.get(f"http://127.0.0.1:{port}/json/list").json()
-        url = next(p["webSocketDebuggerUrl"] for p in pages if p["type"] == "page")
-        self.ws = connect(url, max_size=None)
-        self.next_id = 0
-        self.send(
-            "Emulation.setDeviceMetricsOverride",
-            {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": False},
-        )
-
-    def send(self, method, params=None):
-        self.next_id += 1
-        self.ws.send(json.dumps({"id": self.next_id, "method": method, "params": params or {}}))
-        while True:
-            msg = json.loads(self.ws.recv(timeout=30))
-            if msg.get("id") == self.next_id:
-                return msg.get("result", {})
-
-    def eval(self, expr):
-        return self.send("Runtime.evaluate", {"expression": expr, "returnByValue": True})[
-            "result"
-        ].get("value")
-
-    def close(self):
-        self.ws.close()
-        self.proc.kill()
-        self.proc.wait(timeout=10)
-
-
-LAYOUT = """JSON.stringify({
-  cards: [...document.querySelectorAll('#cards .tv-card')].map(c => {
-    const r = c.getBoundingClientRect();
-    return {html: c.outerHTML, top: r.top, left: r.left, bottom: r.bottom};
-  }),
-  body: document.body.innerText,
-  count: document.getElementById('list-count').textContent,
-  scrollW: document.documentElement.scrollWidth,
-  scrollH: document.documentElement.scrollHeight,
-  w: innerWidth,
-  h: innerHeight,
-})"""
-
-
-@needs_chrome
-@pytest.mark.parametrize("width,height", [(1920, 1080), (1280, 800)])
-def test_headless_screenshot_shows_two_cards(server, tmp_path, width, height):
-    _seed(server)
-    chrome = _Chrome(tmp_path / "chrome", width, height)
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/tv/lists"})
-        layout = None
-        for _ in range(100):
-            layout = json.loads(chrome.eval(LAYOUT) or "null")
-            if layout and layout["cards"]:
-                break
-            time.sleep(0.05)
-        png = base64.b64decode(chrome.send("Page.captureScreenshot", {"format": "png"})["data"])
-    finally:
-        chrome.close()
-    shot = tmp_path / f"tv-lists-{width}x{height}.png"
-    shot.write_bytes(png)
-
-    cards = layout["cards"]
-    assert len(cards) == 2, layout
-    assert "Publix" in cards[0]["html"] and "Message board" in cards[1]["html"]
-    assert re.search(r'<ul><li class="pin">Dog food</li>', cards[0]["html"])
-    assert cards[0]["top"] == cards[1]["top"]
-    assert cards[0]["left"] < cards[1]["left"]
-    assert layout["count"] == "2 lists"
-    assert layout["scrollW"] <= layout["w"] and layout["scrollH"] <= layout["h"]
-    assert max(c["bottom"] for c in cards) < height
-
-    img = Image.open(shot).convert("RGB")
-    assert img.size == (width, height)
-    teal = (0, 128, 128)
-    for y in range(0, height, max(1, height // 50)):
-        assert img.getpixel((width - 2, y)) == teal, ("right edge", y)
-    for x in range(0, width, max(1, width // 50)):
-        assert img.getpixel((x, height - 2)) == teal, ("bottom edge", x)
-    yellow = [
-        (x, y)
-        for x in range(0, width, 4)
-        for y in range(0, height, 4)
-        if img.getpixel((x, y)) == (255, 255, 192)
-    ]
-    assert yellow
-    assert max(x for x, _ in yellow) < width // 2
-
-
-def _seed_screen(base):
-    with httpx.Client(base_url=base) as c:
-        screen = c.post("/api/screens", json={"name": "To dos"}).json()
-        big = c.post("/api/lists", json={"name": "Big"}).json()
-        for n in range(40):
-            c.post(f"/api/lists/{big['id']}/items", json={"text": f"Item {n + 1}"})
-        small = c.post("/api/lists", json={"name": "Small"}).json()
-        c.post(f"/api/lists/{small['id']}/items", json={"text": "Open one"})
-        done = c.post(f"/api/lists/{small['id']}/items", json={"text": "Done one"}).json()
+        for text in ("Water", "Rice", "Batteries", "Foil"):
+            c.post(f"/api/lists/{bjs['id']}/items", json={"text": text})
+        done = c.post(f"/api/lists/{bjs['id']}/items", json={"text": "Bread"}).json()
         c.patch(f"/api/items/{done['id']}", json={"done": True})
-        r = c.put("/api/settings", json={"screen_id": screen["id"]})
-        assert r.status_code == 200
+        notes = c.post("/api/lists", json={"name": "Message board", "kind": "notes"}).json()
+        c.post(f"/api/lists/{notes['id']}/items", json={"text": "Plumber comes Tuesday 9am"})
+        assert c.patch(f"/api/lists/{bjs['id']}", json={"tv_open": False}).status_code == 200
+    return _lists(base)
 
 
-FIT = """JSON.stringify((() => {
-  const title = document.getElementById('title').textContent;
-  const cards = [...document.querySelectorAll('#cards .tv-card')];
-  const big = cards.find(c => c.querySelector('h2').textContent === 'Big');
-  const small = cards.find(c => c.querySelector('h2').textContent === 'Small');
-  if (!big || !small) return {title, ready: false};
-  const ul = big.querySelector('ul');
-  const more = big.querySelector('.more');
-  const hiddenRows = [...ul.children].filter(li => li.hidden);
-  const shownRows = [...ul.children].filter(li => !li.hidden).length;
-  const result = {
-    title, ready: true,
-    names: cards.map(c => c.querySelector('h2').textContent),
-    bottom: big.getBoundingClientRect().bottom,
-    h: innerHeight,
-    more: more ? more.textContent : null,
-    hidden: hiddenRows.length,
-    shown: shownRows,
-    fits: ul.scrollHeight <= ul.clientHeight,
+STATE = """JSON.stringify((() => {
+  const doc = %s;
+  if (!doc || !doc.getElementById('screen')) return null;
+  const box = n => { const r = n.getBoundingClientRect();
+    return {x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top, bottom: r.bottom,
+      left: r.left, right: r.right}; };
+  const card = doc.querySelector('#screen .tv-card[data-kind="lists"]');
+  return {
+    title: doc.getElementById('title').textContent,
+    h2: card ? card.querySelector('h2').textContent : null,
+    tabs: card ? [...card.querySelectorAll('.tv-tab')].map(t => ({text: t.textContent, ...box(t)})) : [],
+    cards: card ? [...card.querySelectorAll('.tv-list')].map(c => ({
+      name: c.querySelector('h2').textContent, head: box(c.querySelector('h2')), ...box(c),
+      notes: c.classList.contains('notes'),
+      pin: !!c.querySelector('li.pin'), fits: c.querySelector('ul').scrollHeight <= c.querySelector('ul').clientHeight,
+      text: c.innerText})) : [],
+    condensed: card ? !!card.querySelector('.tv-lists.condensed') : false,
+    msg: card && card.querySelector('.tv-msg') ? card.querySelector('.tv-msg').textContent : null,
+    text: card ? card.innerText : '',
+    scrollW: doc.documentElement.scrollWidth,
+    scrollH: doc.documentElement.scrollHeight,
   };
-  if (hiddenRows.length) {
-    hiddenRows[0].hidden = false;
-    result.overflowsWithOneMore = ul.scrollHeight > ul.clientHeight;
-    hiddenRows[0].hidden = true;
-  }
-  const done = [...small.querySelectorAll('li')].find(li => li.textContent === 'Done one');
-  result.doneClass = done ? done.className : null;
-  result.doneDecoration = done ? getComputedStyle(done).textDecorationLine : null;
-  result.doneTick = done ? !!done.querySelector('.box.tick') : false;
-  return result;
 })())"""
+PAGE = STATE % "document"
+FRAME = STATE % "document.getElementById('channel').contentDocument"
+
+
+def _wait(chrome, expr, ready):
+    out = None
+    for _ in range(100):
+        out = json.loads(chrome.eval(expr) or "null")
+        if out and ready(out):
+            return out
+        time.sleep(0.05)
+    return out
+
+
+def _until(fn, ready):
+    v = None
+    for _ in range(100):
+        v = fn()
+        if ready(v):
+            return v
+        time.sleep(0.05)
+    return v
+
+
+def _click(chrome, x, y):
+    for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
+        chrome.send(
+            "Input.dispatchMouseEvent",
+            {"type": kind, "x": x, "y": y, "button": "left", "clickCount": 1},
+        )
 
 
 @needs_chrome
-def test_tv_lists_fits_long_list_shows_done_and_screen_name(server, tmp_path):
-    _seed_screen(server)
+def test_notes_screen_tabs_open_and_titles_close_lists(server, tmp_path):  # noqa: F811
+    lists = _seed_three(server)
+    notes = _screens(server)["Notes"]
+    httpx.put(f"{server}/api/settings", json={"channel": "screen", "screen_id": notes["id"]})
+    bjs = lists["BJs"]["id"]
     chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
     try:
-        chrome.send("Page.navigate", {"url": f"{server}/tv/lists"})
-        fit = None
-        for _ in range(100):
-            fit = json.loads(chrome.eval(FIT) or "null")
-            if fit and fit["ready"] and fit["title"] == "To dos":
-                break
-            time.sleep(0.05)
+        chrome.send("Page.navigate", {"url": f"{server}/tv"})
+        before = _wait(chrome, PAGE, lambda o: o["title"] == "Notes" and o["cards"])
+        tab = before["tabs"][0]
+        _click(chrome, tab["x"], tab["y"])
+        opened = _until(lambda: _lists(server)["BJs"]["tv_open"], bool)
+        after = _wait(chrome, PAGE, lambda o: len(o["cards"]) == 3)
+        head = next(c for c in after["cards"] if c["name"] == "Publix")["head"]
+        _click(chrome, head["x"], head["y"])
+        closed = _until(lambda: _lists(server)["Publix"]["tv_open"], lambda v: v is False)
+        last = _wait(chrome, PAGE, lambda o: len(o["cards"]) == 2 and o["tabs"])
     finally:
         chrome.close()
-    assert fit["title"] == "To dos", fit
-    assert fit["names"] == ["Big", "Small"]
-    assert fit["bottom"] <= fit["h"] == 1080
-    assert fit["fits"] is True
-    assert fit["hidden"] > 0 and fit["shown"] > 5
-    assert fit["hidden"] + fit["shown"] == 40
-    assert fit["more"] == f"+{fit['hidden']} more"
-    assert fit["overflowsWithOneMore"] is True
-    assert fit["doneClass"] == "done"
-    assert "line-through" in fit["doneDecoration"]
-    assert fit["doneTick"] is True
+    assert before["h2"] == "Lists"
+    assert [c["name"] for c in before["cards"]] == ["Publix", "Message board"]
+    assert [t["text"] for t in before["tabs"]] == ["BJs 4"]
+    a, b = before["cards"]
+    assert a["top"] == b["top"] and a["right"] < b["left"]
+    assert abs((a["right"] - a["left"]) - (b["right"] - b["left"])) <= 1
+    assert tab["bottom"] < a["top"]
+    assert a["pin"] and b["notes"] and a["fits"] and b["fits"]
+    assert before["scrollW"] <= 1920 and before["scrollH"] <= 1080
+    assert opened is True and _lists(server)["BJs"]["id"] == bjs
+    assert [c["name"] for c in after["cards"]] == ["Publix", "BJs", "Message board"]
+    assert after["tabs"] == []
+    assert "Bread" in next(c for c in after["cards"] if c["name"] == "BJs")["text"]
+    assert closed is False
+    assert [c["name"] for c in last["cards"]] == ["BJs", "Message board"]
+    assert [t["text"] for t in last["tabs"]] == ["Publix 4"]
+
+
+@needs_chrome
+def test_smaller_lists_widgets_show_open_lists_or_one_list(server, tmp_path):  # noqa: F811
+    lists = _seed_three(server)
+    screens = _screens(server)
+    notes = screens["Notes"]
+    widget = notes["widgets"][0]
+    assert httpx.patch(f"{server}/api/widgets/{widget['id']}", json={"h": 1}).status_code == 200
+    httpx.put(f"{server}/api/settings", json={"channel": "screen", "screen_id": notes["id"]})
+    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
+    try:
+        chrome.send("Page.navigate", {"url": f"{server}/tv"})
+        wide = _wait(chrome, PAGE, lambda o: o["title"] == "Notes" and o["condensed"])
+        for name in ("Publix", "Message board"):
+            lid = lists[name]["id"]
+            httpx.patch(f"{server}/api/lists/{lid}", json={"tv_open": False})
+        empty = _wait(chrome, PAGE, lambda o: o["msg"])
+        brief = screens["Daily Brief"]
+        httpx.put(f"{server}/api/settings", json={"screen_id": brief["id"]})
+        one = _wait(chrome, PAGE, lambda o: o["title"] == "Daily Brief" and o["h2"] == "Publix")
+        lists_widget = next(w for w in brief["widgets"] if w["kind"] == "lists")
+        httpx.patch(f"{server}/api/widgets/{lists_widget['id']}", json={"list_id": None})
+        pick = _wait(chrome, PAGE, lambda o: o["msg"])
+    finally:
+        chrome.close()
+    assert [c["name"] for c in wide["cards"]] == ["Publix", "Message board"]
+    assert wide["tabs"] == [] and "BJs" not in wide["text"]
+    assert wide["cards"][0]["top"] == wide["cards"][1]["top"]
+    assert empty["msg"] == "No lists open. Open one from your phone or the Notes screen."
+    assert empty["cards"] == [] and empty["tabs"] == []
+    assert one["h2"] == "Publix" and "Dog food" in one["text"] and "Olive oil" in one["text"]
+    assert one["tabs"] == []
+    assert pick["h2"] == "Lists"
+    assert pick["msg"] == "Pick a list from your phone."
+
+
+TOUCH = """(() => {
+  const t = document.getElementById('channel').contentDocument.querySelector('.tv-tab');
+  if (!t) return null;
+  const r = t.getBoundingClientRect();
+  return {x: r.left + r.width / 2, y: r.top + r.height / 2, text: t.textContent};
+})()"""
+
+
+def _touch(chrome, points):
+    chrome.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [points[0]]})
+    for p in points[1:]:
+        chrome.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [p]})
+    chrome.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+
+
+@needs_chrome
+def test_kiosk_swipe_changes_screen_and_tap_reaches_iframe(server, tmp_path):  # noqa: F811
+    lists = _seed_three(server)
+    screens = _screens(server)
+    cal, notes = screens["Calendar"], screens["Notes"]
+    httpx.put(f"{server}/api/settings", json={"channel": "screen", "screen_id": cal["id"]})
+    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
+    try:
+        chrome.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
+        chrome.send("Page.navigate", {"url": f"{server}/"})
+        _wait(chrome, FRAME, lambda o: o["title"] == "Calendar")
+        _touch(chrome, [{"x": 1200 - 20 * i, "y": 540} for i in range(11)])
+        swiped = _until(
+            lambda: httpx.get(f"{server}/api/settings").json(),
+            lambda s: s["screen_id"] == notes["id"],
+        )
+        _wait(chrome, FRAME, lambda o: o["title"] == "Notes" and o["tabs"])
+        tab = chrome.eval(TOUCH)
+        _touch(chrome, [{"x": tab["x"] + 20 * i, "y": tab["y"]} for i in range(11)])
+        back = _until(
+            lambda: httpx.get(f"{server}/api/settings").json(),
+            lambda s: s["screen_id"] == cal["id"],
+        )
+        _wait(chrome, FRAME, lambda o: o["title"] == "Calendar")
+        still = _lists(server)["BJs"]["tv_open"]
+        _touch(chrome, [{"x": 1200 - 20 * i, "y": 540} for i in range(11)])
+        _wait(chrome, FRAME, lambda o: o["title"] == "Notes" and o["tabs"])
+        tab = chrome.eval(TOUCH)
+        time.sleep(1)
+        _touch(chrome, [{"x": tab["x"], "y": tab["y"]}])
+        opened = _until(lambda: _lists(server)["BJs"]["tv_open"], bool)
+        frame = _wait(chrome, FRAME, lambda o: len(o["cards"]) == 3)
+        settings = httpx.get(f"{server}/api/settings").json()
+    finally:
+        chrome.close()
+    assert lists["BJs"]["tv_open"] is False
+    assert (swiped["channel"], swiped["screen_id"]) == ("screen", notes["id"])
+    assert back["screen_id"] == cal["id"] and still is False
+    assert tab["text"] == "BJs 4"
+    assert opened is True
+    assert len(frame["cards"]) == 3
+    assert (settings["channel"], settings["screen_id"]) == ("screen", notes["id"])

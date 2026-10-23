@@ -1,6 +1,7 @@
 html, body {
   height: 100vh;
   overflow: hidden;
+  touch-action: none;
   cursor: none;
   user-select: none;
   -webkit-user-select: none;
@@ -37,17 +38,6 @@ body.tv {
 .tv .w95-statusbar > * {
   min-height: 3.6vh;
   padding: 0.5vh 1vh;
-}
-
-.tv-cards {
-  min-height: 0;
-  display: grid;
-  gap: 4vh 2vh;
-  grid-template-columns: repeat(auto-fit, minmax(28vw, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  align-items: start;
-  overflow: hidden;
-  padding: 3vh 1.5vh 1.5vh;
 }
 
 .tv-card,
@@ -412,4 +402,211 @@ body.tv {
 .tv-cal-day h3 {
   margin: 0 0 0.4vh;
   font-size: 2.6vh;
+}
+
+.tv-lists-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tv-tabs {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1vh;
+  margin-bottom: 1vh;
+}
+
+.tv-tab {
+  padding: 1vh 2vh;
+  font-family: inherit;
+  font-size: 2.4vh;
+  color: var(--w95-dark);
+  background: var(--w95-face);
+  border: 1px solid;
+  border-color: var(--w95-light) var(--w95-dark) var(--w95-dark) var(--w95-light);
+  box-shadow: inset -1px -1px 0 var(--w95-shadow), inset 1px 1px 0 #dfdfdf;
+}
+
+.tv-tab:active {
+  border-color: var(--w95-dark) var(--w95-light) var(--w95-light) var(--w95-dark);
+  box-shadow: inset 1px 1px 0 var(--w95-shadow);
+}
+
+.tv-lists {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3vh 1.5vh;
+  padding-top: 2vh;
+}
+
+.tv-lists .tv-card {
+  padding-top: 3vh;
+}
+
+.tv-lists.condensed {
+  gap: 2.6vh 1vh;
+  padding-top: 1.6vh;
+}
+
+.tv-lists.condensed .tv-card {
+  padding: 2.4vh 1vh 1vh;
+}
+
+.tv-lists.condensed .tv-card h2 {
+  top: -1.6vh;
+  font-size: 2.2vh;
+  line-height: 3.2vh;
+}
+
+.tv-lists.condensed li {
+  gap: 0.8vh;
+  padding: 0.2vh 0;
+  font-size: 2vh;
+}
+
+.tv-lists.condensed li.pin {
+  margin-bottom: 0.3vh;
+  padding: 0.4vh 1vh;
+  font-size: 2.4vh;
+}
+
+.tv-lists.condensed .box {
+  width: 1.8vh;
+  height: 1.8vh;
+}
+
+.tv-lists.condensed .box.tick::after {
+  left: 0.5vh;
+  top: 0.1vh;
+  width: 0.5vh;
+  height: 1vh;
+}
+
+.tv-lists.condensed .more {
+  font-size: 1.8vh;
+}
+
+.tv-card li.none {
+  color: #404040;
+}
+
+.tv-wx {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5vh;
+  text-align: center;
+}
+
+.tv-card[data-size="2x1"] .tv-wx {
+  flex-direction: row;
+  gap: 6vh;
+}
+
+.wx-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4vh;
+}
+
+.wx-now {
+  display: flex;
+  align-items: center;
+  gap: 2vh;
+}
+
+.wx-icon svg {
+  display: block;
+  width: 10vh;
+  height: 10vh;
+}
+
+.wx-temp {
+  font-size: 10vh;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.wx-label {
+  margin: 0;
+  font-size: 3.2vh;
+  font-weight: bold;
+}
+
+.wx-hilo,
+.wx-rain,
+.wx-where {
+  margin: 0;
+  font-size: 2.6vh;
+}
+
+.wx-asof {
+  color: #404040;
+  font-size: 2vh;
+}
+
+.wx-days {
+  display: flex;
+  gap: 1.5vh;
+}
+
+.wx-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4vh;
+  padding: 0.8vh 1.6vh;
+  font-size: 2.2vh;
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+}
+
+.wx-day .wx-icon svg {
+  width: 5vh;
+  height: 5vh;
+}
+
+.wx-sun {
+  display: flex;
+  gap: 4vh;
+  font-size: 3vh;
+}
+
+.tv-card[data-size="2x2"] .wx-icon svg {
+  width: 18vh;
+  height: 18vh;
+}
+
+.tv-card[data-size="2x2"] .wx-temp {
+  font-size: 18vh;
+}
+
+.tv-card[data-size="2x2"] .wx-label {
+  font-size: 5vh;
+}
+
+.tv-card[data-size="2x2"] .wx-hilo,
+.tv-card[data-size="2x2"] .wx-rain {
+  font-size: 4vh;
+}
+
+.tv-card[data-size="2x2"] .wx-asof {
+  font-size: 2.6vh;
+}
+
+.tv-card[data-size="2x2"] .wx-day {
+  font-size: 3.4vh;
+}
+
+.tv-card[data-size="2x2"] .wx-day .wx-icon svg {
+  width: 9vh;
+  height: 9vh;
 }

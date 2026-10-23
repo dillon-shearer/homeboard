@@ -151,14 +151,6 @@ def create_app(data_dir=None) -> FastAPI:
     def tv_screen(request: Request):
         return templates.TemplateResponse(request, "tv_screen.html")
 
-    @app.get("/tv/lists", response_class=HTMLResponse)
-    def tv_lists(request: Request):
-        return templates.TemplateResponse(request, "tv_lists.html")
-
-    @app.get("/tv/calendar", response_class=HTMLResponse)
-    def tv_calendar(request: Request):
-        return templates.TemplateResponse(request, "tv_calendar.html")
-
     return app
 
 
