@@ -44,12 +44,13 @@ def test_api_service():
     exec_start = s["ExecStart"].split()
     assert exec_start[0] == "/opt/homeboard/.venv/bin/uvicorn"
     assert "app.main:app" in exec_start
-    assert exec_start[exec_start.index("--host") + 1] == "0.0.0.0"
-    assert exec_start[exec_start.index("--port") + 1] == "80"
+    assert exec_start[exec_start.index("--host") + 1] == "127.0.0.1"
+    assert exec_start[exec_start.index("--port") + 1] == "8000"
+    assert "--proxy-headers" in exec_start
+    assert exec_start[exec_start.index("--forwarded-allow-ips") + 1] == "127.0.0.1"
     assert s["User"] == "homeboard"
     assert s["WorkingDirectory"] == "/opt/homeboard"
     assert s["Environment"] == "HOMEBOARD_DATA=/var/lib/homeboard"
-    assert s["AmbientCapabilities"] == "CAP_NET_BIND_SERVICE"
     assert s["Restart"] == "always"
     assert s["RestartSec"] == "2"
     assert "network-online.target" in u["After"].split()
