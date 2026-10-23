@@ -15,10 +15,28 @@ SETTINGS_FIELDS = (
     "channel",
     "channel_timeout_min",
     "lists_screen_id",
+    "clock_size",
+    "caption_size",
+    "clock_pos",
+    "caption_pos",
+    "clock_on_top",
 )
 FITS = ("contain", "cover")
 CHANNELS = ("photos", "calendar", "lists")
 CHANNEL_TIMEOUTS = (0, 2, 5, 10, 30)
+POSITIONS = (
+    "top-left",
+    "top-center",
+    "top-right",
+    "middle-left",
+    "middle-center",
+    "middle-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+)
+OVERLAY_SIZE_MIN = 2
+OVERLAY_SIZE_MAX = 12
 LIST_KINDS = ("checklist", "notes")
 LIST_NAME_MAX = 60
 SCREEN_NAME_MAX = 60
@@ -172,9 +190,19 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
         v = fields["channel_timeout_min"]
         if isinstance(v, bool) or v not in CHANNEL_TIMEOUTS:
             raise ValueError("channel_timeout_min must be one of 0, 2, 5, 10, 30")
+    for k in ("clock_size", "caption_size"):
+        if k in fields:
+            v = fields[k]
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError(f"{k} must be an integer")
+            if not OVERLAY_SIZE_MIN <= v <= OVERLAY_SIZE_MAX:
+                raise ValueError(f"{k} must be from {OVERLAY_SIZE_MIN} to {OVERLAY_SIZE_MAX}")
+    for k in ("clock_pos", "caption_pos"):
+        if k in fields and fields[k] not in POSITIONS:
+            raise ValueError(f"{k} must be one of {', '.join(POSITIONS)}")
     if "lists_screen_id" in fields:
         fields["lists_screen_id"] = _check_screen_id(conn, fields["lists_screen_id"])
-    for k in ("transition", "shuffle", "captions"):
+    for k in ("transition", "shuffle", "captions", "clock_on_top"):
         if k in fields:
             fields[k] = int(fields[k])
     fields["updated_at"] = _now()

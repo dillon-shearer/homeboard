@@ -29,6 +29,11 @@ def test_put_interval_persists(client):
         "channel",
         "channel_timeout_min",
         "lists_screen_id",
+        "clock_size",
+        "caption_size",
+        "clock_pos",
+        "caption_pos",
+        "clock_on_top",
         "updated_at",
     }
 

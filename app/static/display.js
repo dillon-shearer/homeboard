@@ -9,9 +9,23 @@
     captions: false,
     channel: "photos",
     channel_timeout_min: 5,
+    clock_size: 5,
+    caption_size: 5,
+    clock_pos: "bottom-right",
+    caption_pos: "bottom-left",
+    clock_on_top: true,
   };
   const MAX_BACKOFF_S = 30;
   const CHANNELS = ["photos", "calendar", "lists"];
+  const POSITIONS = [
+    "top-left", "top-center", "top-right",
+    "middle-left", "middle-center", "middle-right",
+    "bottom-left", "bottom-center", "bottom-right",
+  ];
+
+  function validSize(v) {
+    return Number.isInteger(v) && v >= 2 && v <= 12;
+  }
 
   function applySettings(prev, incoming) {
     const base = Object.assign({}, DEFAULTS, prev || {});
@@ -26,7 +40,21 @@
     if (typeof s.channel_timeout_min === "number" && s.channel_timeout_min >= 0) {
       out.channel_timeout_min = s.channel_timeout_min;
     }
+    if (validSize(s.clock_size)) out.clock_size = s.clock_size;
+    if (validSize(s.caption_size)) out.caption_size = s.caption_size;
+    if (POSITIONS.indexOf(s.clock_pos) !== -1) out.clock_pos = s.clock_pos;
+    if (POSITIONS.indexOf(s.caption_pos) !== -1) out.caption_pos = s.caption_pos;
+    if ("clock_on_top" in s) out.clock_on_top = !!s.clock_on_top;
     return out;
+  }
+
+  function overlayLayout(settings) {
+    const s = applySettings(null, settings);
+    return {
+      clockCell: s.clock_pos,
+      captionCell: s.caption_pos,
+      order: s.clock_on_top ? ["clock", "caption"] : ["caption", "clock"],
+    };
   }
 
   function nextChannel(channel, step) {
@@ -111,6 +139,8 @@
   const Slideshow = {
     DEFAULTS: DEFAULTS,
     applySettings: applySettings,
+    overlayLayout: overlayLayout,
+    POSITIONS: POSITIONS,
     shuffleIds: shuffleIds,
     buildOrder: buildOrder,
     nextIndex: nextIndex,
@@ -140,6 +170,7 @@
   const clockEl = document.getElementById("clock");
   const channelEl = document.getElementById("channel");
   const swipeEl = document.getElementById("swipe");
+  const overlayEl = document.getElementById("overlay");
 
   const state = {
     photos: [],
@@ -197,7 +228,27 @@
       l.classList.toggle("instant", !state.settings.transition);
     });
     if (!state.settings.captions) hideCaption();
+    placeOverlay(state.settings);
     applyChannel();
+  }
+
+  function placeOverlay(settings) {
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty("--clock-size", settings.clock_size + "vh");
+    rootStyle.setProperty("--caption-size", settings.caption_size + "vh");
+    const layout = overlayLayout(settings);
+    const nodes = { clock: clockEl, caption: captionEl };
+    const cells = {
+      clock: document.getElementById("cell-" + layout.clockCell),
+      caption: document.getElementById("cell-" + layout.captionCell),
+    };
+    const first = layout.order[0];
+    const placed = clockEl.parentNode === cells.clock && captionEl.parentNode === cells.caption &&
+      (cells.clock !== cells.caption || cells.clock.firstElementChild === nodes[first]);
+    if (placed) return;
+    layout.order.forEach(function (name) {
+      cells[name].appendChild(nodes[name]);
+    });
   }
 
   function applyChannel() {
@@ -363,7 +414,7 @@
       state.needEmpty = false;
       const node = document.importNode(found, true);
       node.hidden = state.photos.length > 0;
-      document.body.insertBefore(node, captionEl);
+      document.body.insertBefore(node, overlayEl);
     }).catch(function () {});
   }
 

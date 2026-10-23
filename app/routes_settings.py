@@ -26,6 +26,11 @@ class SettingsPatch(BaseModel):
     channel: str | None = None
     channel_timeout_min: int | None = None
     lists_screen_id: int | None = None
+    clock_size: int | None = None
+    caption_size: int | None = None
+    clock_pos: str | None = None
+    caption_pos: str | None = None
+    clock_on_top: bool | None = None
 
 
 class DisplayCurrent(BaseModel):
@@ -42,6 +47,11 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "channel": row["channel"],
         "channel_timeout_min": row["channel_timeout_min"],
         "lists_screen_id": row["lists_screen_id"],
+        "clock_size": row["clock_size"],
+        "caption_size": row["caption_size"],
+        "clock_pos": row["clock_pos"],
+        "caption_pos": row["caption_pos"],
+        "clock_on_top": bool(row["clock_on_top"]),
         "updated_at": row["updated_at"],
     }
 

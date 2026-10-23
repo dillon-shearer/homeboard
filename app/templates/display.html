@@ -17,8 +17,17 @@
 {% if ip_url %}<div class="url ip">{{ ip_url }}</div>{% endif %}
 </div>
 {% endif %}
-<div id="caption"></div>
-<div id="clock"></div>
+<div id="overlay">
+<div id="cell-top-left" class="cell row-top col-left"></div>
+<div id="cell-top-center" class="cell row-top col-center"></div>
+<div id="cell-top-right" class="cell row-top col-right"></div>
+<div id="cell-middle-left" class="cell row-middle col-left"></div>
+<div id="cell-middle-center" class="cell row-middle col-center"></div>
+<div id="cell-middle-right" class="cell row-middle col-right"></div>
+<div id="cell-bottom-left" class="cell row-bottom col-left"><div id="caption"></div></div>
+<div id="cell-bottom-center" class="cell row-bottom col-center"></div>
+<div id="cell-bottom-right" class="cell row-bottom col-right"><div id="clock"></div></div>
+</div>
 <iframe id="channel" title="TV channel" hidden></iframe>
 <div id="swipe" hidden></div>
 <script src="{{ static_url('display.js') }}"></script>
