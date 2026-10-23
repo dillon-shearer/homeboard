@@ -8,6 +8,9 @@ from app import settings
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 SETTINGS_FIELDS = ("interval_s", "transition", "fit", "shuffle", "captions")
 FITS = ("contain", "cover")
+LIST_KINDS = ("checklist", "notes")
+LIST_NAME_MAX = 60
+ITEM_TEXT_MAX = 200
 _UNSET = object()
 
 
@@ -168,3 +171,146 @@ def set_current_photo_id(conn: sqlite3.Connection, id: int | None) -> None:
             "UPDATE settings SET current_photo_id = ? WHERE id = 1 AND current_photo_id IS NOT ?",
             (id, id),
         )
+
+
+def _clean_text(value, limit: int, label: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError(f"{label} cannot be empty")
+    if len(value) > limit:
+        raise ValueError(f"{label} must be at most {limit} characters")
+    return value
+
+
+def _check_kind(kind) -> str:
+    if kind not in LIST_KINDS:
+        raise ValueError("kind must be 'checklist' or 'notes'")
+    return kind
+
+
+def list_lists(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM lists ORDER BY sort_order, id").fetchall()
+
+
+def get_list(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM lists WHERE id = ?", (id,)).fetchone()
+
+
+def create_list(conn: sqlite3.Connection, name, kind="checklist") -> sqlite3.Row:
+    name = _clean_text(name, LIST_NAME_MAX, "name")
+    kind = _check_kind(kind)
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO lists (name, kind, sort_order, created_at)"
+            " VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM lists), ?)",
+            (name, kind, _now()),
+        )
+    return get_list(conn, cur.lastrowid)
+
+
+def update_list(
+    conn: sqlite3.Connection, id: int, name=_UNSET, kind=_UNSET, show_on_tv=_UNSET
+) -> sqlite3.Row | None:
+    fields = {}
+    if name is not _UNSET:
+        fields["name"] = _clean_text(name, LIST_NAME_MAX, "name")
+    if kind is not _UNSET:
+        fields["kind"] = _check_kind(kind)
+    if show_on_tv is not _UNSET:
+        fields["show_on_tv"] = int(show_on_tv)
+    if fields:
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        with conn:
+            conn.execute(f"UPDATE lists SET {sets} WHERE id = ?", (*fields.values(), id))
+    return get_list(conn, id)
+
+
+def delete_list(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    row = get_list(conn, id)
+    if row is not None:
+        with conn:
+            conn.execute("DELETE FROM lists WHERE id = ?", (id,))
+    return row
+
+
+def reorder_lists(conn: sqlite3.Connection, ids) -> None:
+    ordered = list(dict.fromkeys(int(i) for i in ids))
+    known = [r["id"] for r in list_lists(conn)]
+    unknown = [i for i in ordered if i not in known]
+    if unknown:
+        raise ValueError(f"unknown list ids: {unknown}")
+    rest = [i for i in known if i not in set(ordered)]
+    with conn:
+        for n, lid in enumerate(ordered + rest, start=1):
+            conn.execute("UPDATE lists SET sort_order = ? WHERE id = ?", (n * 10, lid))
+
+
+def list_items(conn: sqlite3.Connection, list_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM list_items WHERE list_id = ? ORDER BY pinned DESC, sort_order, id",
+        (list_id,),
+    ).fetchall()
+
+
+def get_item(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM list_items WHERE id = ?", (id,)).fetchone()
+
+
+def add_item(conn: sqlite3.Connection, list_id: int, text) -> sqlite3.Row:
+    text = _clean_text(text, ITEM_TEXT_MAX, "text")
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO list_items (list_id, text, sort_order, created_at)"
+            " VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM list_items"
+            " WHERE list_id = ?), ?)",
+            (list_id, text, list_id, _now()),
+        )
+    return get_item(conn, cur.lastrowid)
+
+
+def update_item(
+    conn: sqlite3.Connection, id: int, text=_UNSET, done=_UNSET, pinned=_UNSET
+) -> sqlite3.Row | None:
+    fields = {}
+    if text is not _UNSET:
+        fields["text"] = _clean_text(text, ITEM_TEXT_MAX, "text")
+    if done is not _UNSET:
+        fields["done"] = int(done)
+    if pinned is not _UNSET:
+        fields["pinned"] = int(pinned)
+    if fields:
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        with conn:
+            conn.execute(f"UPDATE list_items SET {sets} WHERE id = ?", (*fields.values(), id))
+    return get_item(conn, id)
+
+
+def delete_item(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    row = get_item(conn, id)
+    if row is not None:
+        with conn:
+            conn.execute("DELETE FROM list_items WHERE id = ?", (id,))
+    return row
+
+
+def reorder_items(conn: sqlite3.Connection, list_id: int, ids) -> None:
+    ordered = list(dict.fromkeys(int(i) for i in ids))
+    known = [
+        r["id"]
+        for r in conn.execute(
+            "SELECT id FROM list_items WHERE list_id = ? ORDER BY sort_order, id", (list_id,)
+        )
+    ]
+    unknown = [i for i in ordered if i not in known]
+    if unknown:
+        raise ValueError(f"unknown item ids: {unknown}")
+    rest = [i for i in known if i not in set(ordered)]
+    with conn:
+        for n, iid in enumerate(ordered + rest, start=1):
+            conn.execute("UPDATE list_items SET sort_order = ? WHERE id = ?", (n * 10, iid))
+
+
+def clear_done(conn: sqlite3.Connection, list_id: int) -> int:
+    with conn:
+        cur = conn.execute("DELETE FROM list_items WHERE list_id = ? AND done = 1", (list_id,))
+    return cur.rowcount
