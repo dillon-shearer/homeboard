@@ -82,6 +82,10 @@ html, body {
   max-width: 60vw;
   font-size: 5vh;
   text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   opacity: 0;
   transition: opacity 0.5s;
 }
