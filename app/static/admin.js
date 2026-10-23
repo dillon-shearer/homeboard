@@ -25,6 +25,8 @@
     "save failed": "The photo could not be saved"
   };
   var STATUS_MS = 10000;
+  var FIRST_PAGE = 12;
+  var PAGE = 24;
   var INTERVAL_DEBOUNCE_MS = 400;
   var TOAST_MS = 4000;
   var TOAST_FADE_MS = 400;
@@ -70,59 +72,114 @@
 
   function loadStatus() {
     return getJSON("/api/status").then(function (s) {
-      var dot = $("status-dot");
-      dot.classList.toggle("on", !!s.display_connected);
-      dot.title = s.display_connected ? "Display connected" : "Display not connected";
+      setOffline(s.display_connected ? "" : "Display offline");
       setCount(s.photo_count);
       $("host").textContent = s.hostname;
       $("ip").textContent = s.ip || "";
       $("disk").textContent = (s.disk_free_bytes / 1073741824).toFixed(1) + " GB free";
       $("version").textContent = "v" + s.version;
     }).catch(function () {
-      var dot = $("status-dot");
-      dot.classList.remove("on");
-      dot.title = "Server not reachable";
+      setOffline("Server not reachable");
     });
   }
 
+  function setOffline(text) {
+    var el = $("offline");
+    el.textContent = text;
+    el.hidden = !text;
+  }
+
+  var photos = [];
+  var shown = FIRST_PAGE;
+
+  function findPhoto(id) {
+    for (var i = 0; i < photos.length; i++) if (photos[i].id === id) return photos[i];
+    return null;
+  }
+
   function loadGrid() {
-    return getJSON("/api/photos?all=1").then(function (photos) {
-      var grid = $("grid");
-      grid.textContent = "";
-      photos.forEach(function (p) {
-        grid.appendChild(buildTile(p));
-      });
-      $("grid-empty").hidden = photos.length > 0;
-      setCount(photos.length);
+    return getJSON("/api/photos?all=1").then(function (list) {
+      photos = list;
+      renderGrid();
     });
   }
+
+  function renderGrid() {
+    var grid = $("grid");
+    grid.textContent = "";
+    photos.slice(0, shown).forEach(function (p) {
+      grid.appendChild(buildTile(p));
+    });
+    updateGridMeta();
+  }
+
+  function updateGridMeta() {
+    var rendered = $("grid").querySelectorAll(".tile").length;
+    var left = photos.length - rendered;
+    var more = $("show-more");
+    more.hidden = left <= 0;
+    more.textContent = "Show More (" + left + ")";
+    $("grid-empty").hidden = photos.length > 0;
+    setCount(photos.length);
+  }
+
+  function showMore() {
+    var grid = $("grid");
+    var from = grid.querySelectorAll(".tile").length;
+    shown = from + PAGE;
+    photos.slice(from, shown).forEach(function (p) {
+      grid.appendChild(buildTile(p));
+    });
+    updateGridMeta();
+  }
+
+  function svgIcon(d) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  var ICON_EYE = "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
+  var ICON_EYE_OFF = "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2";
+  var ICON_X = "M7 7l10 10M17 7L7 17";
 
   function buildTile(p) {
     var tile = document.createElement("div");
     tile.className = "tile" + (p.enabled ? "" : " disabled");
     tile.setAttribute("data-id", p.id);
     tile.setAttribute("data-caption", p.caption || "");
-    var img = document.createElement("img");
-    img.src = p.thumb_url;
-    img.alt = p.caption || "";
-    img.loading = "lazy";
-    img.draggable = false;
-    tile.appendChild(img);
-
-    var toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "tile-toggle";
-    toggle.appendChild(document.createElement("span"));
-    tile.appendChild(toggle);
-    setToggle(tile, p.enabled);
-
     var menu = document.createElement("button");
     menu.type = "button";
     menu.className = "tile-menu";
     menu.setAttribute("aria-label", "Photo options");
     menu.setAttribute("aria-haspopup", "dialog");
-    menu.textContent = String.fromCharCode(0x22ee);
+    var img = document.createElement("img");
+    img.src = p.thumb_url;
+    img.alt = p.caption || "";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.draggable = false;
+    menu.appendChild(img);
     tile.appendChild(menu);
+
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "tile-toggle";
+    tile.appendChild(toggle);
+    setToggle(tile, p.enabled);
+
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "tile-delete";
+    del.setAttribute("aria-label", "Delete photo");
+    del.setAttribute("aria-haspopup", "dialog");
+    del.appendChild(svgIcon(ICON_X));
+    tile.appendChild(del);
 
     var handle = document.createElement("span");
     handle.className = "tile-handle";
@@ -139,6 +196,10 @@
     var btn = tile.querySelector(".tile-toggle");
     btn.setAttribute("aria-pressed", enabled ? "true" : "false");
     btn.setAttribute("aria-label", enabled ? "Shown on the board" : "Hidden from the board");
+    btn.textContent = "";
+    btn.appendChild(svgIcon(enabled ? ICON_EYE : ICON_EYE_OFF));
+    var p = findPhoto(tileId(tile));
+    if (p) p.enabled = enabled;
   }
 
   var toastTimer = null;
@@ -191,6 +252,14 @@
       var tile = findTile(id);
       if (tile) grid.appendChild(tile);
     });
+    var head = ids.map(findPhoto).filter(Boolean);
+    photos = head.concat(photos.filter(function (p) { return ids.indexOf(p.id) === -1; }));
+  }
+
+  function fullOrder(ids) {
+    return ids.concat(photos.map(function (p) { return p.id; }).filter(function (id) {
+      return ids.indexOf(id) === -1;
+    }));
   }
 
   function onToggle(tile) {
@@ -223,8 +292,8 @@
     var d = drag;
     drag = null;
     d.tile.classList.remove("dragging");
-    var ids = gridIds();
-    if (ids.join(",") === d.start.join(",")) return;
+    var ids = fullOrder(gridIds());
+    if (ids.join(",") === fullOrder(d.start).join(",")) return;
     send("PUT", "/api/photos/order", { ids: ids }).catch(function () {
       applyOrder(d.start);
       showError("Could not save the new order. Try again.");
@@ -289,15 +358,35 @@
 
   function showSheetPart(name) {
     $("sheet-actions").hidden = name !== "actions";
+    $("sheet-confirm").hidden = name !== "confirm";
     $("sheet-caption").hidden = name !== "caption";
   }
 
   function openSheet(tile, opener) {
     sheetTile = tile;
     sheetOpener = opener || null;
+    $("sheet-thumb").src = tile.querySelector("img").src;
+    $("sheet-toggle").textContent = tile.classList.contains("disabled") ? "Show on Board" : "Hide from Board";
     showSheetPart("actions");
     $("sheet").hidden = false;
     $("sheet-edit").focus();
+  }
+
+  function openConfirm(tile, opener) {
+    if (tile) {
+      sheetTile = tile;
+      sheetOpener = opener || null;
+    }
+    if (!sheetTile) return;
+    showSheetPart("confirm");
+    $("sheet").hidden = false;
+    $("confirm-delete").focus();
+  }
+
+  function sheetToggle() {
+    var tile = sheetTile;
+    closeSheet();
+    if (tile) onToggle(tile);
   }
 
   function closeSheet() {
@@ -327,6 +416,8 @@
     return send("PATCH", "/api/photos/" + tileId(tile), { caption: caption }).then(function () {
       tile.setAttribute("data-caption", caption || "");
       tile.querySelector("img").alt = caption || "";
+      var p = findPhoto(tileId(tile));
+      if (p) p.caption = caption;
       closeSheet();
     }).catch(function () {
       showError("Could not save the caption. Try again.");
@@ -338,13 +429,15 @@
   function deletePhoto() {
     var tile = sheetTile;
     if (!tile) return;
-    if (!window.confirm("Delete this photo? It is removed from the board and the Pi.")) return;
     closeSheet();
-    return send("DELETE", "/api/photos/" + tileId(tile)).then(function () {
+    var id = tileId(tile);
+    return send("DELETE", "/api/photos/" + id).then(function () {
       if (tile.parentNode) tile.parentNode.removeChild(tile);
-      var n = $("grid").querySelectorAll(".tile").length;
-      $("grid-empty").hidden = n > 0;
-      setCount(n);
+      photos = photos.filter(function (p) { return p.id !== id; });
+      var grid = $("grid");
+      var next = photos[grid.querySelectorAll(".tile").length];
+      if (next && grid.querySelectorAll(".tile").length < shown) grid.appendChild(buildTile(next));
+      updateGridMeta();
     }).catch(function () {
       showError("Could not delete the photo. Try again.");
     });
@@ -356,6 +449,7 @@
     var tile = btn.closest(".tile");
     if (!tile) return;
     if (btn.classList.contains("tile-toggle")) onToggle(tile);
+    else if (btn.classList.contains("tile-delete")) openConfirm(tile, btn);
     else if (btn.classList.contains("tile-menu")) openSheet(tile, btn);
   }
 
@@ -371,7 +465,11 @@
     $("sheet-backdrop").addEventListener("click", closeSheet);
     $("sheet-cancel").addEventListener("click", closeSheet);
     $("sheet-edit").addEventListener("click", openCaption);
-    $("sheet-delete").addEventListener("click", deletePhoto);
+    $("sheet-toggle").addEventListener("click", sheetToggle);
+    $("sheet-delete").addEventListener("click", function () { openConfirm(); });
+    $("confirm-delete").addEventListener("click", deletePhoto);
+    $("confirm-cancel").addEventListener("click", closeSheet);
+    $("show-more").addEventListener("click", showMore);
     $("caption-cancel").addEventListener("click", closeSheet);
     $("caption-save").addEventListener("click", saveCaption);
     $("caption-input").addEventListener("keydown", function (e) {
@@ -400,6 +498,7 @@
     li.appendChild(top);
     li.appendChild(bar);
     $("upload-list").appendChild(li);
+    $("upload-list").hidden = false;
     return {
       progress: function (pct) {
         bar.value = pct;
@@ -482,6 +581,10 @@
         buttons[j].setAttribute("aria-pressed", active ? "true" : "false");
       }
     }
+    var switches = document.querySelectorAll(".switch");
+    for (var n = 0; n < switches.length; n++) {
+      switches[n].setAttribute("aria-checked", s[switches[n].getAttribute("data-key")] ? "true" : "false");
+    }
   }
 
   function loadSettings() {
@@ -534,12 +637,20 @@
     }, INTERVAL_DEBOUNCE_MS);
   }
 
+  function onSwitchClick(e) {
+    var key = e.currentTarget.getAttribute("data-key");
+    setSetting(key, e.currentTarget.getAttribute("aria-checked") !== "true");
+  }
+
   function onSegClick(e) {
     var btn = e.target.closest("button");
     if (!btn) return;
     var key = e.currentTarget.getAttribute("data-key");
     var raw = btn.getAttribute("data-value");
-    var value = raw === "true" ? true : raw === "false" ? false : raw;
+    setSetting(key, raw === "true" ? true : raw === "false" ? false : raw);
+  }
+
+  function setSetting(key, value) {
     var patch = {};
     patch[key] = value;
     var next = {};
@@ -559,6 +670,8 @@
     });
     var segs = document.querySelectorAll(".seg");
     for (var i = 0; i < segs.length; i++) segs[i].addEventListener("click", onSegClick);
+    var switches = document.querySelectorAll(".switch");
+    for (var j = 0; j < switches.length; j++) switches[j].addEventListener("click", onSwitchClick);
     initTiles();
 
     loadSettings().catch(function () {

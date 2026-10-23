@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#111111">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Home Board">
 <title>Home Board</title>
 <link rel="manifest" href="/static/manifest.webmanifest">
@@ -18,19 +21,30 @@
 <main>
 <header class="top">
 <h1>Home Board</h1>
-<span class="meta"><span id="photo-count">0 photos</span><span id="status-dot" class="dot" title="Display not connected"></span></span>
+<p class="meta"><span id="photo-count">0 photos</span><span id="offline" class="offline" hidden>Display offline</span></p>
 </header>
 
 <section class="upload">
 <label class="upload-btn">
 <input id="file-input" type="file" accept="image/jpeg,image/png,image/heic,image/heif,image/webp" multiple>
-<span>Add photos</span>
+<span>Add Photos</span>
 </label>
-<ul id="upload-list" class="upload-list"></ul>
+<ul id="upload-list" class="group upload-list" hidden></ul>
+</section>
+
+<section class="photos">
+<div class="section-head">
+<h2>Photos</h2>
+<span class="hint">Tap a photo for options</span>
+</div>
+<div id="grid" class="grid"></div>
+<p id="grid-empty" class="empty" hidden>No photos yet. Tap Add Photos to start.</p>
+<button type="button" id="show-more" class="more" hidden>Show More</button>
 </section>
 
 <section class="settings">
-<h2>Settings</h2>
+<h2>Slideshow</h2>
+<div class="group">
 <div class="row">
 <span class="label">Seconds per photo</span>
 <div class="stepper">
@@ -40,50 +54,61 @@
 </div>
 </div>
 <div class="row">
-<span class="label">Transition</span>
-<div class="seg" data-key="transition"><button type="button" data-value="true">On</button><button type="button" data-value="false">Off</button></div>
-</div>
-<div class="row">
 <span class="label">Fit</span>
 <div class="seg" data-key="fit"><button type="button" data-value="contain">Contain</button><button type="button" data-value="cover">Cover</button></div>
 </div>
 <div class="row">
+<span class="label">Transition</span>
+<button type="button" class="switch" role="switch" data-key="transition" aria-label="Transition"></button>
+</div>
+<div class="row">
 <span class="label">Shuffle</span>
-<div class="seg" data-key="shuffle"><button type="button" data-value="true">On</button><button type="button" data-value="false">Off</button></div>
+<button type="button" class="switch" role="switch" data-key="shuffle" aria-label="Shuffle"></button>
 </div>
 <div class="row">
 <span class="label">Captions</span>
-<div class="seg" data-key="captions"><button type="button" data-value="true">On</button><button type="button" data-value="false">Off</button></div>
+<button type="button" class="switch" role="switch" data-key="captions" aria-label="Captions"></button>
+</div>
 </div>
 <p id="settings-error" class="error" hidden></p>
 </section>
 
-<section class="photos">
-<h2>Photos</h2>
-<div id="grid" class="grid"></div>
-<p id="grid-empty" class="empty" hidden>No photos yet.</p>
+<section class="about">
+<h2>About</h2>
+<div class="group">
+<div class="row"><span class="label">Name</span><span id="host" class="value"></span></div>
+<div class="row"><span class="label">IP address</span><span id="ip" class="value"></span></div>
+<div class="row"><span class="label">Free space</span><span id="disk" class="value"></span></div>
+<div class="row"><span class="label">Version</span><span id="version" class="value"></span></div>
+<a class="row link" href="/docs"><span class="label">API docs</span><span class="chev" aria-hidden="true">&rsaquo;</span></a>
+</div>
 </section>
-
-<footer class="foot">
-<span id="host"></span>
-<span id="ip"></span>
-<span id="disk"></span>
-<span id="version"></span>
-<a href="/docs">API docs</a>
-</footer>
 </main>
 <div id="sheet" class="sheet" hidden>
 <div id="sheet-backdrop" class="sheet-backdrop"></div>
 <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Photo options">
 <div id="sheet-actions" class="sheet-list">
-<button type="button" id="sheet-edit">Edit caption</button>
-<button type="button" id="sheet-delete" class="danger">Delete</button>
-<button type="button" id="sheet-cancel">Cancel</button>
+<div class="sheet-group">
+<img id="sheet-thumb" class="sheet-thumb" alt="">
+<button type="button" id="sheet-edit">Edit Caption</button>
+<button type="button" id="sheet-toggle">Hide from Board</button>
+<button type="button" id="sheet-delete" class="danger">Delete Photo</button>
+</div>
+<button type="button" id="sheet-cancel" class="cancel">Cancel</button>
+</div>
+<div id="sheet-confirm" class="sheet-list" hidden>
+<div class="sheet-group">
+<p class="sheet-title">This photo will be removed from the board and the Pi.</p>
+<button type="button" id="confirm-delete" class="danger">Delete Photo</button>
+</div>
+<button type="button" id="confirm-cancel" class="cancel">Cancel</button>
 </div>
 <div id="sheet-caption" class="sheet-list" hidden>
+<div class="sheet-group pad">
 <input id="caption-input" type="text" placeholder="Caption" aria-label="Caption" enterkeyhint="done">
+</div>
 <div class="sheet-row">
-<button type="button" id="caption-cancel">Cancel</button>
+<button type="button" id="caption-cancel" class="cancel">Cancel</button>
 <button type="button" id="caption-save" class="primary">Save</button>
 </div>
 </div>
