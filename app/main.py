@@ -58,7 +58,7 @@ def create_app(data_dir=None) -> FastAPI:
     for d in (data_dir, photos_dir, thumbs_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db_path = db_path
     app.state.photos_dir = photos_dir
     app.state.thumbs_dir = thumbs_dir
