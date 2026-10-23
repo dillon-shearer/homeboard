@@ -61,7 +61,7 @@ def test_start_lists_icon_links(client):
     assert icon
     assert '<span class="w95-icon-label">Lists</span>' in icon.group(0)
     assert "Coming soon" not in icon.group(0)
-    assert page.count("Coming soon") == 1
+    assert "Coming soon" not in page
 
 
 def test_lists_js_listens_for_changes_and_uses_no_browser_dialogs():
