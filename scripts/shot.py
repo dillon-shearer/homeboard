@@ -17,7 +17,6 @@ from websockets.sync.client import connect
 ROOT = Path(__file__).resolve().parent.parent
 SHOTS = ROOT / "shots"
 SIZES = [(390, 844), (412, 915)]
-DELETE_PROMPT = "Delete this photo? It is removed from the board and the Pi."
 
 
 def free_port() -> int:
@@ -118,7 +117,6 @@ class Cdp:
     def __init__(self, ws):
         self.ws = ws
         self.n = 0
-        self.dialogs = []
 
     def send(self, method, **params):
         self.n += 1
@@ -129,10 +127,7 @@ class Cdp:
         mid = self.send(method, **params)
         while True:
             msg = json.loads(self.ws.recv(timeout=30))
-            if msg.get("method") == "Page.javascriptDialogOpening":
-                self.dialogs.append(msg["params"]["message"])
-                self.send("Page.handleJavaScriptDialog", accept=True)
-            elif msg.get("id") == mid:
+            if msg.get("id") == mid:
                 if "error" in msg:
                     sys.exit(f"{method} failed: {msg['error']}")
                 return msg["result"]
@@ -193,7 +188,7 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
             cdp.call("Page.enable")
             cdp.call("Emulation.setDeviceMetricsOverride", width=width, height=height,
                      deviceScaleFactor=1, mobile=True)
-            cdp.call("Page.navigate", url=f"{base}/admin")
+            cdp.call("Page.navigate", url=f"{base}/admin/photos")
             cdp.wait("document.querySelectorAll('#grid .tile img').length === 2 && "
                      "[...document.querySelectorAll('#grid .tile img')].every(i => i.complete)",
                      "the photo grid")
@@ -202,21 +197,26 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
             off_id = cdp.eval(f"{tile}.getAttribute('data-id')")
             if off_id is None:
                 sys.exit("no disabled tile to toggle")
-            cdp.eval(f"{tile}.querySelector('button.tile-toggle').click()")
-            if cdp.eval(f"document.querySelector('.tile[data-id=\"{off_id}\"]')"
-                        ".classList.contains('disabled')"):
-                sys.exit("toggle did not update the tile at once")
-            wait_api(lambda: api_photos(base)[int(off_id)]["enabled"], "the toggle PATCH")
-            print(f"toggled photo {off_id} on")
+            cdp.eval(f"{tile}.querySelector('button.tile-open').click()")
+            cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
+            cdp.eval("document.getElementById('caption-input').value = 'Forest'")
+            cdp.eval("document.getElementById('photo-enabled').click()")
+            cdp.eval("document.getElementById('photo-save').click()")
+            wait_api(lambda: api_photos(base)[int(off_id)]["enabled"], "the save PATCH")
+            if api_photos(base)[int(off_id)]["caption"] != "Forest":
+                sys.exit("save did not send the caption")
+            cdp.wait(f"!!document.querySelector('.tile[data-id=\"{off_id}\"]:not(.disabled) .badge-cc')",
+                     "the CC badge")
+            print(f"showed photo {off_id} and captioned it")
 
             first = "document.querySelector('#grid .tile')"
             del_id = cdp.eval(f"{first}.getAttribute('data-id')")
-            cdp.eval(f"{first}.querySelector('button.tile-menu').click()")
-            cdp.wait("!document.getElementById('sheet').hidden", "the bottom sheet")
-            labels = cdp.eval("[...document.querySelectorAll('#sheet-actions button')]"
+            cdp.eval(f"{first}.querySelector('button.tile-open').click()")
+            cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
+            labels = cdp.eval("[...document.querySelectorAll('#photo-edit button')]"
                               ".map(b => b.textContent)")
-            if "Edit caption" not in labels or "Delete" not in labels:
-                sys.exit(f"bottom sheet buttons are {labels}")
+            if labels != ["Save", "Cancel", "Delete"]:
+                sys.exit(f"photo window buttons are {labels}")
             time.sleep(0.3)
             shot = cdp.call("Page.captureScreenshot", format="png")
             out.write_bytes(base64.b64decode(shot["data"]))
@@ -225,9 +225,9 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
                     sys.exit(f"{out.name} is {img.width}px wide, expected {width}")
             print(f"wrote {out.relative_to(ROOT)}")
 
-            cdp.eval("document.getElementById('sheet-delete').click()")
-            if cdp.dialogs != [DELETE_PROMPT]:
-                sys.exit(f"expected one confirm dialog, got {cdp.dialogs}")
+            cdp.eval("document.getElementById('photo-delete').click()")
+            cdp.wait("!document.getElementById('photo-confirm').hidden", "the delete confirm")
+            cdp.eval("document.getElementById('confirm-delete').click()")
             wait_api(lambda: int(del_id) not in api_photos(base), "the DELETE")
             cdp.wait(f"!document.querySelector('.tile[data-id=\"{del_id}\"]') && "
                      "document.querySelectorAll('#grid .tile').length === 1", "the tile removal")
@@ -257,7 +257,7 @@ def main() -> None:
         wait_ready(base, proc)
         seed(base)
         for width, height in SIZES:
-            shoot(chrome, f"{base}/admin", width, height, SHOTS / f"admin-{width}.png",
+            shoot(chrome, f"{base}/admin/photos", width, height, SHOTS / f"admin-{width}.png",
                   tmp / f"chrome-{width}")
         drive_menu(chrome, base, SHOTS / "admin-390-menu.png", tmp / "chrome-menu")
     finally:
