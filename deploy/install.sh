@@ -10,17 +10,25 @@ ETC_DIR=/etc/homeboard
 HTTPS_ENV="$ETC_DIR/https.env"
 DNS_CREDENTIALS="$ETC_DIR/dns-credentials.ini"
 API_DROPIN_DIR=/etc/systemd/system/homeboard-api.service.d
+TUNNEL_ENV="$ETC_DIR/tunnel.env"
+PASSWORD_HASH="$ETC_DIR/tunnel-password.hash"
 
 HOST=""
 DNS=""
 EMAIL=""
 NEW_TOKEN=0
+TUNNEL=0
+NEW_TUNNEL_TOKEN=0
+NEW_PASSWORD=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --host) HOST="${2:?--host needs a value}"; shift 2 ;;
         --dns) DNS="${2:?--dns needs a value}"; shift 2 ;;
         --email) EMAIL="${2:?--email needs a value}"; shift 2 ;;
         --new-token) NEW_TOKEN=1; shift ;;
+        --tunnel) TUNNEL=1; shift ;;
+        --new-tunnel-token) TUNNEL=1; NEW_TUNNEL_TOKEN=1; shift ;;
+        --new-password) TUNNEL=1; NEW_PASSWORD=1; shift ;;
         -*) echo "Unknown option: $1" >&2; exit 1 ;;
         *) REPO_URL="$1"; shift ;;
     esac
@@ -28,6 +36,14 @@ done
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run this with sudo: sudo bash install.sh" >&2
+    exit 1
+fi
+
+if [ -s "$TUNNEL_ENV" ]; then
+    TUNNEL=1
+fi
+if [ "$TUNNEL" -eq 1 ] && [ ! -r /dev/tty ] && { [ "$NEW_TUNNEL_TOKEN" -eq 1 ] || [ "$NEW_PASSWORD" -eq 1 ] || [ ! -s "$TUNNEL_ENV" ] || [ ! -s "$PASSWORD_HASH" ]; }; then
+    echo "No terminal to ask for the tunnel token or password; run this from an SSH window" >&2
     exit 1
 fi
 
@@ -61,6 +77,13 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git python3-venv cage chromium fonts-noto libheif1 curl iw nginx
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
+fi
+if [ "$TUNNEL" -eq 1 ]; then
+    install -d -m 755 /usr/share/keyrings
+    curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main"         > /etc/apt/sources.list.d/cloudflared.list
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared
 fi
 
 echo "== Creating the homeboard user"
@@ -137,6 +160,7 @@ fi
 
 echo "== Setting up the web server"
 install -m 644 "$APP_DIR"/deploy/nginx/homeboard-proxy.conf /etc/nginx/snippets/
+install -m 644 "$APP_DIR"/deploy/nginx/homeboard-map.conf /etc/nginx/conf.d/
 rm -f /etc/nginx/sites-enabled/default
 if [ -n "$HOST" ]; then
     echo "== Getting the HTTPS certificate for $HOST"
@@ -181,6 +205,51 @@ else
     rm -f /etc/systemd/system/homeboard-api.service.d/homeboard-host.conf
 fi
 ln -sf /etc/nginx/sites-available/homeboard /etc/nginx/sites-enabled/homeboard
+if [ "$TUNNEL" -eq 1 ]; then
+    echo "== Setting up the Cloudflare Tunnel and its password"
+    install -d -m 700 -o root -g root "$ETC_DIR"
+    if [ "$NEW_TUNNEL_TOKEN" -eq 1 ] || [ ! -s "$TUNNEL_ENV" ]; then
+        read -rsp "Paste the tunnel token and press Enter (nothing shows): " TUNNEL_TOKEN < /dev/tty
+        echo
+        TUNNEL_TOKEN="${TUNNEL_TOKEN##*service install }"
+        TUNNEL_TOKEN="$(printf '%s' "$TUNNEL_TOKEN" | tr -d '[:space:]')"
+        if [ -z "$TUNNEL_TOKEN" ]; then
+            echo "No tunnel token given" >&2
+            exit 1
+        fi
+        (umask 077 && printf 'TUNNEL_TOKEN=%s
+' "$TUNNEL_TOKEN" > "$TUNNEL_ENV")
+        unset TUNNEL_TOKEN
+    fi
+    chown root:root "$TUNNEL_ENV"
+    chmod 600 "$TUNNEL_ENV"
+    if [ "$NEW_PASSWORD" -eq 1 ] || [ ! -s "$PASSWORD_HASH" ]; then
+        read -rsp "Type the board password and press Enter (nothing shows): " PASSWORD < /dev/tty
+        echo
+        read -rsp "Type it again: " PASSWORD_AGAIN < /dev/tty
+        echo
+        if [ -z "$PASSWORD" ] || [ "$PASSWORD" != "$PASSWORD_AGAIN" ]; then
+            unset PASSWORD PASSWORD_AGAIN
+            echo "The two passwords were empty or did not match; run this again" >&2
+            exit 1
+        fi
+        PASSWORD_LINE="$(printf '%s' "$PASSWORD" | (cd "$APP_DIR" && .venv/bin/python -m app.auth))"
+        unset PASSWORD PASSWORD_AGAIN
+        (umask 077 && printf '%s
+' "$PASSWORD_LINE" > "$PASSWORD_HASH")
+        unset PASSWORD_LINE
+    fi
+    chown root:root "$PASSWORD_HASH"
+    chmod 600 "$PASSWORD_HASH"
+    install -m 644 "$APP_DIR"/deploy/nginx/homeboard-tunnel.conf /etc/nginx/sites-available/homeboard-tunnel
+    ln -sf /etc/nginx/sites-available/homeboard-tunnel /etc/nginx/sites-enabled/homeboard-tunnel
+    mkdir -p "$API_DROPIN_DIR"
+    printf '[Service]
+LoadCredential=tunnel-password:%s
+' "$PASSWORD_HASH" > "$API_DROPIN_DIR/homeboard-tunnel.conf"
+else
+    rm -f /etc/nginx/sites-enabled/homeboard-tunnel "$API_DROPIN_DIR/homeboard-tunnel.conf"
+fi
 nginx -t
 
 echo "== Enabling services"
@@ -197,6 +266,12 @@ if [ -n "$HOST" ]; then
     systemctl enable --now certbot.timer
 fi
 systemctl restart homeboard-api.service nginx.service
+if [ "$TUNNEL" -eq 1 ]; then
+    systemctl enable homeboard-tunnel.service
+    systemctl restart homeboard-tunnel.service
+else
+    systemctl disable --now homeboard-tunnel.service 2>/dev/null || true
+fi
 
 echo
 echo "Install finished. reboot now: sudo reboot"

@@ -1,0 +1,14 @@
+[Unit]
+Description=Home Board Cloudflare Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/homeboard/tunnel.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+DynamicUser=yes
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
