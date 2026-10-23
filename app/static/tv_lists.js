@@ -34,7 +34,7 @@
     var out = [];
     if (!screen) return out;
     (lists || []).forEach(function (list) {
-      if (list.screen_id !== screen.id) return;
+      if (list.screen_id !== undefined && list.screen_id !== screen.id) return;
       var items = sortItems(list.items || []);
       if (!items.length) return;
       out.push(Object.assign({}, list, { items: items }));
@@ -128,7 +128,7 @@
   }
 
   function render(lists, screens, settings) {
-    var screenId = settings ? settings.lists_screen_id : null;
+    var screenId = settings ? settings.screen_id : null;
     var screen = currentScreen(screens, screenId);
     var shown = visibleLists(lists, screens, screenId);
     titleEl.textContent = screen ? screen.name : "Lists";

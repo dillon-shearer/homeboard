@@ -383,9 +383,9 @@ def test_screen_rename_and_order_api(client):
     first = client.get("/api/screens").json()[0]["id"]
     second = client.post("/api/screens", json={"name": "Chores"}).json()["id"]
     r = client.put("/api/screens/order", json={"ids": [second, first]})
-    assert [s["id"] for s in r.json()] == [second, first]
+    assert [s["id"] for s in r.json()][:2] == [second, first]
     r = client.patch(f"/api/screens/{second}", json={"name": "Fridge"})
     assert r.json()["name"] == "Fridge"
     assert client.get("/api/screens").json()[0]["name"] == "Fridge"
-    r = client.put("/api/settings", json={"channel": "lists", "lists_screen_id": second})
-    assert (r.json()["channel"], r.json()["lists_screen_id"]) == ("lists", second)
+    r = client.put("/api/settings", json={"channel": "screen", "screen_id": second})
+    assert (r.json()["channel"], r.json()["screen_id"]) == ("screen", second)

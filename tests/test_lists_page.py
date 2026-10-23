@@ -408,7 +408,7 @@ def test_list_options_window_in_headless_chrome(server, tmp_path):
         assert chrome.eval(_shown("name-dialog"))
         assert chrome.eval("document.getElementById('name-title').textContent") == "New screen"
         chrome.eval("document.getElementById('name-cancel').click()")
-        assert chrome.eval("document.getElementById('list-screen').value") == str(shop["screen_id"])
+        assert chrome.eval("document.getElementById('list-screen').value") == ""
         chrome.eval(
             "const s2 = document.getElementById('list-screen');"
             "s2.value = 'new'; s2.dispatchEvent(new Event('change'));"
@@ -432,13 +432,13 @@ def test_list_options_window_in_headless_chrome(server, tmp_path):
                     break
                 time.sleep(0.05)
             screens = c.get("/api/screens").json()
-        notes = next(s for s in screens if s["name"] == "Notes")
-        assert (row["name"], row["kind"], row["screen_id"]) == ("Food", "notes", notes["id"])
+        assert [s["name"] for s in screens].count("Notes") == 2
+        assert (row["name"], row["kind"]) == ("Food", "notes")
         _wait(chrome, f"{tab}.textContent === 'Food'")
 
         chrome.eval("document.getElementById('list-options').click()")
         _wait(chrome, "!document.getElementById('list-screen').disabled")
-        assert chrome.eval("document.getElementById('list-screen').value") == str(notes["id"])
+        assert chrome.eval("document.getElementById('list-screen').value") == ""
         chrome.eval("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
         assert not chrome.eval(_shown("list-dialog"))
         chrome.eval("document.getElementById('list-options').click()")

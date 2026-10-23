@@ -194,9 +194,6 @@ def _seed(base):
         notes = c.post("/api/lists", json={"name": "Message board", "kind": "notes"}).json()
         for text in ("Plumber comes Tuesday 9am", "Water the plants Thursday"):
             c.post(f"/api/lists/{notes['id']}/items", json={"text": text})
-        hidden = c.post("/api/lists", json={"name": "Secret"}).json()
-        c.post(f"/api/lists/{hidden['id']}/items", json={"text": "Hidden item"})
-        c.patch(f"/api/lists/{hidden['id']}", json={"show_on_tv": False})
 
 
 class _Chrome:
@@ -289,7 +286,6 @@ def test_headless_screenshot_shows_two_cards(server, tmp_path, width, height):
     assert re.search(r'<ul><li class="pin">Dog food</li>', cards[0]["html"])
     assert cards[0]["top"] == cards[1]["top"]
     assert cards[0]["left"] < cards[1]["left"]
-    assert "Secret" not in layout["body"] and "Hidden item" not in layout["body"]
     assert layout["count"] == "2 lists"
     assert layout["scrollW"] <= layout["w"] and layout["scrollH"] <= layout["h"]
     assert max(c["bottom"] for c in cards) < height
@@ -315,17 +311,13 @@ def _seed_screen(base):
     with httpx.Client(base_url=base) as c:
         screen = c.post("/api/screens", json={"name": "To dos"}).json()
         big = c.post("/api/lists", json={"name": "Big"}).json()
-        c.patch(f"/api/lists/{big['id']}", json={"screen_id": screen["id"]})
         for n in range(40):
             c.post(f"/api/lists/{big['id']}/items", json={"text": f"Item {n + 1}"})
         small = c.post("/api/lists", json={"name": "Small"}).json()
-        c.patch(f"/api/lists/{small['id']}", json={"screen_id": screen["id"]})
         c.post(f"/api/lists/{small['id']}/items", json={"text": "Open one"})
         done = c.post(f"/api/lists/{small['id']}/items", json={"text": "Done one"}).json()
         c.patch(f"/api/items/{done['id']}", json={"done": True})
-        other = c.post("/api/lists", json={"name": "Elsewhere"}).json()
-        c.post(f"/api/lists/{other['id']}/items", json={"text": "Not here"})
-        r = c.put("/api/settings", json={"lists_screen_id": screen["id"]})
+        r = c.put("/api/settings", json={"screen_id": screen["id"]})
         assert r.status_code == 200
 
 

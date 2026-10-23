@@ -29,7 +29,7 @@ def test_seed_lists_exist(client):
     assert [x["name"] for x in body] == ["Publix", "BJs"]
     assert all(x["kind"] == "checklist" for x in body)
     assert all(x["items"] == [] for x in body)
-    assert all(x["show_on_tv"] is True for x in body)
+    assert all(x["tv_open"] is True for x in body)
 
 
 def test_list_crud(client):
@@ -42,10 +42,10 @@ def test_list_crud(client):
 
     lid = created["id"]
     r = client.patch(
-        f"/api/lists/{lid}", json={"name": "Chores", "kind": "notes", "show_on_tv": False}
+        f"/api/lists/{lid}", json={"name": "Chores", "kind": "notes", "tv_open": False}
     )
     assert r.status_code == 200
-    assert (r.json()["name"], r.json()["kind"], r.json()["show_on_tv"]) == (
+    assert (r.json()["name"], r.json()["kind"], r.json()["tv_open"]) == (
         "Chores",
         "notes",
         False,

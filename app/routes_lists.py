@@ -17,8 +17,7 @@ class ListCreate(BaseModel):
 class ListPatch(BaseModel):
     name: str | None = None
     kind: str | None = None
-    show_on_tv: bool | None = None
-    screen_id: int | None = None
+    tv_open: bool | None = None
 
 
 class ScreenCreate(BaseModel):
@@ -27,6 +26,19 @@ class ScreenCreate(BaseModel):
 
 class ScreenPatch(BaseModel):
     name: str | None = None
+
+
+class WidgetCreate(BaseModel):
+    kind: str
+    w: int | None = None
+    h: int | None = None
+    list_id: int | None = None
+
+
+class WidgetPatch(BaseModel):
+    w: int | None = None
+    h: int | None = None
+    list_id: int | None = None
 
 
 class ItemCreate(BaseModel):
@@ -60,8 +72,7 @@ def list_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         "id": row["id"],
         "name": row["name"],
         "kind": row["kind"],
-        "show_on_tv": row["screen_id"] is not None,
-        "screen_id": row["screen_id"],
+        "tv_open": bool(row["tv_open"]),
         "sort_order": row["sort_order"],
         "created_at": row["created_at"],
         "items": [item_dict(r) for r in db.list_items(conn, row["id"])],
@@ -73,11 +84,25 @@ def all_lists(conn: sqlite3.Connection) -> list[dict]:
 
 
 def screen_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    widgets = db.list_widgets(conn, row["id"])
+    places = db.pack_widgets(widgets)
     return {
         "id": row["id"],
         "name": row["name"],
         "sort_order": row["sort_order"],
-        "list_ids": db.screen_list_ids(conn, row["id"]),
+        "widgets": [
+            {
+                "id": w["id"],
+                "kind": w["kind"],
+                "list_id": w["list_id"],
+                "w": w["w"],
+                "h": w["h"],
+                "sort_order": w["sort_order"],
+                "col": p["col"],
+                "row": p["row"],
+            }
+            for w, p in zip(widgets, places, strict=True)
+        ],
     }
 
 
@@ -87,6 +112,13 @@ def all_screens(conn: sqlite3.Connection) -> list[dict]:
 
 def _set_fields(body: BaseModel) -> dict:
     return {k: getattr(body, k) for k in body.model_fields_set if getattr(body, k) is not None}
+
+
+def _require_screen(conn: sqlite3.Connection, id: int) -> sqlite3.Row:
+    row = db.get_screen(conn, id)
+    if row is None:
+        raise HTTPException(404, "screen not found")
+    return row
 
 
 def _require_list(conn: sqlite3.Connection, id: int) -> sqlite3.Row:
@@ -124,11 +156,8 @@ def order_lists(body: Order, conn: Conn):
 @router.patch("/lists/{id}")
 def patch_list(id: int, body: ListPatch, conn: Conn):
     _require_list(conn, id)
-    fields = _set_fields(body)
-    if "screen_id" in body.model_fields_set:
-        fields["screen_id"] = body.screen_id
     try:
-        row = db.update_list(conn, id, **fields)
+        row = db.update_list(conn, id, **_set_fields(body))
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     events.publish("lists_changed")
@@ -220,8 +249,7 @@ def order_screens(body: Order, conn: Conn):
 
 @router.patch("/screens/{id}")
 def patch_screen(id: int, body: ScreenPatch, conn: Conn):
-    if db.get_screen(conn, id) is None:
-        raise HTTPException(404, "screen not found")
+    _require_screen(conn, id)
     try:
         row = db.update_screen(conn, id, **_set_fields(body))
     except ValueError as e:
@@ -232,7 +260,57 @@ def patch_screen(id: int, body: ScreenPatch, conn: Conn):
 
 @router.delete("/screens/{id}", status_code=204)
 def delete_screen(id: int, conn: Conn):
+    before = db.get_settings(conn)
     if db.delete_screen(conn, id) is None:
         raise HTTPException(404, "screen not found")
+    after = db.get_settings(conn)
+    if (before["channel"], before["screen_id"]) != (after["channel"], after["screen_id"]):
+        events.publish("settings_changed")
+    events.publish("lists_changed")
+    return Response(status_code=204)
+
+
+@router.post("/screens/{id}/widgets", status_code=201)
+def add_widget(id: int, body: WidgetCreate, conn: Conn):
+    row = _require_screen(conn, id)
+    try:
+        db.add_widget(conn, id, body.kind, body.w, body.h, body.list_id)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    events.publish("lists_changed")
+    return screen_dict(conn, row)
+
+
+@router.put("/screens/{id}/widgets/order")
+def order_widgets(id: int, body: Order, conn: Conn):
+    row = _require_screen(conn, id)
+    try:
+        db.reorder_widgets(conn, id, body.ids)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    events.publish("lists_changed")
+    return screen_dict(conn, row)
+
+
+@router.patch("/widgets/{id}")
+def patch_widget(id: int, body: WidgetPatch, conn: Conn):
+    widget = db.get_widget(conn, id)
+    if widget is None:
+        raise HTTPException(404, "widget not found")
+    fields = _set_fields(body)
+    if "list_id" in body.model_fields_set:
+        fields["list_id"] = body.list_id
+    try:
+        db.update_widget(conn, id, **fields)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    events.publish("lists_changed")
+    return screen_dict(conn, db.get_screen(conn, widget["screen_id"]))
+
+
+@router.delete("/widgets/{id}", status_code=204)
+def delete_widget(id: int, conn: Conn):
+    if db.delete_widget(conn, id) is None:
+        raise HTTPException(404, "widget not found")
     events.publish("lists_changed")
     return Response(status_code=204)
