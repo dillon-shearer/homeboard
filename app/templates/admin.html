@@ -14,9 +14,15 @@
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-512.png">
 <link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
 <link rel="stylesheet" href="{{ static_url('admin.css') }}">
 </head>
 <body>
+<div class="w95-titlebar">
+<a class="w95-back" href="/admin">Start</a>
+<span class="w95-title-text">Photos - Home Board</span>
+<span class="w95-close" aria-hidden="true"></span>
+</div>
 <div id="toast" class="toast" role="alert" hidden></div>
 <main>
 <header class="top">
@@ -73,16 +79,6 @@
 <p id="settings-error" class="error" hidden></p>
 </section>
 
-<section class="about">
-<h2>About</h2>
-<div class="group">
-<div class="row"><span class="label">Name</span><span id="host" class="value"></span></div>
-<div class="row"><span class="label">IP address</span><span id="ip" class="value"></span></div>
-<div class="row"><span class="label">Free space</span><span id="disk" class="value"></span></div>
-<div class="row"><span class="label">Version</span><span id="version" class="value"></span></div>
-<a class="row link" href="/docs"><span class="label">API docs</span><span class="chev" aria-hidden="true">&rsaquo;</span></a>
-</div>
-</section>
 </main>
 <div id="sheet" class="sheet" hidden>
 <div id="sheet-backdrop" class="sheet-backdrop"></div>

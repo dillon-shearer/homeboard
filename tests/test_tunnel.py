@@ -106,6 +106,9 @@ def test_right_password_sets_long_cookie_and_opens_admin(client):
     assert auth.COOKIE_MAX_AGE >= 180 * 24 * 3600
     page = client.get("/admin", headers=TUNNEL)
     assert page.status_code == 200
+    assert 'href="/admin/photos"' in page.text
+    page = client.get("/admin/photos", headers=TUNNEL)
+    assert page.status_code == 200
     assert "Add Photos" in page.text
     assert client.get("/api/photos", headers=TUNNEL).status_code == 200
 

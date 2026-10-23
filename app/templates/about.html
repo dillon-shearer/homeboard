@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#008080">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Home Board">
+<title>About - Home Board</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-512.png">
+<link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
+</head>
+<body class="w95-desktop">
+<main class="w95-window">
+<div class="w95-titlebar">
+<a class="w95-back" href="/admin">Start</a>
+<span class="w95-title-text">About Home Board</span>
+<span class="w95-close" aria-hidden="true"></span>
+</div>
+<div class="w95-body">
+<section class="w95-group" aria-labelledby="group-about">
+<h2 id="group-about" class="w95-legend">This board</h2>
+<dl class="w95-fields">
+<dt>Name</dt><dd id="host"></dd>
+<dt>IP address</dt><dd id="ip"></dd>
+<dt>Free space</dt><dd id="disk"></dd>
+<dt>Version</dt><dd id="version"></dd>
+</dl>
+</section>
+<p><a class="w95-btn" href="/docs">API docs</a></p>
+</div>
+</main>
+<script src="{{ static_url('about.js') }}"></script>
+</body>
+</html>

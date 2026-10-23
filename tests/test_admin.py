@@ -16,7 +16,7 @@ def client(tmp_path):
 
 
 def test_admin_page(client):
-    r = client.get("/admin")
+    r = client.get("/admin/photos")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
     assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in r.text

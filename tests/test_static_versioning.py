@@ -18,7 +18,12 @@ def client(tmp_path):
 
 @pytest.mark.parametrize(
     "page,names",
-    [("/admin", ["admin.css", "admin.js"]), ("/", ["display.css", "display.js"])],
+    [
+        ("/admin", ["win95.css", "start.js"]),
+        ("/admin/photos", ["win95.css", "admin.css", "admin.js"]),
+        ("/admin/about", ["win95.css", "about.js"]),
+        ("/", ["display.css", "display.js"]),
+    ],
 )
 def test_assets_carry_file_version(client, page, names):
     html = client.get(page).text
@@ -34,7 +39,7 @@ def test_version_changes_when_file_changes(client):
     before = path.stat()
     try:
         os.utime(path, (before.st_atime, before.st_mtime + 100))
-        html = client.get("/admin").text
+        html = client.get("/admin/photos").text
         assert re.search(rf"admin\.css\?v={int(before.st_mtime) + 100}\b", html)
     finally:
         os.utime(path, (before.st_atime, before.st_mtime))

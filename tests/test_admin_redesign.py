@@ -13,7 +13,7 @@ JS = (ROOT / "static" / "admin.js").read_text()
 @pytest.fixture
 def page(tmp_path):
     with TestClient(create_app(tmp_path)) as c:
-        yield c.get("/admin").text
+        yield c.get("/admin/photos").text
 
 
 def test_status_dot_is_gone(page):
