@@ -1,11 +1,13 @@
 import re
 import shutil
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app import events
 from app.main import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,9 +103,23 @@ def test_empty_screen_shows_https_address_when_host_is_set(monkeypatch, tmp_path
     assert 'class="url ip"' not in r.text
 
 
-def test_loopback_client_still_counts_as_display(tmp_path):
-    with TestClient(create_app(tmp_path), client=("127.0.0.1", 50000)) as client:
-        assert client.get("/healthz").status_code == 200
+@pytest.mark.parametrize("host,local", [("127.0.0.1", True), ("192.168.1.20", False)])
+def test_loopback_client_still_counts_as_display(tmp_path, monkeypatch, host, local):
+    marked = []
+    real = events.subscribe
+
+    @asynccontextmanager
+    async def spy(client_host=None):
+        async with real(client_host) as queue:
+            marked.extend(sub.local for sub in events.subscribers if sub.queue is queue)
+            yield queue
+
+    monkeypatch.setattr(events, "subscribe", spy)
+    app = create_app(tmp_path)
+    app.state.sse_limit = 0
+    with TestClient(app, client=(host, 50000)) as client:
+        assert client.get("/api/events").status_code == 200
+    assert marked == [local]
 
 
 def test_setup_guide_explains_domain_dns_and_token():

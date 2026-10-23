@@ -53,5 +53,10 @@ def test_caption_input_maxlength_matches_api():
 def test_display_caption_clamped_to_two_lines():
     css = (APP / "static" / "display.css").read_text(encoding="utf-8")
     rule = re.search(r"#caption \{([^}]*)\}", css).group(1)
-    for decl in ("display: -webkit-box", "-webkit-line-clamp: 2", "-webkit-box-orient: vertical", "overflow: hidden"):
+    for decl in (
+        "display: -webkit-box",
+        "-webkit-line-clamp: 2",
+        "-webkit-box-orient: vertical",
+        "overflow: hidden",
+    ):
         assert decl in rule

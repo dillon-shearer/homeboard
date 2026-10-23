@@ -40,7 +40,7 @@ def settings_dict(row: sqlite3.Row) -> dict:
     }
 
 
-def _ip() -> str:
+def lan_ip() -> str:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("192.0.2.1", 80))
@@ -114,7 +114,7 @@ def status(request: Request, conn: Conn):
         "photo_count": len(db.list_photos(conn)),
         "current_photo_id": db.get_current_photo_id(conn),
         "hostname": hostname,
-        "ip": _ip(),
+        "ip": lan_ip(),
         "disk_free_bytes": shutil.disk_usage(request.app.state.photos_dir).free,
         "version": __version__,
     }

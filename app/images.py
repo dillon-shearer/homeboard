@@ -1,3 +1,4 @@
+import contextlib
 import io
 import threading
 import uuid
@@ -68,16 +69,17 @@ def _cover(img: Image.Image, width: int, height: int) -> Image.Image:
     return img.resize(size, Image.Resampling.LANCZOS)
 
 
-def _save(img: Image.Image, path: Path, quality: int = JPEG_QUALITY, icc_profile: bytes | None = None) -> None:
+def _save(
+    img: Image.Image, path: Path, quality: int = JPEG_QUALITY, icc_profile: bytes | None = None
+) -> None:
     extra = {"icc_profile": icc_profile} if icc_profile else {}
     img.save(path, "JPEG", quality=quality, progressive=True, optimize=True, **extra)
 
 
 def _draft_size(img: Image.Image) -> tuple[int, int]:
-    try:
+    orientation = None
+    with contextlib.suppress(Exception):
         orientation = img.getexif().get(0x0112)
-    except Exception:
-        orientation = None
     if orientation in (5, 6, 7, 8):
         return SCREEN_HEIGHT, SCREEN_WIDTH
     return SCREEN_WIDTH, SCREEN_HEIGHT

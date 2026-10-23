@@ -35,7 +35,10 @@ def find_chrome() -> str:
         if base.is_dir():
             dirs = sorted((d.name for d in base.iterdir()), reverse=True)
             for prefix, rel in (
-                ("chromium_headless_shell-", "chrome-headless-shell-win64/chrome-headless-shell.exe"),
+                (
+                    "chromium_headless_shell-",
+                    "chrome-headless-shell-win64/chrome-headless-shell.exe",
+                ),
                 ("chromium_headless_shell-", "chrome-win/headless_shell.exe"),
                 ("chromium-", "chrome-win64/chrome.exe"),
                 ("chromium-", "chrome-win/chrome.exe"),
@@ -80,8 +83,10 @@ def wait_ready(base: str, proc: subprocess.Popen) -> None:
 
 def seed(base: str) -> None:
     created = []
-    for name, color, size in (("sunset.jpg", (230, 120, 40), (1200, 800)),
-                              ("forest.jpg", (40, 140, 70), (800, 1200))):
+    for name, color, size in (
+        ("sunset.jpg", (230, 120, 40), (1200, 800)),
+        ("forest.jpg", (40, 140, 70), (800, 1200)),
+    ):
         files = {"files": (name, photo_bytes(color, size), "image/jpeg")}
         r = httpx.post(f"{base}/api/photos", files=files, timeout=30)
         r.raise_for_status()
@@ -166,9 +171,18 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
     width, height = 390, 844
     port = free_port()
     proc = subprocess.Popen(
-        [chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
-         "--no-default-browser-check", f"--user-data-dir={profile}",
-         f"--window-size={width},{height}", f"--remote-debugging-port={port}", "about:blank"],
+        [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--hide-scrollbars",
+            "--no-first-run",
+            "--no-default-browser-check",
+            f"--user-data-dir={profile}",
+            f"--window-size={width},{height}",
+            f"--remote-debugging-port={port}",
+            "about:blank",
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -186,12 +200,19 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
         with connect(ws_url, max_size=None, open_timeout=30) as ws:
             cdp = Cdp(ws)
             cdp.call("Page.enable")
-            cdp.call("Emulation.setDeviceMetricsOverride", width=width, height=height,
-                     deviceScaleFactor=1, mobile=True)
+            cdp.call(
+                "Emulation.setDeviceMetricsOverride",
+                width=width,
+                height=height,
+                deviceScaleFactor=1,
+                mobile=True,
+            )
             cdp.call("Page.navigate", url=f"{base}/admin/photos")
-            cdp.wait("document.querySelectorAll('#grid .tile img').length === 2 && "
-                     "[...document.querySelectorAll('#grid .tile img')].every(i => i.complete)",
-                     "the photo grid")
+            cdp.wait(
+                "document.querySelectorAll('#grid .tile img').length === 2 && "
+                "[...document.querySelectorAll('#grid .tile img')].every(i => i.complete)",
+                "the photo grid",
+            )
 
             tile = "document.querySelector('#grid .tile.disabled')"
             off_id = cdp.eval(f"{tile}.getAttribute('data-id')")
@@ -205,16 +226,19 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
             wait_api(lambda: api_photos(base)[int(off_id)]["enabled"], "the save PATCH")
             if api_photos(base)[int(off_id)]["caption"] != "Forest":
                 sys.exit("save did not send the caption")
-            cdp.wait(f"!!document.querySelector('.tile[data-id=\"{off_id}\"]:not(.disabled) .badge-cc')",
-                     "the CC badge")
+            cdp.wait(
+                f"!!document.querySelector('.tile[data-id=\"{off_id}\"]:not(.disabled) .badge-cc')",
+                "the CC badge",
+            )
             print(f"showed photo {off_id} and captioned it")
 
             first = "document.querySelector('#grid .tile')"
             del_id = cdp.eval(f"{first}.getAttribute('data-id')")
             cdp.eval(f"{first}.querySelector('button.tile-open').click()")
             cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
-            labels = cdp.eval("[...document.querySelectorAll('#photo-edit button')]"
-                              ".map(b => b.textContent)")
+            labels = cdp.eval(
+                "[...document.querySelectorAll('#photo-edit button')].map(b => b.textContent)"
+            )
             if labels != ["Save", "Cancel", "Delete"]:
                 sys.exit(f"photo window buttons are {labels}")
             time.sleep(0.3)
@@ -229,8 +253,11 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
             cdp.wait("!document.getElementById('photo-confirm').hidden", "the delete confirm")
             cdp.eval("document.getElementById('confirm-delete').click()")
             wait_api(lambda: int(del_id) not in api_photos(base), "the DELETE")
-            cdp.wait(f"!document.querySelector('.tile[data-id=\"{del_id}\"]') && "
-                     "document.querySelectorAll('#grid .tile').length === 1", "the tile removal")
+            cdp.wait(
+                f"!document.querySelector('.tile[data-id=\"{del_id}\"]') && "
+                "document.querySelectorAll('#grid .tile').length === 1",
+                "the tile removal",
+            )
             print(f"deleted photo {del_id}")
             cdp.send("Browser.close")
         proc.wait(timeout=15)
@@ -248,8 +275,18 @@ def main() -> None:
     base = f"http://127.0.0.1:{port}"
     env = dict(os.environ, HOMEBOARD_DATA=str(tmp / "data"))
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1",
-         "--port", str(port), "--log-level", "warning"],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
         cwd=ROOT,
         env=env,
     )
@@ -257,8 +294,14 @@ def main() -> None:
         wait_ready(base, proc)
         seed(base)
         for width, height in SIZES:
-            shoot(chrome, f"{base}/admin/photos", width, height, SHOTS / f"admin-{width}.png",
-                  tmp / f"chrome-{width}")
+            shoot(
+                chrome,
+                f"{base}/admin/photos",
+                width,
+                height,
+                SHOTS / f"admin-{width}.png",
+                tmp / f"chrome-{width}",
+            )
         drive_menu(chrome, base, SHOTS / "admin-390-menu.png", tmp / "chrome-menu")
     finally:
         proc.terminate()

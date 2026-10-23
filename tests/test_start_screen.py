@@ -46,7 +46,7 @@ def test_start_links_to_photos_and_about(client):
             + re.escape(name)
             + r"(?:(?!</li>).)*?</span></li>",
             page,
-            re.S,
+            re.DOTALL,
         )
         assert item, name
         assert "Coming soon" in item.group(0)

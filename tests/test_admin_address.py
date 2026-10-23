@@ -95,5 +95,5 @@ def test_ip_never_sends_a_packet_and_skips_loopback(monkeypatch):
     fake = fake_socket_module(None)
     fake.socket = lambda *args, **kwargs: sock
     monkeypatch.setattr(app.routes_settings, "socket", fake)
-    assert app.routes_settings._ip() == ""
+    assert app.routes_settings.lan_ip() == ""
     assert sock.connected == ("192.0.2.1", 80)

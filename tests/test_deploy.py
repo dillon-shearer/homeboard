@@ -98,7 +98,10 @@ def test_backup_timer():
     assert 'rsync -a --delete "$DATA_DIR/photos" "$DATA_DIR/thumbs" "$PHOTOS_DIR/"' in script
     install = (DEPLOY / "install.sh").read_text(encoding="utf-8")
     assert " rsync" in install
-    assert "chown homeboard:homeboard /var/backups/homeboard-db /var/backups/homeboard-photos" in install
+    assert (
+        "chown homeboard:homeboard /var/backups/homeboard-db /var/backups/homeboard-photos"
+        in install
+    )
 
 
 def test_wifi_powersave_off():
@@ -130,7 +133,9 @@ def test_setup_guide_has_steps_and_troubleshooting():
     assert "## Troubleshooting" in text
     assert "## Restore from a backup" in text
     assert "sudo systemctl stop homeboard-api" in text
-    assert "sudo rm -f /var/lib/homeboard/homeboard.db-wal /var/lib/homeboard/homeboard.db-shm" in text
+    assert (
+        "sudo rm -f /var/lib/homeboard/homeboard.db-wal /var/lib/homeboard/homeboard.db-shm" in text
+    )
     assert "sudo chown -R homeboard:homeboard /var/lib/homeboard" in text
     assert "scp -r dillon@homeboard.local:/var/backups/homeboard-db" in text
     assert text.isascii()

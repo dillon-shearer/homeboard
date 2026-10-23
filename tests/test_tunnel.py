@@ -74,7 +74,7 @@ def test_tunnel_pages_redirect_to_login(client, path):
         ("GET", "/photos/1.jpg"),
         ("GET", "/thumbs/1.jpg"),
         ("POST", "/api/photos"),
-        ("PATCH", "/api/settings"),
+        ("PUT", "/api/settings"),
         ("DELETE", "/api/photos/1"),
     ],
 )
