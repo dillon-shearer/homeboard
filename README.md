@@ -22,7 +22,7 @@ Tests live under `tests/` as `test_*.py` files. The board runs the same two step
 
 ## Run on the desktop
 
-Create a venv and activate it (`.venv\Scriptsctivate` on Windows, `source .venv/bin/activate` elsewhere), then install and start:
+Create a venv and activate it (`.venv\Scripts\activate` on Windows, `source .venv/bin/activate` elsewhere), then install and start:
 
 ```
 python -m venv .venv
