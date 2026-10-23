@@ -37,7 +37,25 @@
     return n + (n === 1 ? " list" : " lists");
   }
 
-  var Lists = { TAB_KEY: TAB_KEY, rank: rank, sortItems: sortItems, pickTab: pickTab, moveId: moveId, countLabel: countLabel };
+  var SWIPE_PX = 60;
+
+  function itemPatch(item, text, done, pinned) {
+    var t = (text || "").trim();
+    var patch = {};
+    if (t !== "" && t !== item.text) patch.text = t;
+    if (done !== undefined && done !== !!item.done) patch.done = done;
+    if (pinned !== !!item.pinned) patch.pinned = pinned;
+    return patch;
+  }
+
+  function swipeAction(dx, dy, onHandle) {
+    if (onHandle || Math.abs(dy) >= Math.abs(dx)) return "none";
+    if (dx <= -SWIPE_PX) return "delete";
+    if (dx > 0) return "close";
+    return "none";
+  }
+
+  var Lists = { TAB_KEY: TAB_KEY, SWIPE_PX: SWIPE_PX, rank: rank, sortItems: sortItems, pickTab: pickTab, moveId: moveId, countLabel: countLabel, itemPatch: itemPatch, swipeAction: swipeAction };
   root.Lists = Lists;
   if (typeof module !== "undefined" && module.exports) module.exports = Lists;
   if (typeof document === "undefined") return;
@@ -108,6 +126,15 @@
   var stale = false;
   var editing = null;
   var drag = null;
+  var swipe = null;
+  var openRow = null;
+  var swallowClick = false;
+  var SWIPE_OPEN_PX = 80;
+  var SWIPE_SLOP_PX = 8;
+
+  function busy() {
+    return !!(editing || drag || swipe || openRow);
+  }
 
   function currentList() {
     for (var i = 0; i < lists.length; i++) if (lists[i].id === selected) return lists[i];
@@ -123,7 +150,7 @@
   }
 
   function load() {
-    if (editing || drag) {
+    if (busy()) {
       stale = true;
       return Promise.resolve();
     }
@@ -131,7 +158,7 @@
     return getJSON("/api/lists").then(function (data) {
       lists = data;
       $("lists-error").hidden = true;
-      if (editing || drag) {
+      if (busy()) {
         stale = true;
         return;
       }
@@ -185,6 +212,8 @@
     li.className = "item" + (item.pinned ? " pinned" : "") + (item.done ? " done" : "");
     li.setAttribute("data-id", item.id);
     li.setAttribute("data-rank", rank(item));
+    var row = document.createElement("div");
+    row.className = "row";
     if (!notes) {
       var box = document.createElement("label");
       box.className = "w95-check item-check";
@@ -193,7 +222,7 @@
       input.checked = !!item.done;
       input.setAttribute("aria-label", "Done");
       box.appendChild(input);
-      li.appendChild(box);
+      row.appendChild(box);
     }
     var text = document.createElement("span");
     text.className = "text";
@@ -201,20 +230,27 @@
     text.tabIndex = 0;
     text.setAttribute("role", "button");
     text.title = "Tap to edit";
-    li.appendChild(text);
+    row.appendChild(text);
     var pin = document.createElement("button");
     pin.type = "button";
     pin.className = "w95-btn pin" + (item.pinned ? " on" : "");
     pin.title = item.pinned ? "Unpin" : "Pin";
     pin.setAttribute("aria-pressed", item.pinned ? "true" : "false");
     pin.textContent = "!";
-    li.appendChild(pin);
+    row.appendChild(pin);
     var handle = document.createElement("span");
     handle.className = "drag";
     handle.title = "Drag to reorder";
     handle.setAttribute("aria-hidden", "true");
     handle.textContent = "::";
-    li.appendChild(handle);
+    row.appendChild(handle);
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "w95-btn swipe-delete";
+    del.tabIndex = -1;
+    del.textContent = "Delete";
+    li.appendChild(del);
+    li.appendChild(row);
     return li;
   }
 
@@ -298,68 +334,195 @@
     if (!li) return;
     var item = findItem(rowId(li));
     if (!item) return;
-    if (e.target.closest(".pin")) {
+    if (e.target.closest(".swipe-delete")) {
+      closeSwipe();
+      openItem(item, true);
+    } else if (e.target.closest(".pin")) {
       item.pinned = !item.pinned;
       renderPanel(currentList());
       patchItem(item.id, { pinned: item.pinned }, "Could not pin the item. Try again.");
     } else if (e.target.closest(".text")) {
-      startEdit(li, item);
+      openItem(item, false);
     }
   }
 
   function onItemsKey(e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("text")) {
       e.preventDefault();
-      var li = e.target.closest(".item");
-      var item = findItem(rowId(li));
-      if (item) startEdit(li, item);
+      var item = findItem(rowId(e.target.closest(".item")));
+      if (item) openItem(item, false);
     }
   }
 
-  function startEdit(li, item) {
+  function rowFor(id) {
+    return $("items").querySelector('.item[data-id="' + id + '"]');
+  }
+
+  function showItemPart(name) {
+    $("item-edit").hidden = name !== "edit";
+    $("item-confirm").hidden = name !== "confirm";
+  }
+
+  function openItem(item, confirmOnly) {
     if (editing) return;
-    var span = li.querySelector(".text");
-    var input = document.createElement("input");
-    input.type = "text";
-    input.className = "w95-input text-edit";
-    input.maxLength = 200;
-    input.value = item.text;
-    input.setAttribute("aria-label", "Item text");
-    input.setAttribute("enterkeyhint", "done");
-    editing = { li: li, item: item, input: input, span: span };
-    li.replaceChild(input, span);
-    input.focus();
-    input.select();
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        finishEdit(true);
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        finishEdit(false);
-      }
-    });
-    input.addEventListener("blur", function () {
-      finishEdit(true);
-    });
+    var list = currentList();
+    editing = { id: item.id, confirmOnly: confirmOnly };
+    $("item-text").value = item.text;
+    $("item-done").checked = !!item.done;
+    $("item-done-row").hidden = !!list && list.kind === "notes";
+    $("item-pinned").checked = !!item.pinned;
+    showItemPart(confirmOnly ? "confirm" : "edit");
+    $("item-dialog").hidden = false;
+    if (confirmOnly) $("item-confirm-delete").focus();
+    else $("item-text").focus();
   }
 
-  function finishEdit(save) {
+  function closeItem() {
     var ed = editing;
-    if (!ed) return;
+    $("item-dialog").hidden = true;
     editing = null;
-    var text = ed.input.value.trim();
-    if (ed.input.parentNode) ed.li.replaceChild(ed.span, ed.input);
-    if (!save || text === ed.item.text) {
-      afterIdle();
+    var li = ed && rowFor(ed.id);
+    if (li) li.querySelector(".text").focus();
+    afterIdle();
+  }
+
+  function saveItem(e) {
+    e.preventDefault();
+    var ed = editing;
+    var item = ed && findItem(ed.id);
+    if (!item) {
+      closeItem();
       return;
     }
-    if (text === "") {
-      send("DELETE", "/api/items/" + ed.item.id).then(load, fail("Could not delete the item. Try again."));
+    var text = $("item-text").value;
+    if (!text.trim()) {
+      $("item-text").focus();
       return;
     }
-    ed.span.textContent = text;
-    patchItem(ed.item.id, { text: text }, "Could not save the item. Try again.");
+    var done = $("item-done-row").hidden ? undefined : $("item-done").checked;
+    var patch = itemPatch(item, text, done, $("item-pinned").checked);
+    if (!Object.keys(patch).length) {
+      closeItem();
+      return;
+    }
+    for (var k in patch) item[k] = patch[k];
+    renderPanel(currentList());
+    closeItem();
+    patchItem(item.id, patch, "Could not save the item. Try again.");
+  }
+
+  function askDeleteItem() {
+    showItemPart("confirm");
+    $("item-confirm-delete").focus();
+  }
+
+  function cancelDeleteItem() {
+    if (editing && editing.confirmOnly) {
+      closeItem();
+      return;
+    }
+    showItemPart("edit");
+    $("item-delete").focus();
+  }
+
+  function deleteItem() {
+    var ed = editing;
+    var list = currentList();
+    closeItem();
+    if (!ed || !list) return;
+    list.items = list.items.filter(function (it) { return it.id !== ed.id; });
+    renderPanel(list);
+    send("DELETE", "/api/items/" + ed.id).then(load, fail("Could not delete the item. Try again."));
+  }
+
+  function setOffset(li, x) {
+    li.querySelector(".row").style.transform = x ? "translateX(" + x + "px)" : "";
+  }
+
+  function closeSwipe() {
+    if (!openRow) return;
+    var li = openRow;
+    openRow = null;
+    li.classList.remove("open");
+    setOffset(li, 0);
+    afterIdle();
+  }
+
+  function onDocPointerDown(e) {
+    swallowClick = false;
+    if (!openRow || openRow.contains(e.target)) return;
+    closeSwipe();
+    if ($("items").contains(e.target)) swallowClick = true;
+  }
+
+  function onDocClick(e) {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function onSwipeDown(e) {
+    if (e.pointerType !== "touch" || swipe || drag || editing) return;
+    var li = e.target.closest(".item");
+    if (!li || e.target.closest(".drag") || e.target.closest(".swipe-delete")) return;
+    swipe = { li: li, id: e.pointerId, x: e.clientX, y: e.clientY, base: li === openRow ? -SWIPE_OPEN_PX : 0, locked: false };
+    window.addEventListener("pointermove", onSwipeMove);
+    window.addEventListener("pointerup", onSwipeUp);
+    window.addEventListener("pointercancel", onSwipeUp);
+  }
+
+  function stopSwipe() {
+    window.removeEventListener("pointermove", onSwipeMove);
+    window.removeEventListener("pointerup", onSwipeUp);
+    window.removeEventListener("pointercancel", onSwipeUp);
+    var s = swipe;
+    swipe = null;
+    if (s) s.li.classList.remove("swiping");
+    return s;
+  }
+
+  function onSwipeMove(e) {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    var dx = e.clientX - swipe.x;
+    var dy = e.clientY - swipe.y;
+    if (!swipe.locked) {
+      if (Math.abs(dx) < SWIPE_SLOP_PX && Math.abs(dy) < SWIPE_SLOP_PX) return;
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        stopSwipe();
+        afterIdle();
+        return;
+      }
+      swipe.locked = true;
+      swipe.li.classList.add("swiping");
+    }
+    setOffset(swipe.li, Math.max(-SWIPE_OPEN_PX, Math.min(0, swipe.base + dx)));
+  }
+
+  function onSwipeUp(e) {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    var s = stopSwipe();
+    if (!s.locked) {
+      if (s.li === openRow) {
+        swallowClick = true;
+        closeSwipe();
+      } else {
+        afterIdle();
+      }
+      return;
+    }
+    swallowClick = true;
+    var action = e.type === "pointercancel" ? "none" : swipeAction(e.clientX - s.x, e.clientY - s.y, false);
+    var open = s.base ? action !== "close" : action === "delete";
+    if (open) {
+      if (openRow && openRow !== s.li) closeSwipe();
+      openRow = s.li;
+      s.li.classList.add("open");
+      setOffset(s.li, -SWIPE_OPEN_PX);
+    } else {
+      openRow = s.li;
+      closeSwipe();
+    }
   }
 
   function rowIds() {
@@ -545,6 +708,16 @@
     ul.addEventListener("click", onItemsClick);
     ul.addEventListener("keydown", onItemsKey);
     ul.addEventListener("pointerdown", onPointerDown);
+    ul.addEventListener("pointerdown", onSwipeDown);
+    document.addEventListener("pointerdown", onDocPointerDown, true);
+    document.addEventListener("click", onDocClick, true);
+    $("item-edit").addEventListener("submit", saveItem);
+    $("item-cancel").addEventListener("click", closeItem);
+    $("item-close").addEventListener("click", closeItem);
+    $("item-backdrop").addEventListener("click", closeItem);
+    $("item-delete").addEventListener("click", askDeleteItem);
+    $("item-confirm-delete").addEventListener("click", deleteItem);
+    $("item-confirm-cancel").addEventListener("click", cancelDeleteItem);
     var radios = document.querySelectorAll('input[name="kind"]');
     for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onKindChange);
     $("show-on-tv").addEventListener("change", onTvChange);
@@ -562,7 +735,8 @@
     $("lists-retry").addEventListener("click", load);
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
-      if (!$("name-dialog").hidden) closeName();
+      if (!$("item-dialog").hidden) closeItem();
+      else if (!$("name-dialog").hidden) closeName();
       else if (!$("delete-dialog").hidden) closeDelete();
     });
 

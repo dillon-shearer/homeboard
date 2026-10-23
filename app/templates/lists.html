@@ -105,6 +105,38 @@
 </div>
 </div>
 </div>
+<div id="item-dialog" class="modal" hidden>
+<div id="item-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="item-title">
+<div class="w95-titlebar">
+<span id="item-title" class="w95-title-text">Item</span>
+<button type="button" id="item-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<form id="item-edit" class="w95-body">
+<label class="field-label" for="item-text">Text:</label>
+<input id="item-text" class="w95-input" type="text" maxlength="200" enterkeyhint="done">
+<div class="checks">
+<label id="item-done-row" class="w95-check"><input id="item-done" type="checkbox"><span>Done</span></label>
+<label class="w95-check"><input id="item-pinned" type="checkbox"><span>Pinned</span></label>
+</div>
+<div class="buttons">
+<button type="submit" id="item-save" class="w95-btn default">Save</button>
+<button type="button" id="item-cancel" class="w95-btn">Cancel</button>
+<button type="button" id="item-delete" class="w95-btn">Delete</button>
+</div>
+</form>
+<div id="item-confirm" class="w95-body" hidden>
+<div class="confirm">
+<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
+<p>Delete this item?</p>
+</div>
+<div class="buttons">
+<button type="button" id="item-confirm-delete" class="w95-btn default">Delete</button>
+<button type="button" id="item-confirm-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
 <script src="{{ static_url('lists.js') }}"></script>
 </body>
 </html>
