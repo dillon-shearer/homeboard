@@ -80,13 +80,13 @@ def test_defaults(client):
 
 
 def test_round_trip(client):
-    r = client.put("/api/settings", json={"channel": "lists", "channel_timeout_min": 10})
+    r = client.put("/api/settings", json={"channel": "screen", "channel_timeout_min": 10})
     assert r.status_code == 200
-    assert (r.json()["channel"], r.json()["channel_timeout_min"]) == ("lists", 10)
+    assert (r.json()["channel"], r.json()["channel_timeout_min"]) == ("screen", 10)
     assert events.last_event == "settings_changed"
     body = client.get("/api/settings").json()
-    assert (body["channel"], body["channel_timeout_min"]) == ("lists", 10)
-    assert client.get("/api/status").json()["channel"] == "lists"
+    assert (body["channel"], body["channel_timeout_min"]) == ("screen", 10)
+    assert client.get("/api/status").json()["channel"] == "screen"
 
 
 @pytest.mark.parametrize("minutes", [0, 2, 5, 10, 30])
@@ -363,10 +363,10 @@ def test_kiosk_reloads_screens_on_lists_changed():
     ]
 
 
-def test_lists_screen_id_round_trip(client):
+def test_screen_id_round_trip(client):
     screen = client.get("/api/screens").json()[0]["id"]
-    r = client.put("/api/settings", json={"channel": "lists", "lists_screen_id": screen})
+    r = client.put("/api/settings", json={"channel": "screen", "screen_id": screen})
     assert r.status_code == 200
-    assert (r.json()["channel"], r.json()["lists_screen_id"]) == ("lists", screen)
+    assert (r.json()["channel"], r.json()["screen_id"]) == ("screen", screen)
     status = client.get("/api/status").json()
-    assert (status["channel"], status["lists_screen_id"]) == ("lists", screen)
+    assert (status["channel"], status["screen_id"]) == ("screen", screen)

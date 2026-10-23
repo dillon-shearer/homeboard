@@ -6,7 +6,7 @@ import sqlite3
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app import __version__, db, events
 from app.auth import is_tunnel
@@ -18,6 +18,8 @@ KEEPALIVE_S = 15
 
 
 class SettingsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     interval_s: int | None = None
     transition: bool | None = None
     fit: str | None = None
@@ -25,12 +27,13 @@ class SettingsPatch(BaseModel):
     captions: bool | None = None
     channel: str | None = None
     channel_timeout_min: int | None = None
-    lists_screen_id: int | None = None
+    screen_id: int | None = None
     clock_size: int | None = None
     caption_size: int | None = None
     clock_pos: str | None = None
     caption_pos: str | None = None
     clock_on_top: bool | None = None
+    weather_location: str | None = None
 
 
 class DisplayCurrent(BaseModel):
@@ -46,12 +49,16 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "captions": bool(row["captions"]),
         "channel": row["channel"],
         "channel_timeout_min": row["channel_timeout_min"],
-        "lists_screen_id": row["lists_screen_id"],
+        "screen_id": row["screen_id"],
         "clock_size": row["clock_size"],
         "caption_size": row["caption_size"],
         "clock_pos": row["clock_pos"],
         "caption_pos": row["caption_pos"],
         "clock_on_top": bool(row["clock_on_top"]),
+        "weather_location": row["weather_location"],
+        "weather_lat": row["weather_lat"],
+        "weather_lon": row["weather_lon"],
+        "weather_name": row["weather_name"],
         "updated_at": row["updated_at"],
     }
 
@@ -76,8 +83,8 @@ def get_settings(conn: Conn):
 @router.put("/settings")
 def put_settings(body: SettingsPatch, conn: Conn):
     fields = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
-    if "lists_screen_id" in body.model_fields_set:
-        fields["lists_screen_id"] = body.lists_screen_id
+    if "screen_id" in body.model_fields_set:
+        fields["screen_id"] = body.screen_id
     try:
         row = db.update_settings(conn, **fields)
     except ValueError as e:
@@ -131,7 +138,7 @@ def status(request: Request, conn: Conn):
         "photo_count": len(db.list_photos(conn)),
         "current_photo_id": db.get_current_photo_id(conn),
         "channel": db.get_settings(conn)["channel"],
-        "lists_screen_id": db.get_settings(conn)["lists_screen_id"],
+        "screen_id": db.get_settings(conn)["screen_id"],
         "hostname": hostname,
         "ip": lan_ip(),
         "disk_free_bytes": shutil.disk_usage(request.app.state.photos_dir).free,

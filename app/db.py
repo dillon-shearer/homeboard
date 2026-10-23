@@ -1,6 +1,7 @@
 import re
 import sqlite3
 from datetime import UTC, date, datetime, time
+from itertools import permutations
 from pathlib import Path
 
 from app import settings
@@ -14,15 +15,16 @@ SETTINGS_FIELDS = (
     "captions",
     "channel",
     "channel_timeout_min",
-    "lists_screen_id",
+    "screen_id",
     "clock_size",
     "caption_size",
     "clock_pos",
     "caption_pos",
     "clock_on_top",
+    "weather_location",
 )
 FITS = ("contain", "cover")
-CHANNELS = ("photos", "calendar", "lists")
+CHANNELS = ("photos", "screen")
 CHANNEL_TIMEOUTS = (0, 2, 5, 10, 30)
 POSITIONS = (
     "top-left",
@@ -40,7 +42,11 @@ OVERLAY_SIZE_MAX = 12
 LIST_KINDS = ("checklist", "notes")
 LIST_NAME_MAX = 60
 SCREEN_NAME_MAX = 60
-DEFAULT_SCREEN_NAME = "Lists"
+WIDGET_KINDS = ("clock", "weather", "calendar", "lists")
+WIDGET_SIZES = (1, 2)
+GRID_COLS = 2
+GRID_ROWS = 2
+WEATHER_LOCATION_MAX = 40
 ITEM_TEXT_MAX = 200
 EVENT_TITLE_MAX = 120
 REPEATS = ("never", "weekly", "monthly", "yearly")
@@ -185,7 +191,7 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
     if "fit" in fields and fields["fit"] not in FITS:
         raise ValueError("fit must be 'contain' or 'cover'")
     if "channel" in fields and fields["channel"] not in CHANNELS:
-        raise ValueError("channel must be one of photos, calendar, lists")
+        raise ValueError("channel must be 'photos' or 'screen'")
     if "channel_timeout_min" in fields:
         v = fields["channel_timeout_min"]
         if isinstance(v, bool) or v not in CHANNEL_TIMEOUTS:
@@ -200,8 +206,14 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
     for k in ("clock_pos", "caption_pos"):
         if k in fields and fields[k] not in POSITIONS:
             raise ValueError(f"{k} must be one of {', '.join(POSITIONS)}")
-    if "lists_screen_id" in fields:
-        fields["lists_screen_id"] = _check_screen_id(conn, fields["lists_screen_id"])
+    if "screen_id" in fields:
+        fields["screen_id"] = _check_screen_id(conn, fields["screen_id"])
+    if "weather_location" in fields:
+        v = fields["weather_location"]
+        if not isinstance(v, str):
+            raise ValueError("weather_location must be text")
+        fields["weather_location"] = _clean_text(v, WEATHER_LOCATION_MAX, "weather_location")
+        fields.update(weather_lat=None, weather_lon=None, weather_name=None)
     for k in ("transition", "shuffle", "captions", "clock_on_top"):
         if k in fields:
             fields[k] = int(fields[k])
@@ -250,12 +262,11 @@ def get_list(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
 def create_list(conn: sqlite3.Connection, name, kind="checklist") -> sqlite3.Row:
     name = _clean_text(name, LIST_NAME_MAX, "name")
     kind = _check_kind(kind)
-    first = conn.execute("SELECT id FROM tv_screens ORDER BY sort_order, id LIMIT 1").fetchone()
     with conn:
         cur = conn.execute(
-            "INSERT INTO lists (name, kind, screen_id, sort_order, created_at)"
-            " VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM lists), ?)",
-            (name, kind, first["id"] if first else None, _now()),
+            "INSERT INTO lists (name, kind, sort_order, created_at)"
+            " VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM lists), ?)",
+            (name, kind, _now()),
         )
     return get_list(conn, cur.lastrowid)
 
@@ -265,18 +276,15 @@ def update_list(
     id: int,
     name=_UNSET,
     kind=_UNSET,
-    show_on_tv=_UNSET,
-    screen_id=_UNSET,
+    tv_open=_UNSET,
 ) -> sqlite3.Row | None:
     fields = {}
     if name is not _UNSET:
         fields["name"] = _clean_text(name, LIST_NAME_MAX, "name")
     if kind is not _UNSET:
         fields["kind"] = _check_kind(kind)
-    if screen_id is not _UNSET:
-        fields["screen_id"] = _check_screen_id(conn, screen_id)
-    elif show_on_tv is not _UNSET:
-        fields["screen_id"] = _first_screen_id(conn) if show_on_tv else None
+    if tv_open is not _UNSET:
+        fields["tv_open"] = int(tv_open)
     if fields:
         sets = ", ".join(f"{k} = ?" for k in fields)
         with conn:
@@ -287,8 +295,14 @@ def update_list(
 def delete_list(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
     row = get_list(conn, id)
     if row is not None:
+        screens = [
+            r["screen_id"]
+            for r in conn.execute("SELECT DISTINCT screen_id FROM widgets WHERE list_id = ?", (id,))
+        ]
         with conn:
             conn.execute("DELETE FROM lists WHERE id = ?", (id,))
+            for sid in screens:
+                _repack(conn, sid)
     return row
 
 
@@ -312,28 +326,12 @@ def _check_screen_id(conn: sqlite3.Connection, screen_id) -> int | None:
     return screen_id
 
 
-def _first_screen_id(conn: sqlite3.Connection) -> int:
-    screens = list_screens(conn)
-    if screens:
-        return screens[0]["id"]
-    return create_screen(conn, DEFAULT_SCREEN_NAME)["id"]
-
-
 def list_screens(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM tv_screens ORDER BY sort_order, id").fetchall()
 
 
 def get_screen(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM tv_screens WHERE id = ?", (id,)).fetchone()
-
-
-def screen_list_ids(conn: sqlite3.Connection, id: int) -> list[int]:
-    return [
-        r["id"]
-        for r in conn.execute(
-            "SELECT id FROM lists WHERE screen_id = ? ORDER BY sort_order, id", (id,)
-        )
-    ]
 
 
 def create_screen(conn: sqlite3.Connection, name) -> sqlite3.Row:
@@ -358,11 +356,12 @@ def update_screen(conn: sqlite3.Connection, id: int, name=_UNSET) -> sqlite3.Row
 def delete_screen(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
     row = get_screen(conn, id)
     if row is not None:
+        s = get_settings(conn)
+        showing = s["screen_id"] if s["screen_id"] is not None else list_screens(conn)[0]["id"]
         with conn:
-            conn.execute("UPDATE lists SET screen_id = NULL WHERE screen_id = ?", (id,))
-            conn.execute(
-                "UPDATE settings SET lists_screen_id = NULL WHERE lists_screen_id = ?", (id,)
-            )
+            if s["channel"] == "screen" and showing == id:
+                conn.execute("UPDATE settings SET channel = 'photos' WHERE id = 1")
+            conn.execute("UPDATE settings SET screen_id = NULL WHERE screen_id = ?", (id,))
             conn.execute("DELETE FROM tv_screens WHERE id = ?", (id,))
     return row
 
@@ -377,6 +376,138 @@ def reorder_screens(conn: sqlite3.Connection, ids) -> None:
     with conn:
         for n, sid in enumerate(ordered + rest, start=1):
             conn.execute("UPDATE tv_screens SET sort_order = ? WHERE id = ?", (n * 10, sid))
+
+
+def pack_widgets(widgets) -> list[dict]:
+    taken = set()
+    placed = []
+    for wd in widgets:
+        w, h = wd["w"], wd["h"]
+        free = [(c, r) for r in range(GRID_ROWS) for c in range(GRID_COLS) if (c, r) not in taken]
+        if not free:
+            raise ValueError("the screen is full")
+        col, row = free[0]
+        cells = {(col + dc, row + dr) for dc in range(w) for dr in range(h)}
+        if col + w > GRID_COLS or row + h > GRID_ROWS or cells & taken:
+            raise ValueError(f"a {w}x{h} widget does not fit on this screen")
+        taken |= cells
+        placed.append({"id": wd["id"], "col": col, "row": row, "w": w, "h": h})
+    return placed
+
+
+def list_widgets(conn: sqlite3.Connection, screen_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM widgets WHERE screen_id = ? ORDER BY sort_order, id", (screen_id,)
+    ).fetchall()
+
+
+def get_widget(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM widgets WHERE id = ?", (id,)).fetchone()
+
+
+def _check_size(v, label: str) -> int:
+    if isinstance(v, bool) or v not in WIDGET_SIZES:
+        raise ValueError(f"{label} must be 1 or 2")
+    return v
+
+
+def _check_widget_list(conn: sqlite3.Connection, kind: str, list_id) -> int | None:
+    if list_id is None:
+        return None
+    if kind != "lists":
+        raise ValueError("list_id is only for lists widgets")
+    if get_list(conn, list_id) is None:
+        raise ValueError(f"unknown list id: {list_id}")
+    return list_id
+
+
+def add_widget(
+    conn: sqlite3.Connection, screen_id: int, kind, w=None, h=None, list_id=None
+) -> sqlite3.Row:
+    if kind not in WIDGET_KINDS:
+        raise ValueError(f"kind must be one of {', '.join(WIDGET_KINDS)}")
+    list_id = _check_widget_list(conn, kind, list_id)
+    current = [dict(r) for r in list_widgets(conn, screen_id)]
+    if w is None and h is None:
+        sizes = [(2, 2), (2, 1), (1, 2), (1, 1)]
+    else:
+        sizes = [(_check_size(1 if w is None else w, "w"), _check_size(1 if h is None else h, "h"))]
+    error = None
+    for sw, sh in sizes:
+        try:
+            pack_widgets([*current, {"id": None, "w": sw, "h": sh}])
+        except ValueError as e:
+            error = error or e
+            continue
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO widgets (screen_id, kind, list_id, w, h, sort_order, created_at)"
+                " VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM widgets"
+                " WHERE screen_id = ?), ?)",
+                (screen_id, kind, list_id, sw, sh, screen_id, _now()),
+            )
+        return get_widget(conn, cur.lastrowid)
+    raise error
+
+
+def update_widget(
+    conn: sqlite3.Connection, id: int, w=_UNSET, h=_UNSET, list_id=_UNSET
+) -> sqlite3.Row | None:
+    row = get_widget(conn, id)
+    if row is None:
+        return None
+    fields = {}
+    if w is not _UNSET:
+        fields["w"] = _check_size(w, "w")
+    if h is not _UNSET:
+        fields["h"] = _check_size(h, "h")
+    if list_id is not _UNSET:
+        fields["list_id"] = _check_widget_list(conn, row["kind"], list_id)
+    if "w" in fields or "h" in fields:
+        layout = [dict(r) for r in list_widgets(conn, row["screen_id"])]
+        for wd in layout:
+            if wd["id"] == id:
+                wd.update(w=fields.get("w", wd["w"]), h=fields.get("h", wd["h"]))
+        pack_widgets(layout)
+    if fields:
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        with conn:
+            conn.execute(f"UPDATE widgets SET {sets} WHERE id = ?", (*fields.values(), id))
+    return get_widget(conn, id)
+
+
+def _repack(conn: sqlite3.Connection, screen_id: int) -> None:
+    layout = [dict(r) for r in list_widgets(conn, screen_id)]
+    for order in permutations(layout):
+        try:
+            pack_widgets(order)
+        except ValueError:
+            continue
+        for n, wd in enumerate(order, start=1):
+            conn.execute("UPDATE widgets SET sort_order = ? WHERE id = ?", (n * 10, wd["id"]))
+        return
+
+
+def delete_widget(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
+    row = get_widget(conn, id)
+    if row is not None:
+        with conn:
+            conn.execute("DELETE FROM widgets WHERE id = ?", (id,))
+            _repack(conn, row["screen_id"])
+    return row
+
+
+def reorder_widgets(conn: sqlite3.Connection, screen_id: int, ids) -> None:
+    ordered = list(dict.fromkeys(int(i) for i in ids))
+    layout = {r["id"]: dict(r) for r in list_widgets(conn, screen_id)}
+    unknown = [i for i in ordered if i not in layout]
+    if unknown:
+        raise ValueError(f"unknown widget ids: {unknown}")
+    new = ordered + [i for i in layout if i not in set(ordered)]
+    pack_widgets([layout[i] for i in new])
+    with conn:
+        for n, wid in enumerate(new, start=1):
+            conn.execute("UPDATE widgets SET sort_order = ? WHERE id = ?", (n * 10, wid))
 
 
 def list_items(conn: sqlite3.Connection, list_id: int) -> list[sqlite3.Row]:
