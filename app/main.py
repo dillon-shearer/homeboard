@@ -112,7 +112,15 @@ def create_app(data_dir=None) -> FastAPI:
 
     @app.get("/admin", response_class=HTMLResponse)
     def admin(request: Request):
+        return templates.TemplateResponse(request, "start.html")
+
+    @app.get("/admin/photos", response_class=HTMLResponse)
+    def admin_photos(request: Request):
         return templates.TemplateResponse(request, "admin.html")
+
+    @app.get("/admin/about", response_class=HTMLResponse)
+    def admin_about(request: Request):
+        return templates.TemplateResponse(request, "about.html")
 
     return app
 

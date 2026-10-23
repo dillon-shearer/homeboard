@@ -76,10 +76,6 @@
     return getJSON("/api/status").then(function (s) {
       setOffline(s.display_connected ? "" : "Display offline");
       setCount(s.photo_count);
-      $("host").textContent = s.hostname;
-      $("ip").textContent = s.ip || "";
-      $("disk").textContent = (s.disk_free_bytes / 1073741824).toFixed(1) + " GB free";
-      $("version").textContent = "v" + s.version;
     }).catch(function () {
       setOffline("Server not reachable");
     });
