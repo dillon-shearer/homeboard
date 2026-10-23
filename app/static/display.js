@@ -439,13 +439,14 @@
   }
 
   function updateClock() {
-    clockEl.textContent = formatClock(new Date());
+    const now = new Date();
+    clockEl.textContent = formatClock(now);
+    setTimeout(updateClock, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 20);
   }
 
   function start() {
     applyDom();
     updateClock();
-    setInterval(updateClock, 30000);
     Promise.all([loadResume(), loadSettings()]).then(loadPhotos).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);
       connect();
