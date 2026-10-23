@@ -39,8 +39,7 @@ def test_admin_pages_return_200(client, path):
 def test_start_links_to_photos_and_about(client):
     page = client.get("/admin").text
     assert 'href="/admin/photos"' in page
-    assert 'href="/admin/about"' in page
-    for name in ("Calendar", "Notes", "Grocery List"):
+    for name in ("Calendar", "Lists"):
         item = re.search(
             r'<span class="w95-icon disabled" aria-disabled="true">(?:(?!</li>).)*?'
             + re.escape(name)
@@ -51,8 +50,26 @@ def test_start_links_to_photos_and_about(client):
         assert item, name
         assert "Coming soon" in item.group(0)
         assert "href" not in item.group(0)
-    assert page.count("Coming soon") == 3
+    assert page.count("Coming soon") == 2
+    assert ">Notes<" not in page and "Grocery List" not in page
     assert 'id="photo-count"' in page and 'id="display-state"' in page
+
+
+def test_start_has_no_app_group_and_a_small_about_link(client):
+    page = client.get("/admin").text
+    assert "group-app" not in page and ">App<" not in page
+    assert page.count('href="/admin/about"') == 1
+    assert '<a href="/admin/about">About this board...</a>' in page
+    for icons in re.findall(r'<ul class="w95-icons">.*?</ul>', page, re.DOTALL):
+        assert "/admin/about" not in icons
+
+
+def test_enabled_icons_have_no_subtext(client):
+    page = client.get("/admin").text
+    enabled = re.findall(r'<a class="w95-icon".*?</a>', page, re.DOTALL)
+    assert enabled
+    for icon in enabled:
+        assert "w95-icon-note" not in icon
 
 
 def test_start_status_refreshes_every_ten_seconds():
@@ -98,11 +115,29 @@ def test_win95_css_classes():
     assert "min-height: 44px" in WIN95 and "height: 44px" in WIN95
 
 
+def test_win95_sizes_for_phones():
+    def rule(sel):
+        m = re.search(r"(?m)^" + re.escape(sel) + r" \{([^}]*)\}", WIN95)
+        assert m, sel
+        return m.group(1)
+
+    assert "min-height: 40px" in rule(".w95-titlebar")
+    icon = rule(".w95-icon-img")
+    assert "width: 64px" in icon and "height: 64px" in icon
+    window = rule(".w95-window")
+    assert "max-width: 960px" in window and "width: 100%" in window
+    assert "display: flex" in window and "flex-direction: column" in window
+    assert "font-size: clamp(13px, 1.1vw + 10px, 16px)" in rule(".w95-desktop")
+    assert "minmax(110px, 1fr)" in rule(".w95-icons")
+    assert "min-height: 120px" in rule(".w95-icon")
+
+
 def test_no_dark_mode_or_rounded_corners():
     for text in (
         WIN95,
         (ROOT / "templates" / "start.html").read_text(),
         (ROOT / "templates" / "about.html").read_text(),
+        (ROOT / "templates" / "admin.html").read_text(),
     ):
         assert "prefers-color-scheme" not in text
         assert "border-radius" not in text
