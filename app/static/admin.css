@@ -349,11 +349,14 @@ button, input {
 }
 
 .focus-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 6px 0 10px;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.focus-row .hint {
+  white-space: nowrap;
 }
 
 #caption-input {
