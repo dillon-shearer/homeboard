@@ -138,3 +138,15 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
     with conn:
         conn.execute(f"UPDATE settings SET {sets} WHERE id = 1", tuple(fields.values()))
     return get_settings(conn)
+
+
+def get_current_photo_id(conn: sqlite3.Connection) -> int | None:
+    return get_settings(conn)["current_photo_id"]
+
+
+def set_current_photo_id(conn: sqlite3.Connection, id: int | None) -> None:
+    with conn:
+        conn.execute(
+            "UPDATE settings SET current_photo_id = ? WHERE id = 1 AND current_photo_id IS NOT ?",
+            (id, id),
+        )

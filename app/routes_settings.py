@@ -24,6 +24,10 @@ class SettingsPatch(BaseModel):
     captions: bool | None = None
 
 
+class DisplayCurrent(BaseModel):
+    id: int | None = None
+
+
 def settings_dict(row: sqlite3.Row) -> dict:
     return {
         "interval_s": row["interval_s"],
@@ -61,6 +65,17 @@ def put_settings(body: SettingsPatch, conn: Conn):
         raise HTTPException(422, str(e)) from e
     events.publish("settings_changed")
     return settings_dict(row)
+
+
+@router.get("/display/current")
+def get_display_current(conn: Conn):
+    return {"id": db.get_current_photo_id(conn)}
+
+
+@router.put("/display/current")
+def put_display_current(body: DisplayCurrent, conn: Conn):
+    db.set_current_photo_id(conn, body.id)
+    return {"id": body.id}
 
 
 @router.get("/events")

@@ -69,6 +69,12 @@
     return { order: ids.slice(), pos: ids.indexOf(currentId) };
   }
 
+  function resumeOrder(ids, resumeId, shuffle, rand) {
+    const o = orderAround(ids, resumeId === undefined ? null : resumeId, shuffle, rand);
+    if (resumeId !== null && resumeId !== undefined && ids.indexOf(resumeId) !== -1) o.pos -= 1;
+    return o;
+  }
+
   function nextBackoff(seconds) {
     return Math.min(seconds * 2, MAX_BACKOFF_S);
   }
@@ -87,6 +93,7 @@
     nextIndex: nextIndex,
     mergeList: mergeList,
     orderAround: orderAround,
+    resumeOrder: resumeOrder,
     nextBackoff: nextBackoff,
     formatClock: formatClock,
   };
@@ -97,7 +104,7 @@
 
   const RETRY_MS = 5000;
   const LOAD_TIMEOUT_MS = 15000;
-  const CAPTION_MS = 5000;
+  const CAPTION_FADE_MS = 500;
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
@@ -111,6 +118,8 @@
     pos: -1,
     settings: applySettings(null, null),
     currentId: null,
+    resumeId: null,
+    reportedId: null,
     shownAt: 0,
     timer: null,
     upcoming: null,
@@ -163,7 +172,9 @@
     state.settings = applySettings(prev, data);
     applyDom();
     if (prev.shuffle !== state.settings.shuffle && state.order.length) {
-      const o = orderAround(ids(), state.currentId, state.settings.shuffle);
+      const o = state.currentId === null
+        ? resumeOrder(ids(), state.resumeId, state.settings.shuffle)
+        : orderAround(ids(), state.currentId, state.settings.shuffle);
       state.order = o.order;
       state.pos = o.pos;
       state.upcoming = null;
@@ -198,7 +209,9 @@
       return { restart: false };
     }
     hideEmpty();
-    const o = orderAround(newIds, hadCurrent ? m.id : null, state.settings.shuffle);
+    const o = hadCurrent
+      ? orderAround(newIds, m.id, state.settings.shuffle)
+      : resumeOrder(newIds, state.resumeId, state.settings.shuffle);
     state.order = o.order;
     state.pos = o.pos;
     if (m.removed) state.pos -= 1;
@@ -213,6 +226,25 @@
       state.needPhotos = true;
       return null;
     });
+  }
+
+  function loadResume() {
+    return fetchJson("/api/display/current").then(function (data) {
+      if (data && typeof data.id === "number") {
+        state.resumeId = data.id;
+        state.reportedId = data.id;
+      }
+    }, function () {});
+  }
+
+  function reportCurrent(id) {
+    if (id === state.reportedId) return;
+    state.reportedId = id;
+    fetch("/api/display/current", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id }),
+    }).catch(function () {});
   }
 
   function emptyEl() {
@@ -256,15 +288,26 @@
 
   function hideCaption() {
     clearTimeout(captionTimer);
+    captionTimer = null;
     captionEl.classList.remove("show");
   }
 
   function showCaption(photo) {
+    const text = state.settings.captions && photo.caption ? photo.caption : "";
+    const shown = captionEl.classList.contains("show");
+    if (shown && !captionTimer && captionEl.textContent === text) return;
     hideCaption();
-    if (!state.settings.captions || !photo.caption) return;
-    captionEl.textContent = photo.caption;
-    captionEl.classList.add("show");
-    captionTimer = setTimeout(hideCaption, CAPTION_MS);
+    if (!text) return;
+    if (!shown) {
+      captionEl.textContent = text;
+      captionEl.classList.add("show");
+      return;
+    }
+    captionTimer = setTimeout(function () {
+      captionTimer = null;
+      captionEl.textContent = text;
+      captionEl.classList.add("show");
+    }, CAPTION_FADE_MS);
   }
 
   function preload(token) {
@@ -286,6 +329,8 @@
     state.back.classList.remove("front");
     state.currentId = photo.id;
     state.shownAt = Date.now();
+    state.resumeId = null;
+    reportCurrent(photo.id);
     showCaption(photo);
     schedule();
     setTimeout(function () { preload(token); }, transitionMs() + 50);
@@ -401,10 +446,10 @@
     applyDom();
     updateClock();
     setInterval(updateClock, 30000);
-    Promise.all([loadSettings(), loadPhotos()]).then(function () {
+    Promise.all([loadResume(), loadSettings()]).then(loadPhotos).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);
+      connect();
     });
-    connect();
   }
 
   start();
