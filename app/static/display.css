@@ -1,0 +1,100 @@
+html, body {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  cursor: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  cursor: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+}
+
+.layer.cover {
+  object-fit: cover;
+}
+
+.layer.instant {
+  transition: none;
+}
+
+.layer.front {
+  opacity: 1;
+}
+
+#empty {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  text-align: center;
+}
+
+#empty .name {
+  font-size: 6vh;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+#empty .qr svg {
+  display: block;
+  width: 35vh;
+  height: 35vh;
+}
+
+#empty .url {
+  font-size: 3vh;
+}
+
+#empty .ip {
+  font-size: 2.2vh;
+  opacity: 0.7;
+}
+
+#caption {
+  position: fixed;
+  left: 2vh;
+  bottom: 2vh;
+  max-width: 70vw;
+  font-size: 2.5vh;
+  text-shadow: 0 0 0.6vh #000, 0 0 0.2vh #000;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+
+#caption.show {
+  opacity: 1;
+}
+
+#clock {
+  position: fixed;
+  right: 2vh;
+  bottom: 2vh;
+  font-size: 2vh;
+  text-shadow: 0 0 0.6vh #000, 0 0 0.2vh #000;
+  opacity: 0.85;
+}

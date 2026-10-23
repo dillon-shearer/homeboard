@@ -1,15 +1,18 @@
 import os
+import socket
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse, PlainTextResponse
+import segno
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import db, settings
 from app.routes_photos import router as photos_router
+from app.routes_settings import _ip
 from app.routes_settings import router as settings_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -68,9 +71,26 @@ def create_app(data_dir=None) -> FastAPI:
             return JSONResponse({"ok": False}, status_code=503)
         return {"ok": True}
 
-    @app.get("/", response_class=PlainTextResponse)
-    def index():
-        return "homeboard"
+    @app.get("/", response_class=HTMLResponse)
+    def index(request: Request):
+        conn = db.connect(app.state.db_path)
+        try:
+            empty = not db.list_photos(conn, enabled_only=True)
+        finally:
+            conn.close()
+        context = {"empty": empty}
+        if empty:
+            hostname = socket.gethostname()
+            admin_url = f"http://{hostname}/admin"
+            ip = _ip(hostname)
+            context.update(
+                admin_url=admin_url,
+                ip_url=f"http://{ip}/admin" if ip else "",
+                qr_svg=segno.make(admin_url, error="m").svg_inline(
+                    omitsize=True, dark="#000", light="#fff", border=2
+                ),
+            )
+        return templates.TemplateResponse(request, "display.html", context)
 
     return app
 
