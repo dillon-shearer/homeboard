@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>homeboard</title>
 <link rel="stylesheet" href="{{ static_url('display.css') }}">
+{% set boot = splash() %}
+<style>{{ boot.css | safe }}</style>
 </head>
 <body>
 <img id="layer-a" class="layer" alt=""{% if empty %} hidden{% endif %}>
@@ -30,6 +32,7 @@
 </div>
 <iframe id="channel" title="TV channel" hidden></iframe>
 <div id="swipe" hidden></div>
+<div id="splash" class="splash">{{ boot.markup | safe }}</div>
 <script src="{{ static_url('display.js') }}"></script>
 </body>
 </html>

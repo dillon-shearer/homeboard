@@ -5,7 +5,9 @@
 <title>Home Board boot screen</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; cursor: none; user-select: none; }
-  body {
+</style>
+<style id="splash-css">
+  .splash {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4vh;
     font-family: Arial, Helvetica, sans-serif; color: #fff;
     background:
@@ -15,29 +17,29 @@
       linear-gradient(180deg, #1b3f8f 0%, #3a74c8 45%, #8fbbe8 100%);
   }
 
-  .logo { display: flex; align-items: center; gap: 4vw; }
+  .splash .logo { display: flex; align-items: center; gap: 4vw; }
 
-  .flag { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6vw; transform: skewY(-8deg); }
-  .flag i { display: block; width: 9vw; height: 9vw; }
-  .flag i:nth-child(1) { background: #f35325; }
-  .flag i:nth-child(2) { background: #81bc06; }
-  .flag i:nth-child(3) { background: #05a6f0; }
-  .flag i:nth-child(4) { background: #ffba08; }
+  .splash .flag { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6vw; transform: skewY(-8deg); }
+  .splash .flag i { display: block; width: 9vw; height: 9vw; }
+  .splash .flag i:nth-child(1) { background: #f35325; }
+  .splash .flag i:nth-child(2) { background: #81bc06; }
+  .splash .flag i:nth-child(3) { background: #05a6f0; }
+  .splash .flag i:nth-child(4) { background: #ffba08; }
 
-  .name { text-shadow: 3px 3px 0 #000; }
-  .name small { display: block; font-size: 3vw; letter-spacing: .05em; }
-  .name b { display: block; font-size: 10vw; line-height: 1; }
+  .splash .name { text-shadow: 3px 3px 0 #000; }
+  .splash .name small { display: block; font-size: 3vw; letter-spacing: .05em; }
+  .splash .name b { display: block; font-size: 10vw; line-height: 1; }
 
-  .panel {
+  .splash .panel {
     width: 46vw; font-size: 1.6vw; text-shadow: 1px 1px 0 #000;
     display: flex; flex-direction: column; gap: 1.2vh;
   }
-  .bar {
+  .splash .bar {
     height: 3.2vh; padding: 2px; box-sizing: border-box; overflow: hidden;
     background: rgba(0, 0, 64, .55);
     border: 1px solid; border-color: #000040 #fff #fff #000040;
   }
-  .blocks {
+  .splash .blocks {
     width: 60%; height: 100%;
     background: repeating-linear-gradient(90deg, #fff 0 1.4vw, transparent 1.4vw 1.75vw);
     animation: run 1.4s steps(14) infinite;
@@ -46,7 +48,7 @@
   .bare #label { visibility: hidden; }
 </style>
 </head>
-<body>
+<body class="splash">
   <div class="logo">
     <div class="flag"><i></i><i></i><i></i><i></i></div>
     <div class="name"><small>Data with Dillon</small><b>Home Board</b></div>

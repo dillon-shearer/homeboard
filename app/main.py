@@ -20,6 +20,7 @@ from app.routes_settings import lan_ip
 from app.routes_settings import router as settings_router
 
 APP_DIR = Path(__file__).resolve().parent
+BOOT_HTML = APP_DIR.parent / "deploy" / "splash" / "boot.html"
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
@@ -51,7 +52,16 @@ def static_url(name: str) -> str:
     return f"/static/{name}?v={version}"
 
 
+def splash() -> dict:
+    text = BOOT_HTML.read_text(encoding="ascii")
+    return {
+        "css": text.split('<style id="splash-css">', 1)[1].split("</style>", 1)[0],
+        "markup": text.split('<body class="splash">', 1)[1].split("<script>", 1)[0],
+    }
+
+
 templates.env.globals["static_url"] = static_url
+templates.env.globals["splash"] = splash
 
 
 def create_app(data_dir=None) -> FastAPI:
