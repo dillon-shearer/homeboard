@@ -23,6 +23,8 @@ class SettingsPatch(BaseModel):
     fit: str | None = None
     shuffle: bool | None = None
     captions: bool | None = None
+    channel: str | None = None
+    channel_timeout_min: int | None = None
 
 
 class DisplayCurrent(BaseModel):
@@ -36,6 +38,8 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "fit": row["fit"],
         "shuffle": bool(row["shuffle"]),
         "captions": bool(row["captions"]),
+        "channel": row["channel"],
+        "channel_timeout_min": row["channel_timeout_min"],
         "updated_at": row["updated_at"],
     }
 
@@ -112,6 +116,7 @@ def status(request: Request, conn: Conn):
         "display_connected": events.display_connected(),
         "photo_count": len(db.list_photos(conn)),
         "current_photo_id": db.get_current_photo_id(conn),
+        "channel": db.get_settings(conn)["channel"],
         "hostname": hostname,
         "ip": lan_ip(),
         "disk_free_bytes": shutil.disk_usage(request.app.state.photos_dir).free,

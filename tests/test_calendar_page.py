@@ -126,8 +126,7 @@ def test_grid_is_whole_weeks_and_at_most_42_days():
 @needs_node
 def test_format_time():
     result = _node(
-        "console.log(JSON.stringify(['18:30', '00:05', '12:00', '09:07', null]"
-        ".map(C.formatTime)))"
+        "console.log(JSON.stringify(['18:30', '00:05', '12:00', '09:07', null].map(C.formatTime)))"
     )
     assert result == ["6:30 pm", "12:05 am", "12:00 pm", "9:07 am", "All day"]
 

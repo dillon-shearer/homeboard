@@ -207,6 +207,37 @@
   outline-offset: 0;
 }
 
+.w95-btn.on {
+  border-color: var(--w95-dark) var(--w95-light) var(--w95-light) var(--w95-dark);
+  box-shadow: inset 1px 1px 0 var(--w95-shadow);
+  background: #dfdfdf;
+  font-weight: bold;
+}
+
+.w95-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.w95-row + .w95-row {
+  margin-top: 12px;
+}
+
+.w95-seg {
+  display: inline-flex;
+}
+
+.w95-seg .w95-btn {
+  min-width: 96px;
+}
+
+.w95-note {
+  color: #404040;
+  font-size: 0.9em;
+}
+
 .w95-btn:disabled, .w95-btn[aria-disabled="true"] {
   color: var(--w95-shadow);
   text-shadow: 1px 1px 0 var(--w95-light);

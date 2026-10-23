@@ -6,8 +6,18 @@ from pathlib import Path
 from app import settings
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
-SETTINGS_FIELDS = ("interval_s", "transition", "fit", "shuffle", "captions")
+SETTINGS_FIELDS = (
+    "interval_s",
+    "transition",
+    "fit",
+    "shuffle",
+    "captions",
+    "channel",
+    "channel_timeout_min",
+)
 FITS = ("contain", "cover")
+CHANNELS = ("photos", "calendar", "lists")
+CHANNEL_TIMEOUTS = (0, 2, 5, 10, 30)
 LIST_KINDS = ("checklist", "notes")
 LIST_NAME_MAX = 60
 ITEM_TEXT_MAX = 200
@@ -153,6 +163,12 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
             raise ValueError("interval_s must be an integer from 5 to 600")
     if "fit" in fields and fields["fit"] not in FITS:
         raise ValueError("fit must be 'contain' or 'cover'")
+    if "channel" in fields and fields["channel"] not in CHANNELS:
+        raise ValueError("channel must be one of photos, calendar, lists")
+    if "channel_timeout_min" in fields:
+        v = fields["channel_timeout_min"]
+        if isinstance(v, bool) or v not in CHANNEL_TIMEOUTS:
+            raise ValueError("channel_timeout_min must be one of 0, 2, 5, 10, 30")
     for k in ("transition", "shuffle", "captions"):
         if k in fields:
             fields[k] = int(fields[k])

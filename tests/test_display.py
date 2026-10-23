@@ -98,6 +98,8 @@ def test_apply_settings_and_backoff():
         "fit": "cover",
         "shuffle": True,
         "captions": False,
+        "channel": "photos",
+        "channel_timeout_min": 5,
     }
     assert result["b"]["fit"] == "contain" and result["b"]["interval_s"] == 30
     assert result["seq"] == [1, 2, 4, 8, 16, 30, 30, 30]
