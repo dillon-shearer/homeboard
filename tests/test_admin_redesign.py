@@ -53,7 +53,18 @@ def test_settings_are_radios_and_checkboxes(page):
         assert f'<input type="checkbox" data-key="{key}">' in page
     for old in ('role="switch"', 'class="switch"', 'class="seg"'):
         assert old not in page
+    for text in ("Whole photo", "Fill screen", "Fade between photos", "Random order", "Show captions on the TV"):
+        assert text in page
+    for old in ("> Transition<", "> Shuffle<", "> Captions<", "> Contain<", "> Cover<"):
+        assert old not in page
+    assert 'class="hint">Off = hard cut<' in page
     assert page.index('id="settings-error"') > page.index('id="group-slideshow"')
+
+
+def test_settings_form_is_two_column_grid():
+    assert "min-width: 120px" not in CSS
+    assert "grid-template-columns: max-content 1fr" in CSS
+    assert ".settings .row" not in CSS and ".settings .label" not in CSS
 
 
 def test_sheet_is_gone():
