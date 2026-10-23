@@ -17,6 +17,8 @@ log = logging.getLogger(__name__)
 class PhotoPatch(BaseModel):
     enabled: bool | None = None
     caption: Annotated[str | None, Field(max_length=CAPTION_MAX)] = None
+    focus_x: Annotated[int, Field(ge=0, le=100, strict=True)] | None = None
+    focus_y: Annotated[int, Field(ge=0, le=100, strict=True)] | None = None
 
 
 class PhotoOrder(BaseModel):
@@ -44,6 +46,8 @@ def photo_dict(row: sqlite3.Row) -> dict:
         "sort_order": row["sort_order"],
         "width": row["width"],
         "height": row["height"],
+        "focus_x": row["focus_x"],
+        "focus_y": row["focus_y"],
         "uploaded_at": row["uploaded_at"],
     }
 
@@ -120,6 +124,9 @@ def patch_photo(id: int, body: PhotoPatch, conn: Conn):
         fields["caption"] = body.caption
     if "enabled" in body.model_fields_set and body.enabled is not None:
         fields["enabled"] = body.enabled
+    for k in ("focus_x", "focus_y"):
+        if getattr(body, k) is not None:
+            fields[k] = getattr(body, k)
     row = db.update_photo(conn, id, **fields)
     events.publish("photos_changed")
     return photo_dict(row)
