@@ -143,6 +143,10 @@ def create_app(data_dir=None) -> FastAPI:
     def admin_calendar(request: Request):
         return templates.TemplateResponse(request, "calendar.html")
 
+    @app.get("/admin/tv", response_class=HTMLResponse)
+    def admin_tv(request: Request):
+        return templates.TemplateResponse(request, "tv.html")
+
     @app.get("/admin/about", response_class=HTMLResponse)
     def admin_about(request: Request):
         return templates.TemplateResponse(request, "about.html")

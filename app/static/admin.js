@@ -718,7 +718,7 @@
   }
 
   var current = {};
-  var RADIO_KEYS = ["fit", "clock_pos", "caption_pos", "clock_on_top"];
+  var RADIO_KEYS = ["fit"];
 
   function showSettingsError(msg) {
     var el = $("settings-error");
@@ -729,13 +729,10 @@
   function renderSettings(s) {
     current = s;
     $("interval").value = s.interval_s;
-    $("clock-size").value = s.clock_size;
-    $("caption-size").value = s.caption_size;
     RADIO_KEYS.forEach(function (key) {
       var radios = document.querySelectorAll('input[name="' + key + '"]');
       for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s[key]);
     });
-    $("stack-row").hidden = s.clock_pos !== s.caption_pos;
     var checks = document.querySelectorAll(".checks input[data-key]");
     for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
   }
@@ -832,8 +829,7 @@
   function onRadioChange(e) {
     var el = e.currentTarget;
     if (!el.checked) return;
-    var name = el.getAttribute("name");
-    setSetting(name, name === "clock_on_top" ? el.value === "true" : el.value);
+    setSetting(el.getAttribute("name"), el.value);
   }
 
   function setSetting(key, value) {
@@ -895,8 +891,6 @@
     $("file-input").addEventListener("change", onFiles);
     $("upload-close").addEventListener("click", closeUpload);
     makeStepper("interval", "interval_s", 5, 600);
-    makeStepper("clock-size", "clock_size", 2, 12);
-    makeStepper("caption-size", "caption_size", 2, 12);
     RADIO_KEYS.forEach(function (key) {
       var radios = document.querySelectorAll('input[name="' + key + '"]');
       for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onRadioChange);

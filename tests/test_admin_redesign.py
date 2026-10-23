@@ -49,8 +49,9 @@ def test_settings_are_radios_and_checkboxes(page):
     assert 'id="interval-minus"' in page and 'id="interval-plus"' in page
     for value in ("contain", "cover"):
         assert f'<input type="radio" name="fit" value="{value}">' in page
-    for key in ("transition", "shuffle", "captions"):
+    for key in ("transition", "shuffle"):
         assert f'<input type="checkbox" data-key="{key}">' in page
+    assert 'data-key="captions"' not in page
     for old in ('role="switch"', 'class="switch"', 'class="seg"'):
         assert old not in page
     for text in (
@@ -58,7 +59,6 @@ def test_settings_are_radios_and_checkboxes(page):
         "Fill screen",
         "Fade between photos",
         "Random order",
-        "Show captions on the TV",
     ):
         assert text in page
     for old in ("> Transition<", "> Shuffle<", "> Captions<", "> Contain<", "> Cover<"):

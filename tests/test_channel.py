@@ -105,9 +105,9 @@ def test_invalid_is_422(client, body):
     assert (after["channel"], after["channel_timeout_min"]) == ("photos", 5)
 
 
-def test_start_screen_markup(client):
-    page = client.get("/admin").text
-    assert ">TV channel<" in page
+def test_tv_page_markup(client):
+    page = client.get("/admin/tv").text
+    assert ">Showing on the TV<" in page
     assert re.search(r'<button class="w95-btn"[^>]*data-channel="photos"[^>]*aria-pressed', page)
     assert 'data-channel="calendar"' not in page
     assert 'data-channel="lists"' not in page
@@ -119,8 +119,8 @@ def test_start_screen_markup(client):
     assert 'id="display-state"' in page
 
 
-def test_start_js_puts_channel_and_timeout():
-    js = (ROOT / "static" / "start.js").read_text(encoding="utf-8")
+def test_tv_js_puts_channel_and_timeout():
+    js = (ROOT / "static" / "tv_admin.js").read_text(encoding="utf-8")
     assert "var body = { channel: channel };" in js and "putSettings(body)" in js
     assert 'if (channel === "screen") body.screen_id = parseInt(' in js
     assert "channel_timeout_min: parseInt" in js
