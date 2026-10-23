@@ -121,7 +121,7 @@
     menu.className = "tile-menu";
     menu.setAttribute("aria-label", "Photo options");
     menu.setAttribute("aria-haspopup", "dialog");
-    menu.textContent = "⋮";
+    menu.textContent = String.fromCharCode(0x22ee);
     tile.appendChild(menu);
 
     var handle = document.createElement("span");
@@ -129,7 +129,7 @@
     handle.draggable = true;
     handle.title = "Drag to reorder";
     handle.setAttribute("aria-hidden", "true");
-    handle.textContent = "≡";
+    handle.textContent = String.fromCharCode(0x2261);
     tile.appendChild(handle);
     return tile;
   }
