@@ -53,7 +53,13 @@ def test_settings_are_radios_and_checkboxes(page):
         assert f'<input type="checkbox" data-key="{key}">' in page
     for old in ('role="switch"', 'class="switch"', 'class="seg"'):
         assert old not in page
-    for text in ("Whole photo", "Fill screen", "Fade between photos", "Random order", "Show captions on the TV"):
+    for text in (
+        "Whole photo",
+        "Fill screen",
+        "Fade between photos",
+        "Random order",
+        "Show captions on the TV",
+    ):
         assert text in page
     for old in ("> Transition<", "> Shuffle<", "> Captions<", "> Contain<", "> Cover<"):
         assert old not in page

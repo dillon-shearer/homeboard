@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import db, settings
 from app.auth import TunnelGate
+from app.routes_lists import router as lists_router
 from app.routes_photos import router as photos_router
 from app.routes_settings import lan_ip
 from app.routes_settings import router as settings_router
@@ -66,6 +67,7 @@ def create_app(data_dir=None) -> FastAPI:
     app.add_middleware(TunnelGate)
     app.include_router(photos_router)
     app.include_router(settings_router)
+    app.include_router(lists_router)
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
     app.mount("/photos", ImmutableStaticFiles(directory=photos_dir), name="photos")
     app.mount("/thumbs", ImmutableStaticFiles(directory=thumbs_dir), name="thumbs")
