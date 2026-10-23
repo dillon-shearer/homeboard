@@ -35,16 +35,16 @@ def settings_dict(row: sqlite3.Row) -> dict:
     }
 
 
-def _ip(hostname: str) -> str:
+def _ip() -> str:
     try:
-        infos = socket.getaddrinfo(hostname, None, socket.AF_INET)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 80))
+            addr = s.getsockname()[0]
     except OSError:
         return ""
-    for info in infos:
-        addr = info[4][0]
-        if not addr.startswith("127."):
-            return addr
-    return ""
+    if addr.startswith("127.") or addr == "0.0.0.0":
+        return ""
+    return addr
 
 
 @router.get("/settings")
@@ -97,7 +97,7 @@ def status(request: Request, conn: Conn):
         "display_connected": events.display_connected(),
         "photo_count": len(db.list_photos(conn)),
         "hostname": hostname,
-        "ip": _ip(hostname),
+        "ip": _ip(),
         "disk_free_bytes": shutil.disk_usage(request.app.state.photos_dir).free,
         "version": __version__,
     }
