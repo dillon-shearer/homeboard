@@ -19,7 +19,95 @@
     return type === "" || type === "application/octet-stream" || type.indexOf("image/") === 0;
   }
 
-  var Admin = { moveId: moveId, isSupported: isSupported };
+  function photoPatch(photo, captionText, enabled) {
+    var text = (captionText || "").trim();
+    var caption = text === "" ? null : text;
+    var patch = {};
+    if (caption !== (photo.caption || null)) patch.caption = caption;
+    if (enabled !== !!photo.enabled) patch.enabled = enabled;
+    return patch;
+  }
+
+  function svgIcon(d) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  var ICON_EYE_OFF = "M1 6C3 3 9 3 11 6C9 9 3 9 1 6ZM5 6a1 1 0 1 0 2 0a1 1 0 1 0-2 0M1.5 10.5L10.5 1.5";
+
+  function makeBadge(cls) {
+    var badge = document.createElement("span");
+    badge.className = "badge " + cls;
+    badge.setAttribute("aria-hidden", "true");
+    return badge;
+  }
+
+  function setBadge(tile, cls, on, fill) {
+    var badge = tile.querySelector("." + cls);
+    if (!on) {
+      if (badge) tile.removeChild(badge);
+      return;
+    }
+    if (badge) return;
+    badge = makeBadge(cls);
+    fill(badge);
+    tile.insertBefore(badge, tile.querySelector(".tile-handle"));
+  }
+
+  function tileLabel(p) {
+    return "Photo" + (p.caption ? ": " + p.caption : "") + (p.enabled ? "" : ", hidden from the board");
+  }
+
+  function setTileState(tile, p) {
+    tile.classList.toggle("disabled", !p.enabled);
+    tile.setAttribute("data-caption", p.caption || "");
+    var open = tile.querySelector(".tile-open");
+    open.setAttribute("aria-label", tileLabel(p));
+    open.querySelector("img").alt = p.caption || "";
+    setBadge(tile, "badge-hidden", !p.enabled, function (b) {
+      b.appendChild(svgIcon(ICON_EYE_OFF));
+    });
+    setBadge(tile, "badge-cc", !!p.caption, function (b) {
+      b.textContent = "CC";
+    });
+  }
+
+  function buildTile(p) {
+    var tile = document.createElement("div");
+    tile.className = "tile";
+    tile.setAttribute("data-id", p.id);
+    var open = document.createElement("button");
+    open.type = "button";
+    open.className = "tile-open";
+    open.setAttribute("aria-haspopup", "dialog");
+    var img = document.createElement("img");
+    img.src = p.thumb_url;
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.draggable = false;
+    open.appendChild(img);
+    tile.appendChild(open);
+
+    var handle = document.createElement("span");
+    handle.className = "tile-handle";
+    handle.draggable = true;
+    handle.title = "Drag to reorder";
+    handle.setAttribute("aria-hidden", "true");
+    var grip = makeBadge("badge-handle");
+    grip.textContent = String.fromCharCode(0x2261);
+    handle.appendChild(grip);
+    tile.appendChild(handle);
+    setTileState(tile, p);
+    return tile;
+  }
+
+  var Admin = { moveId: moveId, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState };
   root.Admin = Admin;
   if (typeof module !== "undefined" && module.exports) module.exports = Admin;
   if (typeof document === "undefined") return;
@@ -74,17 +162,15 @@
 
   function loadStatus() {
     return getJSON("/api/status").then(function (s) {
-      setOffline(s.display_connected ? "" : "Display offline");
+      setDisplayState(s.display_connected ? "Display online" : "Display offline");
       setCount(s.photo_count);
     }).catch(function () {
-      setOffline("Server not reachable");
+      setDisplayState("Server not reachable");
     });
   }
 
-  function setOffline(text) {
-    var el = $("offline");
-    el.textContent = text;
-    el.hidden = !text;
+  function setDisplayState(text) {
+    $("display-state").textContent = text;
   }
 
   var photos = [];
@@ -131,81 +217,12 @@
     updateGridMeta();
   }
 
-  function svgIcon(d) {
-    var ns = "http://www.w3.org/2000/svg";
-    var svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("aria-hidden", "true");
-    var path = document.createElementNS(ns, "path");
-    path.setAttribute("d", d);
-    svg.appendChild(path);
-    return svg;
-  }
-
-  var ICON_EYE = "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
-  var ICON_EYE_OFF = "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2";
-  var ICON_X = "M7 7l10 10M17 7L7 17";
-
-  function buildTile(p) {
-    var tile = document.createElement("div");
-    tile.className = "tile" + (p.enabled ? "" : " disabled");
-    tile.setAttribute("data-id", p.id);
-    tile.setAttribute("data-caption", p.caption || "");
-    var menu = document.createElement("button");
-    menu.type = "button";
-    menu.className = "tile-menu";
-    menu.setAttribute("aria-label", "Photo options");
-    menu.setAttribute("aria-haspopup", "dialog");
-    var img = document.createElement("img");
-    img.src = p.thumb_url;
-    img.alt = p.caption || "";
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.draggable = false;
-    menu.appendChild(img);
-    tile.appendChild(menu);
-
-    var toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "tile-toggle";
-    tile.appendChild(toggle);
-    setToggle(tile, p.enabled);
-
-    var del = document.createElement("button");
-    del.type = "button";
-    del.className = "tile-delete";
-    del.setAttribute("aria-label", "Delete photo");
-    del.setAttribute("aria-haspopup", "dialog");
-    del.appendChild(svgIcon(ICON_X));
-    tile.appendChild(del);
-
-    var handle = document.createElement("span");
-    handle.className = "tile-handle";
-    handle.draggable = true;
-    handle.title = "Drag to reorder";
-    handle.setAttribute("aria-hidden", "true");
-    handle.textContent = String.fromCharCode(0x2261);
-    tile.appendChild(handle);
-    return tile;
-  }
-
-  function setToggle(tile, enabled) {
-    tile.classList.toggle("disabled", !enabled);
-    var btn = tile.querySelector(".tile-toggle");
-    btn.setAttribute("aria-pressed", enabled ? "true" : "false");
-    btn.setAttribute("aria-label", enabled ? "Shown on the board" : "Hidden from the board");
-    btn.textContent = "";
-    btn.appendChild(svgIcon(enabled ? ICON_EYE : ICON_EYE_OFF));
-    var p = findPhoto(tileId(tile));
-    if (p) p.enabled = enabled;
-  }
-
   var toastTimer = null;
 
   function showError(msg) {
     var el = $("toast");
     clearTimeout(toastTimer);
-    el.textContent = msg;
+    $("toast-text").textContent = msg;
     el.classList.remove("fade");
     el.hidden = false;
     toastTimer = setTimeout(function () {
@@ -258,15 +275,6 @@
     return ids.concat(photos.map(function (p) { return p.id; }).filter(function (id) {
       return ids.indexOf(id) === -1;
     }));
-  }
-
-  function onToggle(tile) {
-    var next = tile.classList.contains("disabled");
-    setToggle(tile, next);
-    return send("PATCH", "/api/photos/" + tileId(tile), { enabled: next }).catch(function () {
-      setToggle(tile, !next);
-      showError("Could not " + (next ? "show" : "hide") + " the photo. Try again.");
-    });
   }
 
   var drag = null;
@@ -351,83 +359,70 @@
     endDrag();
   }
 
-  var sheetTile = null;
-  var sheetOpener = null;
+  var dialogTile = null;
 
-  function showSheetPart(name) {
-    $("sheet-actions").hidden = name !== "actions";
-    $("sheet-confirm").hidden = name !== "confirm";
-    $("sheet-caption").hidden = name !== "caption";
+  function showDialogPart(name) {
+    $("photo-edit").hidden = name !== "edit";
+    $("photo-confirm").hidden = name !== "confirm";
   }
 
-  function openSheet(tile, opener) {
-    sheetTile = tile;
-    sheetOpener = opener || null;
-    $("sheet-thumb").src = tile.querySelector("img").src;
-    $("sheet-toggle").textContent = tile.classList.contains("disabled") ? "Show on Board" : "Hide from Board";
-    showSheetPart("actions");
-    $("sheet").hidden = false;
-    $("sheet-edit").focus();
+  function openDialog(tile) {
+    var p = findPhoto(tileId(tile));
+    if (!p) return;
+    dialogTile = tile;
+    $("photo-thumb").src = tile.querySelector("img").src;
+    $("caption-input").value = p.caption || "";
+    $("photo-enabled").checked = !!p.enabled;
+    showDialogPart("edit");
+    $("photo-dialog").hidden = false;
+    $("caption-input").focus();
   }
 
-  function openConfirm(tile, opener) {
-    if (tile) {
-      sheetTile = tile;
-      sheetOpener = opener || null;
-    }
-    if (!sheetTile) return;
-    showSheetPart("confirm");
-    $("sheet").hidden = false;
+  function openConfirm() {
+    if (!dialogTile) return;
+    showDialogPart("confirm");
     $("confirm-delete").focus();
   }
 
-  function sheetToggle() {
-    var tile = sheetTile;
-    closeSheet();
-    if (tile) onToggle(tile);
+  function backToEdit() {
+    showDialogPart("edit");
+    $("photo-delete").focus();
   }
 
-  function closeSheet() {
-    $("sheet").hidden = true;
-    var opener = sheetOpener;
-    sheetTile = null;
-    sheetOpener = null;
-    if (opener && document.body.contains(opener)) opener.focus();
+  function closeDialog() {
+    $("photo-dialog").hidden = true;
+    var tile = dialogTile;
+    dialogTile = null;
+    if (tile && document.body.contains(tile)) tile.querySelector(".tile-open").focus();
   }
 
-  function openCaption() {
-    if (!sheetTile) return;
-    var input = $("caption-input");
-    input.value = sheetTile.getAttribute("data-caption") || "";
-    showSheetPart("caption");
-    input.focus();
-    input.select();
-  }
-
-  function saveCaption() {
-    var tile = sheetTile;
+  function savePhoto() {
+    var tile = dialogTile;
     if (!tile) return;
-    var text = $("caption-input").value.trim();
-    var caption = text === "" ? null : text;
-    var btn = $("caption-save");
+    var p = findPhoto(tileId(tile));
+    if (!p) return;
+    var patch = photoPatch(p, $("caption-input").value, $("photo-enabled").checked);
+    if (!Object.keys(patch).length) {
+      closeDialog();
+      return;
+    }
+    var btn = $("photo-save");
     btn.disabled = true;
-    return send("PATCH", "/api/photos/" + tileId(tile), { caption: caption }).then(function () {
-      tile.setAttribute("data-caption", caption || "");
-      tile.querySelector("img").alt = caption || "";
-      var p = findPhoto(tileId(tile));
-      if (p) p.caption = caption;
-      closeSheet();
+    return send("PATCH", "/api/photos/" + tileId(tile), patch).then(function () {
+      for (var k in patch) p[k] = patch[k];
+      setTileState(tile, p);
+      if (dialogTile === tile) closeDialog();
     }).catch(function () {
-      showError("Could not save the caption. Try again.");
+      showError("Could not save the photo. Try again.");
     }).then(function () {
       btn.disabled = false;
     });
   }
 
   function deletePhoto() {
-    var tile = sheetTile;
+    var tile = dialogTile;
     if (!tile) return;
-    closeSheet();
+    closeDialog();
     var id = tileId(tile);
     return send("DELETE", "/api/photos/" + id).then(function () {
       if (tile.parentNode) tile.parentNode.removeChild(tile);
@@ -442,13 +437,9 @@
   }
 
   function onGridClick(e) {
-    var btn = e.target.closest("button");
+    var btn = e.target.closest(".tile-open");
     if (!btn) return;
-    var tile = btn.closest(".tile");
-    if (!tile) return;
-    if (btn.classList.contains("tile-toggle")) onToggle(tile);
-    else if (btn.classList.contains("tile-delete")) openConfirm(tile, btn);
-    else if (btn.classList.contains("tile-menu")) openSheet(tile, btn);
+    openDialog(btn.closest(".tile"));
   }
 
   function initTiles() {
@@ -460,58 +451,58 @@
     grid.addEventListener("drop", onDrop);
     grid.addEventListener("dragend", endDrag);
 
-    $("sheet-backdrop").addEventListener("click", closeSheet);
-    $("sheet-cancel").addEventListener("click", closeSheet);
-    $("sheet-edit").addEventListener("click", openCaption);
-    $("sheet-toggle").addEventListener("click", sheetToggle);
-    $("sheet-delete").addEventListener("click", function () { openConfirm(); });
+    $("photo-backdrop").addEventListener("click", closeDialog);
+    $("photo-close").addEventListener("click", closeDialog);
+    $("photo-cancel").addEventListener("click", closeDialog);
+    $("photo-save").addEventListener("click", savePhoto);
+    $("photo-delete").addEventListener("click", openConfirm);
     $("confirm-delete").addEventListener("click", deletePhoto);
-    $("confirm-cancel").addEventListener("click", closeSheet);
+    $("confirm-cancel").addEventListener("click", backToEdit);
     $("show-more").addEventListener("click", showMore);
-    $("caption-cancel").addEventListener("click", closeSheet);
-    $("caption-save").addEventListener("click", saveCaption);
     $("caption-input").addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
-        saveCaption();
+        savePhoto();
       }
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !$("sheet").hidden) closeSheet();
+      if (e.key !== "Escape") return;
+      if (!$("photo-dialog").hidden) closeDialog();
+      else if (!$("upload-dialog").hidden && !$("upload-close").disabled) closeUpload();
     });
   }
 
   function addRow(file) {
     var li = document.createElement("li");
-    var top = document.createElement("div");
-    top.className = "name";
-    var name = document.createElement("span");
+    var name = document.createElement("div");
+    name.className = "name";
     name.textContent = file.name;
-    var state = document.createElement("span");
-    top.appendChild(name);
-    top.appendChild(state);
-    var bar = document.createElement("progress");
-    bar.max = 100;
-    bar.value = 0;
-    li.appendChild(top);
-    li.appendChild(bar);
+    var frame = document.createElement("div");
+    frame.className = "w95-progress";
+    var bar = document.createElement("div");
+    bar.className = "w95-progress-bar";
+    frame.appendChild(bar);
+    var state = document.createElement("div");
+    state.className = "state";
+    state.textContent = "Waiting...";
+    li.appendChild(name);
+    li.appendChild(frame);
+    li.appendChild(state);
     $("upload-list").appendChild(li);
-    $("upload-list").hidden = false;
     return {
       progress: function (pct) {
-        bar.value = pct;
+        bar.style.width = pct + "%";
         state.textContent = pct + "%";
       },
       done: function () {
-        bar.value = 100;
-        bar.hidden = true;
+        bar.style.width = "100%";
         state.textContent = "Done";
-        state.className = "done";
+        state.className = "state done";
       },
       fail: function (msg) {
-        bar.hidden = true;
+        frame.hidden = true;
         state.textContent = msg;
-        state.className = "fail";
+        state.className = "state fail";
       }
     };
   }
@@ -538,11 +529,18 @@
     });
   }
 
+  function closeUpload() {
+    $("upload-dialog").hidden = true;
+    $("file-input").focus();
+  }
+
   function onFiles(e) {
     var files = Array.prototype.slice.call(e.target.files || []);
     e.target.value = "";
     if (!files.length) return;
     $("upload-list").textContent = "";
+    $("upload-close").disabled = true;
+    $("upload-dialog").hidden = false;
     var jobs = files.map(function (file) {
       var row = addRow(file);
       if (!isSupported(file)) {
@@ -552,6 +550,8 @@
       return uploadOne(file, row);
     });
     Promise.all(jobs).then(function () {
+      $("upload-close").disabled = false;
+      $("upload-close").focus();
       loadGrid().catch(function () {});
       loadStatus();
     });
@@ -569,20 +569,10 @@
   function renderSettings(s) {
     current = s;
     $("interval").value = s.interval_s;
-    var segs = document.querySelectorAll(".seg");
-    for (var i = 0; i < segs.length; i++) {
-      var key = segs[i].getAttribute("data-key");
-      var buttons = segs[i].querySelectorAll("button");
-      for (var j = 0; j < buttons.length; j++) {
-        var active = buttons[j].getAttribute("data-value") === String(s[key]);
-        buttons[j].classList.toggle("active", active);
-        buttons[j].setAttribute("aria-pressed", active ? "true" : "false");
-      }
-    }
-    var switches = document.querySelectorAll(".switch");
-    for (var n = 0; n < switches.length; n++) {
-      switches[n].setAttribute("aria-checked", s[switches[n].getAttribute("data-key")] ? "true" : "false");
-    }
+    var radios = document.querySelectorAll('input[name="fit"]');
+    for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s.fit);
+    var checks = document.querySelectorAll(".checks input[data-key]");
+    for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
   }
 
   function loadSettings() {
@@ -659,17 +649,12 @@
     }, INTERVAL_DEBOUNCE_MS);
   }
 
-  function onSwitchClick(e) {
-    var key = e.currentTarget.getAttribute("data-key");
-    setSetting(key, e.currentTarget.getAttribute("aria-checked") !== "true");
+  function onCheckChange(e) {
+    setSetting(e.currentTarget.getAttribute("data-key"), e.currentTarget.checked);
   }
 
-  function onSegClick(e) {
-    var btn = e.target.closest("button");
-    if (!btn) return;
-    var key = e.currentTarget.getAttribute("data-key");
-    var raw = btn.getAttribute("data-value");
-    setSetting(key, raw === "true" ? true : raw === "false" ? false : raw);
+  function onFitChange(e) {
+    if (e.currentTarget.checked) setSetting("fit", e.currentTarget.value);
   }
 
   function setSetting(key, value) {
@@ -684,16 +669,17 @@
 
   function init() {
     $("file-input").addEventListener("change", onFiles);
+    $("upload-close").addEventListener("click", closeUpload);
     holdStep($("interval-minus"), -1);
     holdStep($("interval-plus"), 1);
     $("interval").addEventListener("input", onIntervalInput);
     $("interval").addEventListener("change", function () {
       if ($("interval").value === "") $("interval").value = current.interval_s;
     });
-    var segs = document.querySelectorAll(".seg");
-    for (var i = 0; i < segs.length; i++) segs[i].addEventListener("click", onSegClick);
-    var switches = document.querySelectorAll(".switch");
-    for (var j = 0; j < switches.length; j++) switches[j].addEventListener("click", onSwitchClick);
+    var radios = document.querySelectorAll('input[name="fit"]');
+    for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onFitChange);
+    var checks = document.querySelectorAll(".checks input[data-key]");
+    for (var j = 0; j < checks.length; j++) checks[j].addEventListener("change", onCheckChange);
     initTiles();
 
     loadSettings().catch(function () {

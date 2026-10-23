@@ -3,109 +3,116 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#008080">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Home Board">
-<title>Home Board</title>
+<title>Photos - Home Board</title>
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-512.png">
 <link rel="icon" type="image/png" href="/static/icon-512.png">
 <link rel="stylesheet" href="{{ static_url('win95.css') }}">
 <link rel="stylesheet" href="{{ static_url('admin.css') }}">
 </head>
-<body>
+<body class="w95-desktop">
+<div id="toast" class="toast w95-window" role="alert" hidden>
+<div class="w95-titlebar"><span class="w95-title-text">Home Board</span></div>
+<div class="toast-body">
+<svg class="toast-icon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="#000"/><circle cx="15" cy="15" r="13" fill="#ff0000"/><path d="M10 10l10 10M20 10L10 20" stroke="#fff" stroke-width="3"/></svg>
+<span id="toast-text"></span>
+</div>
+</div>
+<main class="w95-window">
 <div class="w95-titlebar">
 <a class="w95-back" href="/admin">Start</a>
-<span class="w95-title-text">Photos - Home Board</span>
+<span class="w95-title-text">Photos</span>
 <span class="w95-close" aria-hidden="true"></span>
 </div>
-<div id="toast" class="toast" role="alert" hidden></div>
-<main>
-<header class="top">
-<h1>Home Board</h1>
-<p class="meta"><span id="photo-count">0 photos</span><span id="offline" class="offline" hidden>Display offline</span></p>
-</header>
-
-<section class="upload">
-<label class="upload-btn">
+<div class="w95-body">
+<div class="toolbar">
+<label class="w95-btn upload-btn">
 <input id="file-input" type="file" accept="image/jpeg,image/png,image/heic,image/heif,image/webp" multiple>
 <span>Add Photos</span>
 </label>
-<ul id="upload-list" class="group upload-list" hidden></ul>
-</section>
-
-<section class="photos">
-<div class="section-head">
-<h2>Photos</h2>
-<span class="hint">Tap a photo for options</span>
+<span class="hint">Tap a photo to edit it</span>
 </div>
+
 <div id="grid" class="grid"></div>
-<p id="grid-empty" class="empty" hidden>No photos yet. Tap Add Photos to start.</p>
-<button type="button" id="show-more" class="more" hidden>Show More</button>
-</section>
+<p id="grid-empty" class="empty w95-sunken" hidden>No photos yet. Tap Add Photos to start.</p>
+<button type="button" id="show-more" class="w95-btn more" hidden>Show More</button>
 
-<section class="settings">
-<h2>Slideshow</h2>
-<div class="group">
+<section class="w95-group settings" aria-labelledby="group-slideshow">
+<h2 id="group-slideshow" class="w95-legend">Slideshow</h2>
 <div class="row">
-<span class="label">Seconds per photo</span>
+<label class="label" for="interval">Seconds per photo:</label>
 <div class="stepper">
-<button type="button" id="interval-minus" aria-label="Less time">&minus;</button>
-<input id="interval" type="number" min="5" max="600" step="1" inputmode="numeric" aria-label="Seconds per photo">
-<button type="button" id="interval-plus" aria-label="More time">+</button>
+<button type="button" id="interval-minus" class="w95-btn step" aria-label="Less time">&minus;</button>
+<input id="interval" type="number" min="5" max="600" step="1" inputmode="numeric" class="w95-input" aria-label="Seconds per photo">
+<button type="button" id="interval-plus" class="w95-btn step" aria-label="More time">+</button>
 </div>
 </div>
-<div class="row">
-<span class="label">Fit</span>
-<div class="seg" data-key="fit"><button type="button" data-value="contain">Contain</button><button type="button" data-value="cover">Cover</button></div>
-</div>
-<div class="row">
-<span class="label">Transition</span>
-<button type="button" class="switch" role="switch" data-key="transition" aria-label="Transition"></button>
-</div>
-<div class="row">
-<span class="label">Shuffle</span>
-<button type="button" class="switch" role="switch" data-key="shuffle" aria-label="Shuffle"></button>
-</div>
-<div class="row">
-<span class="label">Captions</span>
-<button type="button" class="switch" role="switch" data-key="captions" aria-label="Captions"></button>
+<div class="row" role="radiogroup" aria-labelledby="fit-label">
+<span id="fit-label" class="label">Fit:</span>
+<div class="choices">
+<label class="w95-check w95-radio"><input type="radio" name="fit" value="contain"> Contain</label>
+<label class="w95-check w95-radio"><input type="radio" name="fit" value="cover"> Cover</label>
 </div>
 </div>
-<p id="settings-error" class="error" hidden></p>
+<div class="checks">
+<label class="w95-check"><input type="checkbox" data-key="transition"> Transition</label>
+<label class="w95-check"><input type="checkbox" data-key="shuffle"> Shuffle</label>
+<label class="w95-check"><input type="checkbox" data-key="captions"> Captions</label>
+</div>
 </section>
-
+<p id="settings-error" class="error" hidden></p>
+</div>
+<div class="w95-statusbar" role="status">
+<span id="photo-count">0 photos</span>
+<span id="display-state">Display ...</span>
+</div>
 </main>
-<div id="sheet" class="sheet" hidden>
-<div id="sheet-backdrop" class="sheet-backdrop"></div>
-<div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Photo options">
-<div id="sheet-actions" class="sheet-list">
-<div class="sheet-group">
-<img id="sheet-thumb" class="sheet-thumb" alt="">
-<button type="button" id="sheet-edit">Edit Caption</button>
-<button type="button" id="sheet-toggle">Hide from Board</button>
-<button type="button" id="sheet-delete" class="danger">Delete Photo</button>
+
+<div id="photo-dialog" class="modal" hidden>
+<div id="photo-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="photo-title">
+<div class="w95-titlebar">
+<span id="photo-title" class="w95-title-text">Photo</span>
+<button type="button" id="photo-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
 </div>
-<button type="button" id="sheet-cancel" class="cancel">Cancel</button>
+<div id="photo-edit" class="w95-body">
+<img id="photo-thumb" class="photo-thumb" alt="">
+<label class="field-label" for="caption-input">Caption:</label>
+<input id="caption-input" class="w95-input" type="text" placeholder="No caption" enterkeyhint="done">
+<label class="w95-check"><input id="photo-enabled" type="checkbox"> Show on the board</label>
+<div class="buttons">
+<button type="button" id="photo-save" class="w95-btn default">Save</button>
+<button type="button" id="photo-cancel" class="w95-btn">Cancel</button>
+<button type="button" id="photo-delete" class="w95-btn">Delete</button>
 </div>
-<div id="sheet-confirm" class="sheet-list" hidden>
-<div class="sheet-group">
-<p class="sheet-title">This photo will be removed from the board and the Pi.</p>
-<button type="button" id="confirm-delete" class="danger">Delete Photo</button>
 </div>
-<button type="button" id="confirm-cancel" class="cancel">Cancel</button>
+<div id="photo-confirm" class="w95-body" hidden>
+<div class="confirm">
+<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
+<p>Delete this photo from the board and the Pi?</p>
 </div>
-<div id="sheet-caption" class="sheet-list" hidden>
-<div class="sheet-group pad">
-<input id="caption-input" type="text" placeholder="Caption" aria-label="Caption" enterkeyhint="done">
+<div class="buttons">
+<button type="button" id="confirm-delete" class="w95-btn default">Delete</button>
+<button type="button" id="confirm-cancel" class="w95-btn">Cancel</button>
 </div>
-<div class="sheet-row">
-<button type="button" id="caption-cancel" class="cancel">Cancel</button>
-<button type="button" id="caption-save" class="primary">Save</button>
+</div>
+</div>
+</div>
+
+<div id="upload-dialog" class="modal" hidden>
+<div class="modal-backdrop"></div>
+<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+<div class="w95-titlebar"><span id="upload-title" class="w95-title-text">Uploading</span></div>
+<div class="w95-body">
+<ul id="upload-list" class="upload-list"></ul>
+<div class="buttons">
+<button type="button" id="upload-close" class="w95-btn default" disabled>Close</button>
 </div>
 </div>
 </div>

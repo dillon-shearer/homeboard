@@ -47,8 +47,9 @@ def test_move_id():
 
 def test_admin_js_tile_actions():
     js = ADMIN_JS.read_text()
-    assert 'send("PATCH", "/api/photos/" + tileId(tile), { enabled: next })' in js
-    assert "setToggle(tile, !next)" in js
+    assert 'var patch = photoPatch(p, $("caption-input").value, $("photo-enabled").checked);' in js
+    assert 'send("PATCH", "/api/photos/" + tileId(tile), patch)' in js
+    assert js.count('send("PATCH"') == 1
     assert 'send("PUT", "/api/photos/order", { ids: ids })' in js
     assert '"pointerdown"' in js and '"pointermove"' in js and '"pointerup"' in js
     assert "window.confirm(" not in js
