@@ -194,23 +194,59 @@
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
 }
 
-.panel .form {
+.add-row .gear {
+  flex: none;
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.clear-done {
+  display: flex;
+  width: max-content;
+  min-width: 0;
+  margin: 8px 0 0 auto;
+}
+
+#list-form .form {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 12px 14px;
   align-items: center;
-  margin-top: 12px;
 }
 
-.list-buttons {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.list-buttons .w95-btn {
+#list-form .w95-input, #list-form .w95-select {
+  width: 100%;
   min-width: 0;
+}
+
+.w95-select {
+  min-height: 32px;
+  padding: 2px 4px;
+  font-family: var(--w95-font);
+  font-size: inherit;
+  color: var(--w95-dark);
+  background: var(--w95-light);
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-dark);
+  border-radius: 0;
+}
+
+.w95-select:focus-visible {
+  outline: 1px dotted var(--w95-dark);
+  outline-offset: -4px;
+}
+
+.buttons .del {
+  margin-right: auto;
+}
+
+@media (pointer: coarse) {
+  .w95-select {
+    font-size: 16px;
+    min-height: 44px;
+  }
 }
 
 #item-text {

@@ -48,6 +48,16 @@
     return patch;
   }
 
+  function listPatch(list, name, kind, screenId) {
+    var n = (name || "").trim();
+    var patch = {};
+    if (n !== "" && n !== list.name) patch.name = n;
+    if (kind && kind !== list.kind) patch.kind = kind;
+    var current = list.screen_id == null ? null : list.screen_id;
+    if (screenId !== undefined && screenId !== current) patch.screen_id = screenId;
+    return patch;
+  }
+
   function swipeAction(dx, dy, onHandle) {
     if (onHandle || Math.abs(dy) >= Math.abs(dx)) return "none";
     if (dx <= -SWIPE_PX) return "delete";
@@ -55,7 +65,7 @@
     return "none";
   }
 
-  var Lists = { TAB_KEY: TAB_KEY, SWIPE_PX: SWIPE_PX, rank: rank, sortItems: sortItems, pickTab: pickTab, moveId: moveId, countLabel: countLabel, itemPatch: itemPatch, swipeAction: swipeAction };
+  var Lists = { TAB_KEY: TAB_KEY, SWIPE_PX: SWIPE_PX, rank: rank, sortItems: sortItems, pickTab: pickTab, moveId: moveId, countLabel: countLabel, itemPatch: itemPatch, listPatch: listPatch, swipeAction: swipeAction };
   root.Lists = Lists;
   if (typeof module !== "undefined" && module.exports) module.exports = Lists;
   if (typeof document === "undefined") return;
@@ -263,10 +273,7 @@
       ul.appendChild(buildRow(item, notes));
     });
     $("items-empty").hidden = list.items.length > 0;
-    var radios = document.querySelectorAll('input[name="kind"]');
-    for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === list.kind;
-    $("show-on-tv").checked = !!list.show_on_tv;
-    $("clear-done").disabled = !list.items.some(function (it) { return it.done; });
+    $("clear-done").hidden = !list.items.some(function (it) { return it.done; });
     $("panel").setAttribute("aria-label", list.name);
   }
 
@@ -584,23 +591,107 @@
     });
   }
 
-  function patchList(patch, msg) {
-    var list = currentList();
-    if (!list) return Promise.resolve();
-    return send("PATCH", "/api/lists/" + list.id, patch).then(load, fail(msg));
+  var screenPrev = "";
+
+  function screenValue() {
+    var v = $("list-screen").value;
+    if ($("list-screen").disabled || v === "new") return undefined;
+    return v === "" ? null : Number(v);
   }
 
-  function onKindChange(e) {
-    if (!e.currentTarget.checked) return;
-    var list = currentList();
-    if (!list) return;
-    list.kind = e.currentTarget.value;
-    renderPanel(list);
-    patchList({ kind: list.kind }, "Could not change the kind. Try again.");
+  function fillScreens(screens, value) {
+    var sel = $("list-screen");
+    var last = sel.lastElementChild;
+    while (sel.options.length > 2) sel.removeChild(sel.options[1]);
+    screens.forEach(function (sc) {
+      var o = document.createElement("option");
+      o.value = String(sc.id);
+      o.textContent = sc.name;
+      sel.insertBefore(o, last);
+    });
+    sel.value = value;
+    if (sel.value !== value) sel.value = "";
+    screenPrev = sel.value;
   }
 
-  function onTvChange() {
-    patchList({ show_on_tv: $("show-on-tv").checked }, "Could not save the TV setting. Try again.");
+  function openOptions() {
+    var list = currentList();
+    if (!list || editing) return;
+    editing = { list: list.id };
+    $("list-title").textContent = list.name;
+    $("list-name").value = list.name;
+    var radios = document.querySelectorAll('input[name="kind"]');
+    for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === list.kind;
+    var sel = $("list-screen");
+    var value = list.screen_id == null ? "" : String(list.screen_id);
+    fillScreens([], "");
+    sel.disabled = true;
+    $("list-dialog").hidden = false;
+    $("list-name").focus();
+    var ed = editing;
+    getJSON("/api/screens").then(function (screens) {
+      if (editing !== ed) return;
+      sel.disabled = false;
+      fillScreens(screens, value);
+    }, function () {
+      if (editing === ed) showError("Could not load the TV choices. Try again.");
+    });
+  }
+
+  function closeOptions() {
+    $("list-dialog").hidden = true;
+    editing = null;
+    $("list-options").focus();
+    afterIdle();
+  }
+
+  function saveOptions(e) {
+    e.preventDefault();
+    var ed = editing;
+    var list = currentList();
+    if (!ed || !list || list.id !== ed.list) {
+      closeOptions();
+      return;
+    }
+    if (!$("list-name").value.trim()) {
+      $("list-name").focus();
+      return;
+    }
+    var kind = document.querySelector('input[name="kind"]:checked');
+    var patch = listPatch(list, $("list-name").value, kind && kind.value, screenValue());
+    closeOptions();
+    if (!Object.keys(patch).length) return;
+    send("PATCH", "/api/lists/" + list.id, patch).then(load, fail("Could not save the list. Try again."));
+  }
+
+  function onScreenChange() {
+    var sel = $("list-screen");
+    if (sel.value === "new") openName("screen");
+    else screenPrev = sel.value;
+  }
+
+  function addScreen(name) {
+    var sel = $("list-screen");
+    var ed = editing;
+    send("POST", "/api/screens", { name: name }).then(function (r) {
+      return r.json();
+    }).then(function (created) {
+      if (editing !== ed) return;
+      var o = document.createElement("option");
+      o.value = String(created.id);
+      o.textContent = created.name;
+      sel.insertBefore(o, sel.lastElementChild);
+      sel.value = o.value;
+      screenPrev = o.value;
+    }, function () {
+      if (editing === ed) sel.value = screenPrev;
+      showError("Could not add that to the TV. Try again.");
+    });
+  }
+
+  function deleteFromOptions() {
+    closeOptions();
+    openDelete();
   }
 
   function clearDone() {
@@ -613,15 +704,18 @@
 
   function openName(mode) {
     nameMode = mode;
-    var list = currentList();
-    $("name-title").textContent = mode === "new" ? "New list" : "Rename list";
-    $("name-input").value = mode === "rename" && list ? list.name : "";
+    $("name-title").textContent = mode === "screen" ? "New screen" : "New list";
+    $("name-input").value = "";
     $("name-dialog").hidden = false;
     $("name-input").focus();
   }
 
   function closeName() {
     $("name-dialog").hidden = true;
+    if (nameMode === "screen") {
+      $("list-screen").value = screenPrev;
+      $("list-screen").focus();
+    }
     nameMode = null;
   }
 
@@ -633,6 +727,13 @@
       return;
     }
     var mode = nameMode;
+    if (mode === "screen") {
+      $("name-dialog").hidden = true;
+      nameMode = null;
+      $("list-screen").focus();
+      addScreen(name);
+      return;
+    }
     closeName();
     if (mode === "new") {
       send("POST", "/api/lists", { name: name }).then(function (r) {
@@ -644,8 +745,6 @@
       }, function () {
         showError("Could not make the list. Try again.");
       });
-    } else if (mode === "rename") {
-      patchList({ name: name }, "Could not rename the list. Try again.");
     }
   }
 
@@ -718,12 +817,14 @@
     $("item-delete").addEventListener("click", askDeleteItem);
     $("item-confirm-delete").addEventListener("click", deleteItem);
     $("item-confirm-cancel").addEventListener("click", cancelDeleteItem);
-    var radios = document.querySelectorAll('input[name="kind"]');
-    for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onKindChange);
-    $("show-on-tv").addEventListener("change", onTvChange);
     $("clear-done").addEventListener("click", clearDone);
-    $("rename-list").addEventListener("click", function () { openName("rename"); });
-    $("delete-list").addEventListener("click", openDelete);
+    $("list-options").addEventListener("click", openOptions);
+    $("list-form").addEventListener("submit", saveOptions);
+    $("list-cancel").addEventListener("click", closeOptions);
+    $("list-close").addEventListener("click", closeOptions);
+    $("list-backdrop").addEventListener("click", closeOptions);
+    $("list-screen").addEventListener("change", onScreenChange);
+    $("delete-list").addEventListener("click", deleteFromOptions);
     $("name-form").addEventListener("submit", saveName);
     $("name-cancel").addEventListener("click", closeName);
     $("name-close").addEventListener("click", closeName);
@@ -737,6 +838,7 @@
       if (e.key !== "Escape") return;
       if (!$("item-dialog").hidden) closeItem();
       else if (!$("name-dialog").hidden) closeName();
+      else if (!$("list-dialog").hidden) closeOptions();
       else if (!$("delete-dialog").hidden) closeDelete();
     });
 

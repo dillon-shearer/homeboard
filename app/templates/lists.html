@@ -37,24 +37,11 @@
 <form id="add-form" class="add-row">
 <input id="item-input" class="w95-input" type="text" maxlength="200" placeholder="Add an item..." enterkeyhint="done" aria-label="New item">
 <button type="submit" id="item-add" class="w95-btn default">Add</button>
+<button type="button" id="list-options" class="w95-btn gear" aria-label="List options" title="List options"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="#000" fill-rule="evenodd" d="M7 1h2l.4 1.8 1.2.5 1.6-1 1.4 1.4-1 1.6.5 1.2L15 7v2l-1.8.4-.5 1.2 1 1.6-1.4 1.4-1.6-1-1.2.5L9 15H7l-.4-1.8-1.2-.5-1.6 1-1.4-1.4 1-1.6-.5-1.2L1 9V7l1.8-.4.5-1.2-1-1.6 1.4-1.4 1.6 1 1.2-.5zM8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg></button>
 </form>
 <ul id="items" class="items"></ul>
 <p id="items-empty" class="items-empty" hidden>Nothing on this list yet.</p>
-<div class="form">
-<span id="kind-label">Kind</span>
-<div class="choices" role="radiogroup" aria-labelledby="kind-label">
-<label class="w95-check w95-radio"><input type="radio" name="kind" value="checklist"> Checklist</label>
-<label class="w95-check w95-radio"><input type="radio" name="kind" value="notes"> Notes</label>
-</div>
-<div class="checks">
-<label class="w95-check"><input id="show-on-tv" type="checkbox"><span>Show this list on the TV</span></label>
-</div>
-<div class="list-buttons">
-<button type="button" id="clear-done" class="w95-btn">Clear done</button>
-<button type="button" id="rename-list" class="w95-btn">Rename</button>
-<button type="button" id="delete-list" class="w95-btn">Delete list</button>
-</div>
-</div>
+<button type="button" id="clear-done" class="w95-btn clear-done" hidden>Clear done</button>
 </div>
 <p id="lists-empty" class="empty w95-sunken" hidden>No lists yet. Tap + to make one.</p>
 <div id="lists-error" class="empty w95-sunken" role="alert" hidden>
@@ -67,6 +54,37 @@
 <span id="display-state">Display ...</span>
 </div>
 </main>
+
+<div id="list-dialog" class="modal" hidden>
+<div id="list-backdrop" class="modal-backdrop"></div>
+<form id="list-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="list-title">
+<div class="w95-titlebar">
+<span id="list-title" class="w95-title-text">List options</span>
+<button type="button" id="list-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="form">
+<label for="list-name">Name</label>
+<input id="list-name" class="w95-input" type="text" maxlength="60" enterkeyhint="done" autocomplete="off">
+<span id="kind-label">Type</span>
+<div class="choices" role="radiogroup" aria-labelledby="kind-label">
+<label class="w95-check w95-radio"><input type="radio" name="kind" value="checklist"> Checklist</label>
+<label class="w95-check w95-radio"><input type="radio" name="kind" value="notes"> Notes</label>
+</div>
+<label for="list-screen">On the TV</label>
+<select id="list-screen" class="w95-select">
+<option value="">Not shown</option>
+<option value="new">New screen...</option>
+</select>
+</div>
+<div class="buttons">
+<button type="button" id="delete-list" class="w95-btn del">Delete list</button>
+<button type="submit" id="list-save" class="w95-btn default">Save</button>
+<button type="button" id="list-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</form>
+</div>
 
 <div id="name-dialog" class="modal" hidden>
 <div id="name-backdrop" class="modal-backdrop"></div>
