@@ -80,8 +80,8 @@ html, body {
   left: 2vh;
   bottom: 2vh;
   max-width: 70vw;
-  font-size: 2.5vh;
-  text-shadow: 0 0 0.6vh #000, 0 0 0.2vh #000;
+  font-size: 3.5vh;
+  text-shadow: 0 0 0.8vh #000, 0 0 0.3vh #000;
   opacity: 0;
   transition: opacity 0.5s;
 }
@@ -94,7 +94,8 @@ html, body {
   position: fixed;
   right: 2vh;
   bottom: 2vh;
-  font-size: 2vh;
-  text-shadow: 0 0 0.6vh #000, 0 0 0.2vh #000;
+  font-size: 3.5vh;
+  font-weight: 600;
+  text-shadow: 0 0 0.8vh #000, 0 0 0.3vh #000;
   opacity: 0.85;
 }
