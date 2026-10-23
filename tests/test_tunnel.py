@@ -1,6 +1,8 @@
 import configparser
 import io
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -159,6 +161,34 @@ def test_next_cannot_leave_the_site():
     assert auth._safe_next("//evil.example") == "/admin"
     assert auth._safe_next("https://evil.example") == "/admin"
     assert auth._safe_next("/admin?x=1") == "/admin?x=1"
+    assert auth._safe_next("/login") == "/admin"
+    assert auth._safe_next("/login?x=1") == "/admin"
+
+
+def test_password_check_does_not_block_other_requests(client, monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+    real = auth.check_password
+
+    def slow(password, stored):
+        started.set()
+        release.wait(10)
+        return real(password, stored)
+
+    monkeypatch.setattr(auth, "check_password", slow)
+    result = {}
+    worker = threading.Thread(target=lambda: result.update(r=login(client, "letmein")))
+    worker.start()
+    try:
+        assert started.wait(10)
+        t0 = time.monotonic()
+        assert client.get("/healthz").status_code == 200
+        assert time.monotonic() - t0 < 5
+        assert not release.is_set()
+    finally:
+        release.set()
+        worker.join(10)
+    assert result["r"].status_code == 303
 
 
 def test_tunnel_admin_does_not_count_as_display(client, monkeypatch):
