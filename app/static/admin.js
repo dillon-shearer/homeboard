@@ -9,13 +9,21 @@
     return out;
   }
 
-  var Admin = { moveId: moveId };
+  var TYPES = ["image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/heic", "image/heif", "image/webp"];
+  var EXTS = ["jpg", "jpeg", "png", "heic", "heif", "webp"];
+
+  function isSupported(file) {
+    var type = (file.type || "").toLowerCase();
+    var ext = ((file.name || "").split(".").pop() || "").toLowerCase();
+    if (TYPES.indexOf(type) !== -1 || EXTS.indexOf(ext) !== -1) return true;
+    return type === "" || type === "application/octet-stream" || type.indexOf("image/") === 0;
+  }
+
+  var Admin = { moveId: moveId, isSupported: isSupported };
   root.Admin = Admin;
   if (typeof module !== "undefined" && module.exports) module.exports = Admin;
   if (typeof document === "undefined") return;
 
-  var TYPES = ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp"];
-  var EXTS = ["jpg", "jpeg", "png", "heic", "heif", "webp"];
   var TYPE_ERROR = "Only JPEG, PNG, HEIC and WebP photos";
   var SERVER_ERRORS = {
     "too large": "This photo is too large",
@@ -40,12 +48,6 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     });
-  }
-
-  function isSupported(file) {
-    if (file.type) return TYPES.indexOf(file.type.toLowerCase()) !== -1;
-    var ext = (file.name.split(".").pop() || "").toLowerCase();
-    return EXTS.indexOf(ext) !== -1;
   }
 
   function plainError(text) {
