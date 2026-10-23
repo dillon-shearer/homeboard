@@ -125,6 +125,71 @@ Things that also run by themselves:
 - The browser restarts every day at 04:00 to stay fresh.
 - The photos and settings are backed up every night to `/var/backups`. The newest 7 backups are kept.
 
+## Part 6: Secure address for phones (https)
+
+Chrome on Android can refuse plain `http` addresses. To fix that, the board gets a real address on your domain, `homeboard.datawithdillon.com`, with a free certificate from Let's Encrypt. The phone then opens `https://homeboard.datawithdillon.com/admin` with the lock icon and no warning. The monitor does not need any of this: it keeps showing the slideshow even with no internet.
+
+Words used here:
+
+- **Domain**: the name you bought, `datawithdillon.com`. It stays registered at GoDaddy.
+- **DNS**: the internet's phone book. It turns `homeboard.datawithdillon.com` into the Pi's number.
+- **DNS provider**: the company that runs the phone book for your domain. Today that is GoDaddy. In step 21 you move only this part to Cloudflare, which is free. GoDaddy does not let small accounts use its DNS API, and the Pi needs that API to renew the certificate by itself.
+- **Nameservers**: two addresses at GoDaddy that say which company runs your DNS.
+- **API token**: a password that lets the Pi add one temporary entry to your DNS, to prove you own the domain. Let's Encrypt checks it every 2 to 3 months.
+
+20. Give the Pi a fixed number on your Wi-Fi. Log in to your router's admin page (often printed on a sticker on the router) and find **DHCP reservation**, **Address reservation** or **Static lease**. Pick `homeboard` from the list and reserve the number it has now. On the Pi, `hostname -I` shows that number; the first one, like `192.168.1.235`, is the one you want. If you skip this, the router may give the Pi a new number later and the phone address stops working.
+
+21. Move the domain's DNS to Cloudflare. Your website and email keep working; Cloudflare copies their records first.
+    1. Make a free account at https://dash.cloudflare.com/sign-up.
+    2. Click **Add a domain** (or **Add site**), type `datawithdillon.com`, and choose to scan for existing DNS records. Pick the **Free** plan.
+    3. Cloudflare shows the records it found. Open GoDaddy in another tab: **My Products** > `datawithdillon.com` > **DNS**. Check every record in GoDaddy's list is also in Cloudflare's list (same type, name and value). Add any that are missing in Cloudflare. Records for email (type `MX`, and `TXT` records that start with `v=spf1`) matter most.
+    4. Cloudflare then shows two nameservers, like `ada.ns.cloudflare.com` and `bob.ns.cloudflare.com`. In GoDaddy, go to `datawithdillon.com` > **DNS** > **Nameservers** > **Change Nameservers** > **I'll use my own nameservers**, and enter the two Cloudflare names. Save. If GoDaddy shows **DNSSEC** turned on, turn it off first.
+    5. Back in Cloudflare, click **Check nameservers**. It can take from a few minutes to a few hours. Cloudflare emails you when the domain is **Active**. Wait for that before step 24.
+
+22. Add the board's address. In Cloudflare, open `datawithdillon.com` > **DNS** > **Records** > **Add record**:
+    - **Type**: `A`
+    - **Name**: `homeboard`
+    - **IPv4 address**: the Pi's number from step 20
+    - **Proxy status**: click the orange cloud so it turns grey and says **DNS only**. The orange cloud would send phones to Cloudflare instead of the Pi.
+
+    Save it. Anyone can see this record, but the number only works inside your home, so that is fine.
+
+23. Make the API token. In Cloudflare, click the person icon at the top right > **My Profile** > **API Tokens** > **Create Token**. Next to **Edit zone DNS**, click **Use template**. Under **Zone Resources**, pick `datawithdillon.com`. Click **Continue to summary** > **Create Token**. Copy the token it shows. It is shown only once.
+
+    Keep the token secret. Do not put it in an email, a chat, or a file on your PC. It goes only into the Pi in the next step.
+
+24. Connect with `ssh dillon@homeboard.local` and run the installer with the address and your email (Let's Encrypt emails you only if something is wrong with the certificate):
+
+    ```
+    sudo bash /opt/homeboard/deploy/install.sh --host homeboard.datawithdillon.com --dns cloudflare --email you@example.com
+    ```
+
+    Put your own email in place of `you@example.com`. When it asks `Paste the DNS API token`, paste the token and press Enter. Nothing shows while you paste; that is normal. Getting the certificate takes about a minute. The installer saves the token in `/etc/homeboard/dns-credentials.ini`, which only the administrator (root) can read. It is never sent anywhere except to Cloudflare and it is not in the Home Board code.
+
+    It is done when the last line says `Install finished. reboot now: sudo reboot`. Run `sudo reboot`.
+
+25. On your phone, on the home Wi-Fi, open `https://homeboard.datawithdillon.com/admin`. It should open with the lock icon and no warning. Add it to your home screen if you like. The old `http://` addresses now send the phone to the `https` one.
+
+26. Check that renewal works. Certificates last 90 days. The Pi renews by itself twice a day when the certificate is close to running out, then reloads the web server. To test it without changing anything:
+
+    ```
+    sudo certbot renew --dry-run
+    ```
+
+    It should end with `Congratulations, all simulated renewals succeeded`. To see when it runs next:
+
+    ```
+    systemctl list-timers certbot.timer
+    ```
+
+Later runs of the installer, for example after an update, remember the address and the token. You do not need to type them again.
+
+If you ever need a new token (you deleted the old one, or think someone saw it), make a new one as in step 23, delete the old one in Cloudflare, and run:
+
+```
+sudo bash /opt/homeboard/deploy/install.sh --new-token
+```
+
 ## Check the logs
 
 Logs are messages the programs write about what they are doing. They are kept in memory and cleared at each restart, to save the SD card.
@@ -212,7 +277,19 @@ Some phones do not understand `.local` names. Use the Pi's number instead. On th
 
 ### Android Chrome shows ERR_TOO_MANY_RETRIES or cannot reach the site
 
-The board is served over plain `http`, not `https`. If Chrome on the phone refuses plain `http` addresses (for example with **Always use secure connections** turned on in Settings > Privacy and security), it does not open `http://homeboard.local/` or the Pi's number, and the Pi never sees the request. Use the PC, or a phone browser that allows `http`, until the board serves `https`.
+Chrome on the phone may refuse plain `http` addresses (for example with **Always use secure connections** turned on in Settings > Privacy and security). Then it does not open `http://homeboard.local/` or the Pi's number, and the Pi never sees the request. Set up the secure address in Part 6 and use `https://homeboard.datawithdillon.com/admin`.
+
+### The https address does not open on the phone
+
+1. Check the phone is on the home Wi-Fi, not mobile data. The address points to a number that only works at home.
+2. On your PC, run `nslookup homeboard.datawithdillon.com`. It should show the Pi's number. If it shows nothing, check the DNS record from step 22. If it shows other numbers on Cloudflare, the cloud is still orange; make it grey (**DNS only**).
+3. If `nslookup homeboard.datawithdillon.com 1.1.1.1` shows the Pi's number but plain `nslookup homeboard.datawithdillon.com` does not, your router blocks names that point inside your home (often called **DNS rebinding protection**). Allow your domain in the router's settings, or set the phone's **Private DNS** to `one.one.one.one`.
+4. Check the Pi's number has not changed: run `hostname -I` on the Pi and compare with the DNS record. If it changed, fix the record and set up the reservation in step 20.
+5. Check the web server: `systemctl status nginx` should say `active (running)`. If not, `journalctl -u nginx -n 50` shows why.
+
+### The certificate expired or the phone shows a certificate warning
+
+Run `sudo certbot renew` and read the last lines. If it says the token is not valid, make a new token as in step 23 and run the installer with `--new-token` (end of Part 6). Then run `sudo systemctl reload nginx`.
 
 ### A mouse pointer shows in the middle of the screen
 

@@ -1,7 +1,7 @@
 [Unit]
 Description=Home Board kiosk on the monitor
-After=homeboard-api.service systemd-user-sessions.service systemd-logind.service getty@tty1.service
-Wants=homeboard-api.service
+After=homeboard-api.service nginx.service systemd-user-sessions.service systemd-logind.service getty@tty1.service
+Wants=homeboard-api.service nginx.service
 Conflicts=getty@tty1.service
 
 [Service]

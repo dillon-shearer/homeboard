@@ -91,9 +91,14 @@ def create_app(data_dir=None) -> FastAPI:
             conn.close()
         context = {"empty": empty}
         if empty:
-            hostname = socket.gethostname()
-            admin_url = f"http://{hostname.split('.')[0]}.local/admin"
-            ip = _ip()
+            public_host = os.environ.get("HOMEBOARD_HOST", "")
+            if public_host:
+                admin_url = f"https://{public_host}/admin"
+                ip = ""
+            else:
+                hostname = socket.gethostname()
+                admin_url = f"http://{hostname.split('.')[0]}.local/admin"
+                ip = _ip()
             context.update(
                 admin_url=admin_url,
                 ip_url=f"http://{ip}/admin" if ip else "",
