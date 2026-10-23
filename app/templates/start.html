@@ -43,10 +43,10 @@
 <h2 id="group-channel" class="w95-legend">TV channel</h2>
 <div class="w95-row">
 <span>Showing on the TV:</span>
-<span class="w95-seg">
+<span id="tv-stops" class="w95-seg">
 <button class="w95-btn" type="button" data-channel="photos" aria-pressed="false">Photos</button>
 <button class="w95-btn" type="button" data-channel="calendar" aria-pressed="false">Calendar</button>
-<button class="w95-btn" type="button" data-channel="lists" aria-pressed="false">Lists</button>
+<button id="screens-edit" class="w95-btn" type="button" aria-pressed="false">Edit</button>
 </span>
 </div>
 <div class="w95-row">
@@ -68,6 +68,25 @@
 <span id="display-state">Display ...</span>
 </div>
 </main>
+
+<div id="name-dialog" class="modal" hidden>
+<div id="name-backdrop" class="modal-backdrop"></div>
+<form id="name-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="name-title">
+<div class="w95-titlebar">
+<span id="name-title" class="w95-title-text">Rename</span>
+<button type="button" id="name-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<label class="field-label" for="name-input">Name:</label>
+<input id="name-input" class="w95-input" type="text" maxlength="60" enterkeyhint="done" autocomplete="off">
+<p id="name-error" class="w95-note" role="alert" hidden>Could not save the name. Try again.</p>
+<div class="buttons">
+<button type="submit" id="name-save" class="w95-btn default">OK</button>
+<button type="button" id="name-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</form>
+</div>
 <script src="{{ static_url('start.js') }}"></script>
 </body>
 </html>

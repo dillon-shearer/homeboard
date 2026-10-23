@@ -264,53 +264,6 @@ button, input {
   margin: 6px 2px 0;
 }
 
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-}
-
-.modal-backdrop {
-  position: absolute;
-  inset: 0;
-}
-
-.dialog {
-  position: relative;
-  width: 100%;
-  max-width: 380px;
-  min-height: 0;
-  max-height: 100%;
-  margin: 0;
-  overflow: auto;
-  box-shadow: inset 1px 1px 0 var(--w95-light), inset -1px -1px 0 var(--w95-shadow), 2px 2px 0 rgba(0, 0, 0, 0.5);
-}
-
-.title-close {
-  flex: none;
-  position: relative;
-  display: flex;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-}
-
-.title-close:focus-visible {
-  outline: 1px dotted var(--w95-light);
-  outline-offset: 1px;
-}
-
-.title-close:active .w95-close {
-  border-color: var(--w95-dark) var(--w95-light) var(--w95-light) var(--w95-dark);
-  box-shadow: inset 1px 1px 0 var(--w95-shadow);
-}
-
 .photo-thumb {
   display: block;
   width: 128px;
@@ -321,23 +274,10 @@ button, input {
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
 }
 
-.field-label {
-  display: block;
-  margin-bottom: 3px;
-}
-
 #caption-input {
   display: block;
   width: 100%;
   margin-bottom: 6px;
-}
-
-.buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 12px;
 }
 
 .confirm {
@@ -405,12 +345,6 @@ button, input {
 }
 
 @media (pointer: coarse) {
-  .title-close::after {
-    content: "";
-    position: absolute;
-    inset: -14px;
-  }
-
   .stepper .step {
     min-width: 44px;
     align-self: stretch;
