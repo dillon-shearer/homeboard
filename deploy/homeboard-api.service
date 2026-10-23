@@ -11,6 +11,12 @@ Environment=HOMEBOARD_DATA=/var/lib/homeboard
 ExecStart=/opt/homeboard/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=always
 RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/homeboard
+ProtectHome=yes
+PrivateDevices=yes
 
 [Install]
 WantedBy=multi-user.target

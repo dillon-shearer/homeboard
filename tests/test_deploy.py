@@ -134,3 +134,20 @@ def test_setup_guide_has_steps_and_troubleshooting():
     assert "sudo chown -R homeboard:homeboard /var/lib/homeboard" in text
     assert "scp -r dillon@homeboard.local:/var/backups/homeboard-db" in text
     assert text.isascii()
+
+
+def test_api_service_is_sandboxed():
+    s = load("homeboard-api.service")["Service"]
+    assert s["NoNewPrivileges"] == "yes"
+    assert s["PrivateTmp"] == "yes"
+    assert s["ProtectSystem"] == "strict"
+    assert s["ReadWritePaths"] == "/var/lib/homeboard"
+    assert s["ProtectHome"] == "yes"
+    assert s["PrivateDevices"] == "yes"
+
+
+def test_install_restarts_api_when_it_fails_after_the_stop():
+    lines = (DEPLOY / "install.sh").read_text(encoding="utf-8").splitlines()
+    stop = lines.index("systemctl stop homeboard-api.service 2>/dev/null || true")
+    assert lines[stop + 1] == "trap 'systemctl start homeboard-api.service || true' EXIT"
+    assert stop < lines.index("apt-get update")
