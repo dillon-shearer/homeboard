@@ -90,7 +90,11 @@ def _cookies(scope) -> dict[str, str]:
 
 
 def _safe_next(value: str) -> str:
-    if value.startswith("/") and not value.startswith(("//", "/\\")) and value != "/login":
+    if (
+        value.startswith("/")
+        and not value.startswith(("//", "/\\"))
+        and value.split("?", 1)[0] != "/login"
+    ):
         return value
     return "/admin"
 
@@ -220,7 +224,8 @@ class TunnelGate:
             or len(self.all_fails) >= FAILS_TOTAL
         ):
             return login_page(next_path, "Too many wrong tries. Wait 15 minutes.", 429)
-        if not check_password(password, stored):
+        ok = await asyncio.to_thread(check_password, password, stored)
+        if not ok:
             self.fails.setdefault(client, deque()).append(now)
             self.all_fails.append(now)
             await asyncio.sleep(WRONG_DELAY_S)
