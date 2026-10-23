@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home Board boot screen</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; cursor: none; user-select: none; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4vh;
+    font-family: Arial, Helvetica, sans-serif; color: #fff;
+    background:
+      radial-gradient(ellipse 40% 30% at 20% 70%, rgba(255,255,255,.55), transparent 70%),
+      radial-gradient(ellipse 35% 25% at 65% 35%, rgba(255,255,255,.5), transparent 70%),
+      radial-gradient(ellipse 50% 30% at 80% 80%, rgba(255,255,255,.45), transparent 70%),
+      linear-gradient(180deg, #1b3f8f 0%, #3a74c8 45%, #8fbbe8 100%);
+  }
+
+  .logo { display: flex; align-items: center; gap: 4vw; }
+
+  .flag { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6vw; transform: skewY(-8deg); }
+  .flag i { display: block; width: 9vw; height: 9vw; }
+  .flag i:nth-child(1) { background: #f35325; }
+  .flag i:nth-child(2) { background: #81bc06; }
+  .flag i:nth-child(3) { background: #05a6f0; }
+  .flag i:nth-child(4) { background: #ffba08; }
+
+  .name { text-shadow: 3px 3px 0 #000; }
+  .name small { display: block; font-size: 3vw; letter-spacing: .05em; }
+  .name b { display: block; font-size: 10vw; line-height: 1; }
+
+  .panel {
+    width: 46vw; font-size: 1.6vw; text-shadow: 1px 1px 0 #000;
+    display: flex; flex-direction: column; gap: 1.2vh;
+  }
+  .bar {
+    height: 3.2vh; padding: 2px; box-sizing: border-box; overflow: hidden;
+    background: rgba(0, 0, 64, .55);
+    border: 1px solid; border-color: #000040 #fff #fff #000040;
+  }
+  .blocks {
+    width: 60%; height: 100%;
+    background: repeating-linear-gradient(90deg, #fff 0 1.4vw, transparent 1.4vw 1.75vw);
+    animation: run 1.4s steps(14) infinite;
+  }
+  @keyframes run { from { transform: translateX(-100%); } to { transform: translateX(170%); } }
+  .bare #label { visibility: hidden; }
+</style>
+</head>
+<body>
+  <div class="logo">
+    <div class="flag"><i></i><i></i><i></i><i></i></div>
+    <div class="name"><small>Data with Dillon</small><b>Home Board</b></div>
+  </div>
+  <div class="panel">
+    <span id="label">Starting Home Board...</span>
+    <div class="bar"><div class="blocks"></div></div>
+  </div>
+  <script>
+    (function () {
+      var query = new URLSearchParams(window.location.search);
+      var label = document.getElementById("label");
+      if (query.get("label") === "restarting") {
+        label.textContent = "Home Board is restarting...";
+      }
+      if (query.get("bare") === "1") {
+        document.body.classList.add("bare");
+      }
+      var base = window.location.protocol === "file:" ? "http://localhost" : "";
+      var target = base ? "http://localhost/" : "/";
+      var started = Date.now();
+      var done = false;
+      function next() {
+        if (Date.now() - started >= 90000) {
+          label.textContent = "Home Board is not responding. It keeps trying.";
+        }
+        setTimeout(poll, 1000);
+      }
+      function poll() {
+        fetch(base + "/healthz", { cache: "no-store" }).then(function (r) {
+          if (r.status === 200 && !done) {
+            done = true;
+            window.location.href = target;
+          } else {
+            next();
+          }
+        }, next);
+      }
+      poll();
+    })();
+  </script>
+</body>
+</html>

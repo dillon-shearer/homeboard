@@ -23,6 +23,8 @@ APP_DIR = Path(__file__).resolve().parent
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
+HEALTHZ_HEADERS = {"Access-Control-Allow-Origin": "*"}
+
 
 class ImmutableStaticFiles(StaticFiles):
     def file_response(self, *args, **kwargs):
@@ -85,8 +87,8 @@ def create_app(data_dir=None) -> FastAPI:
             if not (photos_dir.is_dir() and os.access(photos_dir, os.R_OK)):
                 raise OSError("photos dir not readable")
         except (sqlite3.Error, OSError):
-            return JSONResponse({"ok": False}, status_code=503)
-        return {"ok": True}
+            return JSONResponse({"ok": False}, status_code=503, headers=HEALTHZ_HEADERS)
+        return JSONResponse({"ok": True}, headers=HEALTHZ_HEADERS)
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request):

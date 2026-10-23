@@ -156,3 +156,41 @@ def test_install_restarts_api_when_it_fails_after_the_stop():
     stop = lines.index("systemctl stop homeboard-api.service 2>/dev/null || true")
     assert lines[stop + 1] == "trap 'systemctl start homeboard-api.service || true' EXIT"
     assert stop < lines.index("apt-get update")
+
+
+def test_boot_page_has_every_state():
+    text = (DEPLOY / "splash" / "boot.html").read_text(encoding="utf-8")
+    for needle in [
+        "Starting Home Board...",
+        "Home Board is restarting...",
+        "Home Board is not responding. It keeps trying.",
+        "/healthz",
+        "http://localhost/",
+        "90000",
+        "bare",
+    ]:
+        assert needle in text
+    assert text.isascii()
+
+
+def test_boot_page_is_self_contained():
+    text = (DEPLOY / "splash" / "boot.html").read_text(encoding="utf-8")
+    for needle in ["<link", "src=", "@import", "url(", "@font-face"]:
+        assert needle not in text
+
+
+def test_kiosk_opens_boot_page_without_waiting():
+    text = (DEPLOY / "kiosk.sh").read_text(encoding="utf-8")
+    assert "file:///opt/homeboard/deploy/splash/boot.html" in text
+    assert "seq 1 60" not in text
+    assert "curl" not in text
+    for flag in [
+        "--kiosk",
+        "--noerrdialogs",
+        "--disable-infobars",
+        "--disable-session-crashed-bubble",
+        "--incognito",
+        "--autoplay-policy=no-user-gesture-required",
+        "--ozone-platform=wayland",
+    ]:
+        assert flag in text

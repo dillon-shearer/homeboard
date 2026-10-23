@@ -58,8 +58,11 @@ def test_proxy_keeps_client_address_sse_and_large_uploads():
 
 
 def test_kiosk_still_uses_plain_localhost():
-    assert "http://localhost/\n" in read(DEPLOY / "kiosk.sh")
-    assert "http://localhost/healthz" in read(DEPLOY / "kiosk.sh")
+    assert "https://" not in read(DEPLOY / "kiosk.sh")
+    boot = read(DEPLOY / "splash" / "boot.html")
+    assert '"http://localhost"' in boot
+    assert '"http://localhost/"' in boot
+    assert "https://" not in boot
 
 
 def test_renewal_hook_reloads_nginx():
