@@ -73,8 +73,9 @@ def test_photos_keeps_controls_and_back_link(client):
 
 def test_about_page(client):
     page = client.get("/admin/about").text
-    for el in ('id="host"', 'id="ip"', 'id="disk"', 'id="version"', 'href="/docs"'):
+    for el in ('id="host"', 'id="ip"', 'id="disk"', 'id="version"'):
         assert el in page
+    assert 'href="/docs"' not in page
     assert '<a class="w95-back" href="/admin">Start</a>' in page
 
 
