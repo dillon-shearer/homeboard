@@ -74,7 +74,7 @@ echo "== Installing packages"
 systemctl stop homeboard-api.service 2>/dev/null || true
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx
+    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
 fi
@@ -121,7 +121,8 @@ fi
 echo "== Creating the data folders"
 mkdir -p "$DATA_DIR/photos" "$DATA_DIR/thumbs"
 chown -R homeboard:homeboard "$DATA_DIR"
-mkdir -p /var/backups
+mkdir -p /var/backups/homeboard-db /var/backups/homeboard-photos
+chown homeboard:homeboard /var/backups/homeboard-db /var/backups/homeboard-photos
 
 echo "== Installing services and timers"
 install -m 644 "$APP_DIR"/deploy/*.service "$APP_DIR"/deploy/*.timer /etc/systemd/system/

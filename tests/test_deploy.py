@@ -31,7 +31,7 @@ def test_unit_parses_with_lf_endings(name):
     assert parser.has_section("Unit")
 
 
-@pytest.mark.parametrize("name", ["install.sh", "kiosk.sh"])
+@pytest.mark.parametrize("name", ["install.sh", "kiosk.sh", "homeboard-backup.sh"])
 def test_scripts_use_lf_endings(name):
     raw = (DEPLOY / name).read_bytes()
     assert raw.startswith(b"#!/usr/bin/env bash\n")
@@ -84,10 +84,21 @@ def test_backup_timer():
     assert "OnCalendar" in t
     assert t["Unit"] == "homeboard-backup.service"
     s = load("homeboard-backup.service")["Service"]
-    cmd = s["ExecStart"]
-    assert "/var/backups/homeboard-$$(date +%%Y%%m%%d).tar.gz" in cmd
-    assert "-C /var/lib homeboard" in cmd
-    assert "tail -n +8" in cmd
+    assert s["User"] == "homeboard"
+    assert s["ExecStart"] == "/opt/homeboard/deploy/homeboard-backup.sh"
+    script = (DEPLOY / "homeboard-backup.sh").read_text(encoding="utf-8")
+    assert "set -euo pipefail" in script
+    assert "tar " not in script
+    assert "cp " not in script
+    assert "PYTHON=/opt/homeboard/.venv/bin/python" in script
+    assert "src.backup(dst)" in script
+    assert '"$DATA_DIR/homeboard.db" "$TMP"' in script
+    assert 'mv -f "$TMP" "$DB_DIR/homeboard-$(date +%Y%m%d).db"' in script
+    assert 'ls -1t "$DB_DIR"/homeboard-*.db | tail -n +8' in script
+    assert 'rsync -a --delete "$DATA_DIR/photos" "$DATA_DIR/thumbs" "$PHOTOS_DIR/"' in script
+    install = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert " rsync" in install
+    assert "chown homeboard:homeboard /var/backups/homeboard-db /var/backups/homeboard-photos" in install
 
 
 def test_wifi_powersave_off():
@@ -117,4 +128,9 @@ def test_setup_guide_has_steps_and_troubleshooting():
     assert "ssh dillon@homeboard.local" in text
     assert "journalctl -u homeboard-api -n 50" in text
     assert "## Troubleshooting" in text
+    assert "## Restore from a backup" in text
+    assert "sudo systemctl stop homeboard-api" in text
+    assert "sudo rm -f /var/lib/homeboard/homeboard.db-wal /var/lib/homeboard/homeboard.db-shm" in text
+    assert "sudo chown -R homeboard:homeboard /var/lib/homeboard" in text
+    assert "scp -r dillon@homeboard.local:/var/backups/homeboard-db" in text
     assert text.isascii()
