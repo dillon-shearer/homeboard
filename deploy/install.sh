@@ -77,7 +77,7 @@ systemctl stop homeboard-api.service 2>/dev/null || true
 trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync plymouth plymouth-themes
+    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync plymouth plymouth-themes swayimg
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
 fi
@@ -181,6 +181,12 @@ if [ -f "$CMDLINE_TXT" ]; then
     fi
 else
     echo "Warning: $CMDLINE_TXT not found; skipping boot screen settings" >&2
+fi
+
+echo "== Kiosk start screen"
+install -d -m 755 /var/cache/homeboard
+if ! "$APP_DIR/.venv/bin/python" "$APP_DIR/deploy/splash/still.py" /var/cache/homeboard/boot.png; then
+    echo "Warning: could not draw the kiosk start screen; the screen stays black until Chromium is up" >&2
 fi
 
 echo "== Keeping logs in memory"
@@ -296,6 +302,7 @@ systemctl disable getty@tty1.service || true
 systemctl enable \
     homeboard-api.service \
     homeboard-kiosk.service \
+    homeboard-preload.service \
     wifi-powersave-off.service \
     homeboard-kiosk-restart.timer \
     homeboard-backup.timer \
