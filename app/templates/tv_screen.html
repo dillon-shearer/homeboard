@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Home Board</title>
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
+<link rel="stylesheet" href="{{ static_url('tv.css') }}">
+</head>
+<body class="w95-desktop tv">
+<main class="w95-window">
+<div class="w95-titlebar">
+<span id="title" class="w95-title-text">Home Board</span>
+<span id="clock" class="tv-clock"></span>
+</div>
+<div id="screen" class="w95-body tv-screen"></div>
+<div class="w95-statusbar">
+<span id="screen-count"></span>
+<span id="today"></span>
+</div>
+</main>
+<script src="{{ static_url('calendar_util.js') }}"></script>
+<script src="{{ static_url('tv_screen.js') }}"></script>
+</body>
+</html>

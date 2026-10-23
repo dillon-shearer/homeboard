@@ -233,6 +233,16 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
     return get_settings(conn)
 
 
+def set_weather_place(conn: sqlite3.Connection, location: str, lat, lon, name) -> bool:
+    with conn:
+        cur = conn.execute(
+            "UPDATE settings SET weather_lat = ?, weather_lon = ?, weather_name = ?"
+            " WHERE id = 1 AND weather_location = ?",
+            (lat, lon, name, location),
+        )
+    return cur.rowcount == 1
+
+
 def get_current_photo_id(conn: sqlite3.Connection) -> int | None:
     return get_settings(conn)["current_photo_id"]
 

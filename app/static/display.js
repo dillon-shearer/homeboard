@@ -8,7 +8,7 @@
     shuffle: false,
     captions: false,
     channel: "photos",
-    lists_screen_id: null,
+    screen_id: null,
     channel_timeout_min: 5,
     clock_size: 5,
     caption_size: 5,
@@ -17,7 +17,7 @@
     clock_on_top: true,
   };
   const MAX_BACKOFF_S = 30;
-  const CHANNELS = ["photos", "calendar", "lists"];
+  const CHANNELS = ["photos", "screen"];
   const POSITIONS = [
     "top-left", "top-center", "top-right",
     "middle-left", "middle-center", "middle-right",
@@ -38,9 +38,7 @@
     if ("shuffle" in s) out.shuffle = !!s.shuffle;
     if ("captions" in s) out.captions = !!s.captions;
     if (CHANNELS.indexOf(s.channel) !== -1) out.channel = s.channel;
-    if (s.lists_screen_id === null || Number.isInteger(s.lists_screen_id)) {
-      out.lists_screen_id = s.lists_screen_id;
-    }
+    if (s.screen_id === null || Number.isInteger(s.screen_id)) out.screen_id = s.screen_id;
     if (typeof s.channel_timeout_min === "number" && s.channel_timeout_min >= 0) {
       out.channel_timeout_min = s.channel_timeout_min;
     }
@@ -62,23 +60,23 @@
   }
 
   function buildStops(screens) {
-    const stops = [{ channel: "photos" }, { channel: "calendar" }];
+    const stops = [{ channel: "photos" }];
     (Array.isArray(screens) ? screens : []).forEach(function (screen) {
-      if (screen && Number.isInteger(screen.id)) stops.push({ channel: "lists", screen_id: screen.id });
+      if (screen && Number.isInteger(screen.id)) stops.push({ channel: "screen", screen_id: screen.id });
     });
     return stops;
   }
 
   function stopIndex(stops, settings) {
     const s = settings || {};
-    let firstList = -1;
+    let firstScreen = -1;
     for (let i = 0; i < stops.length; i++) {
       if (stops[i].channel !== s.channel) continue;
-      if (s.channel !== "lists" || stops[i].screen_id === s.lists_screen_id) return i;
-      if (firstList === -1) firstList = i;
+      if (s.channel !== "screen" || stops[i].screen_id === s.screen_id) return i;
+      if (firstScreen === -1) firstScreen = i;
     }
-    if (firstList !== -1) return firstList;
-    return s.channel === "lists" ? -1 : 0;
+    if (firstScreen !== -1) return firstScreen;
+    return s.channel === "screen" ? -1 : 0;
   }
 
   function nextStop(stops, settings, step) {
@@ -296,7 +294,7 @@
       if (channelEl.getAttribute("src") !== "about:blank") channelEl.src = "about:blank";
       return;
     }
-    const url = "/tv/" + channel;
+    const url = "/tv";
     if (channelEl.getAttribute("src") !== url) channelEl.src = url;
     channelEl.hidden = false;
     swipeEl.hidden = false;
@@ -304,9 +302,9 @@
 
   function setChannel(stop) {
     const body = { channel: stop.channel };
-    if (stop.channel === "lists") body.lists_screen_id = stop.screen_id;
+    if (stop.channel === "screen") body.screen_id = stop.screen_id;
     const s = state.settings;
-    if (body.channel === s.channel && (body.channel !== "lists" || body.lists_screen_id === s.lists_screen_id)) {
+    if (body.channel === s.channel && (body.channel !== "screen" || body.screen_id === s.screen_id)) {
       return;
     }
     state.settings = applySettings(state.settings, body);

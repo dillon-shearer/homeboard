@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
-from app import __version__, db, events
+from app import __version__, db, events, weather
 from app.auth import is_tunnel
 from app.routes_photos import Conn
 
@@ -81,7 +81,7 @@ def get_settings(conn: Conn):
 
 
 @router.put("/settings")
-def put_settings(body: SettingsPatch, conn: Conn):
+def put_settings(body: SettingsPatch, request: Request, conn: Conn):
     fields = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     if "screen_id" in body.model_fields_set:
         fields["screen_id"] = body.screen_id
@@ -89,8 +89,15 @@ def put_settings(body: SettingsPatch, conn: Conn):
         row = db.update_settings(conn, **fields)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
+    if "weather_location" in fields:
+        weather.drop_cache(request.app.state.data_dir)
     events.publish("settings_changed")
     return settings_dict(row)
+
+
+@router.get("/weather")
+def get_weather(request: Request, conn: Conn):
+    return weather.get_weather(conn, request.app.state.data_dir)
 
 
 @router.get("/display/current")
