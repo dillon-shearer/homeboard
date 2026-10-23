@@ -1,3 +1,8 @@
+:root {
+  --clock-size: 5vh;
+  --caption-size: 5vh;
+}
+
 html, body {
   margin: 0;
   width: 100vw;
@@ -75,12 +80,53 @@ html, body {
   opacity: 0.7;
 }
 
-#caption {
+#overlay {
   position: fixed;
-  left: 4vh;
-  bottom: 4vh;
+  inset: 4vh;
+  display: grid;
+  grid-template: 1fr 1fr 1fr / 1fr 1fr 1fr;
+  pointer-events: none;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  min-width: 0;
+  min-height: 0;
+}
+
+.row-top {
+  justify-content: flex-start;
+}
+
+.row-middle {
+  justify-content: center;
+}
+
+.row-bottom {
+  justify-content: flex-end;
+}
+
+.col-left {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.col-center {
+  align-items: center;
+  text-align: center;
+}
+
+.col-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+#caption {
+  width: max-content;
   max-width: 60vw;
-  font-size: 5vh;
+  font-size: var(--caption-size);
   text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -95,10 +141,8 @@ html, body {
 }
 
 #clock {
-  position: fixed;
-  right: 4vh;
-  bottom: 4vh;
-  font-size: 5vh;
+  white-space: nowrap;
+  font-size: var(--clock-size);
   font-weight: 600;
   text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   opacity: 0.85;

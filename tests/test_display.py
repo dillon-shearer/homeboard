@@ -100,6 +100,11 @@ def test_apply_settings_and_backoff():
         "captions": False,
         "channel": "photos",
         "channel_timeout_min": 5,
+        "clock_size": 5,
+        "caption_size": 5,
+        "clock_pos": "bottom-right",
+        "caption_pos": "bottom-left",
+        "clock_on_top": True,
     }
     assert result["b"]["fit"] == "contain" and result["b"]["interval_s"] == 30
     assert result["seq"] == [1, 2, 4, 8, 16, 30, 30, 30]

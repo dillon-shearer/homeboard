@@ -46,6 +46,7 @@ function el(id) {
     },
     getAttribute: (k) => (k in attrs ? attrs[k] : null),
     removeAttribute: (k) => { delete attrs[k]; },
+    appendChild: (c) => { c.parentNode = e; },
   };
   Object.defineProperty(e, "src", {
     get: () => attrs.src,
@@ -59,10 +60,15 @@ function el(id) {
 }
 const els = {
   "layer-a": el("layer-a"), "layer-b": el("layer-b"), caption: el("caption"), clock: el("clock"),
-  channel: el("channel"), swipe: el("swipe"),
+  channel: el("channel"), swipe: el("swipe"), overlay: el("overlay"),
 };
+for (const r of ["top", "middle", "bottom"]) {
+  for (const c of ["left", "center", "right"]) els[`cell-${r}-${c}`] = el(`cell-${r}-${c}`);
+}
+const rootVars = {};
 globalThis.document = {
   getElementById: (id) => els[id] || null, body: { insertBefore() {} }, addEventListener() {},
+  documentElement: { style: { setProperty: (k, v) => { rootVars[k] = v; } } },
 };
 globalThis.window = globalThis;
 
