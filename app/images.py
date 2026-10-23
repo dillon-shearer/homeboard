@@ -1,4 +1,5 @@
 import io
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,13 @@ THUMB_EDGE = 400
 JPEG_QUALITY = 85
 FULL_JPEG_QUALITY = 92
 ALLOWED_FORMATS = {"JPEG", "MPO", "PNG", "HEIF", "HEIC", "WEBP"}
+DRAFT_FORMATS = {"JPEG", "MPO"}
+MAX_PIXELS = 210_000_000
+MAX_FULL_DECODE_PIXELS = 178_956_970
+MAX_CONCURRENT = 1
+Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+
+_slots = threading.BoundedSemaphore(MAX_CONCURRENT)
 
 
 class ImageError(Exception):
@@ -65,16 +73,39 @@ def _save(img: Image.Image, path: Path, quality: int = JPEG_QUALITY, icc_profile
     img.save(path, "JPEG", quality=quality, progressive=True, optimize=True, **extra)
 
 
+def _draft_size(img: Image.Image) -> tuple[int, int]:
+    try:
+        orientation = img.getexif().get(0x0112)
+    except Exception:
+        orientation = None
+    if orientation in (5, 6, 7, 8):
+        return SCREEN_HEIGHT, SCREEN_WIDTH
+    return SCREEN_WIDTH, SCREEN_HEIGHT
+
+
 def process_upload(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
     if len(data) > MAX_UPLOAD_BYTES:
         raise ImageError("too large")
+    with _slots:
+        return _process(data, photos_dir, thumbs_dir)
+
+
+def _process(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
     try:
         img = Image.open(io.BytesIO(data))
-        img.load()
     except Exception as e:
         raise ImageError("cannot open") from e
     if img.format not in ALLOWED_FORMATS:
         raise ImageError("unsupported format")
+    pixels = img.width * img.height
+    if pixels > MAX_PIXELS or (img.format not in DRAFT_FORMATS and pixels > MAX_FULL_DECODE_PIXELS):
+        raise ImageError("too large")
+    try:
+        if img.format in DRAFT_FORMATS:
+            img.draft("RGB", _draft_size(img))
+        img.load()
+    except Exception as e:
+        raise ImageError("cannot open") from e
     icc = img.info.get("icc_profile") if img.mode in ("RGB", "RGBA", "RGBX") else None
     img = _to_rgb(ImageOps.exif_transpose(img))
     full = _cover(img, SCREEN_WIDTH, SCREEN_HEIGHT)
