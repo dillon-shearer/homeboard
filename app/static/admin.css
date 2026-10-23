@@ -244,3 +244,169 @@ button:focus-visible, input:focus-visible, .upload-btn:focus-within, a:focus-vis
 .foot a {
   color: #4a9eff;
 }
+
+.tile {
+  position: relative;
+}
+
+.tile img {
+  transition: opacity 0.15s;
+}
+
+.tile.dragging {
+  opacity: 0.5;
+  outline: 2px solid #4a9eff;
+  outline-offset: -2px;
+}
+
+.tile button, .tile-handle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 0 3px #000;
+}
+
+.tile-toggle {
+  top: 0;
+  left: 0;
+}
+
+.tile-toggle span {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: #2c2;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  transition: background 0.15s;
+}
+
+.tile-toggle span::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 14px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+
+.tile.disabled .tile-toggle span {
+  background: #666;
+}
+
+.tile.disabled .tile-toggle span::after {
+  left: 2px;
+}
+
+.tile-menu {
+  top: 0;
+  right: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.tile-handle {
+  right: 0;
+  bottom: 0;
+  font-size: 26px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.toast {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 10px 16px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  background: #a22;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.4s;
+}
+
+.toast.fade {
+  opacity: 0;
+}
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  background: #1c1c1c;
+  border-radius: 14px 14px 0 0;
+}
+
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-list button {
+  width: 100%;
+  min-height: 52px;
+}
+
+.sheet-list input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #111;
+}
+
+.sheet-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sheet .danger {
+  color: #f66;
+}
+
+.sheet .primary {
+  background: #4a9eff;
+  border-color: #4a9eff;
+  color: #000;
+  font-weight: 600;
+}

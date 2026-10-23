@@ -1,4 +1,6 @@
+import base64
 import io
+import json
 import os
 import shutil
 import socket
@@ -10,10 +12,12 @@ from pathlib import Path
 
 import httpx
 from PIL import Image
+from websockets.sync.client import connect
 
 ROOT = Path(__file__).resolve().parent.parent
 SHOTS = ROOT / "shots"
 SIZES = [(390, 844), (412, 915)]
+DELETE_PROMPT = "Delete this photo? It is removed from the board and the Pi."
 
 
 def free_port() -> int:
@@ -110,6 +114,132 @@ def shoot(chrome: str, url: str, width: int, height: int, out: Path, profile: Pa
     print(f"wrote {out.relative_to(ROOT)}")
 
 
+class Cdp:
+    def __init__(self, ws):
+        self.ws = ws
+        self.n = 0
+        self.dialogs = []
+
+    def send(self, method, **params):
+        self.n += 1
+        self.ws.send(json.dumps({"id": self.n, "method": method, "params": params}))
+        return self.n
+
+    def call(self, method, **params):
+        mid = self.send(method, **params)
+        while True:
+            msg = json.loads(self.ws.recv(timeout=30))
+            if msg.get("method") == "Page.javascriptDialogOpening":
+                self.dialogs.append(msg["params"]["message"])
+                self.send("Page.handleJavaScriptDialog", accept=True)
+            elif msg.get("id") == mid:
+                if "error" in msg:
+                    sys.exit(f"{method} failed: {msg['error']}")
+                return msg["result"]
+
+    def eval(self, expr):
+        r = self.call("Runtime.evaluate", expression=expr, returnByValue=True, awaitPromise=True)
+        if "exceptionDetails" in r:
+            sys.exit(f"page error in {expr!r}: {r['exceptionDetails']}")
+        return r["result"].get("value")
+
+    def wait(self, expr, what):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            if self.eval(expr):
+                return
+            time.sleep(0.1)
+        sys.exit(f"timed out waiting for {what}")
+
+
+def api_photos(base: str) -> dict:
+    r = httpx.get(f"{base}/api/photos?all=1", timeout=10)
+    r.raise_for_status()
+    return {p["id"]: p for p in r.json()}
+
+
+def wait_api(check, what: str) -> None:
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if check():
+            return
+        time.sleep(0.1)
+    sys.exit(f"timed out waiting for {what}")
+
+
+def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
+    width, height = 390, 844
+    port = free_port()
+    proc = subprocess.Popen(
+        [chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+         "--no-default-browser-check", f"--user-data-dir={profile}",
+         f"--window-size={width},{height}", f"--remote-debugging-port={port}", "about:blank"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        ws_url = None
+        deadline = time.monotonic() + 30
+        while ws_url is None and time.monotonic() < deadline:
+            try:
+                targets = httpx.get(f"http://127.0.0.1:{port}/json", timeout=1).json()
+                ws_url = next(t["webSocketDebuggerUrl"] for t in targets if t["type"] == "page")
+            except (httpx.HTTPError, StopIteration, ValueError):
+                time.sleep(0.2)
+        if ws_url is None:
+            sys.exit("Chrome DevTools did not start")
+        with connect(ws_url, max_size=None, open_timeout=30) as ws:
+            cdp = Cdp(ws)
+            cdp.call("Page.enable")
+            cdp.call("Emulation.setDeviceMetricsOverride", width=width, height=height,
+                     deviceScaleFactor=1, mobile=True)
+            cdp.call("Page.navigate", url=f"{base}/admin")
+            cdp.wait("document.querySelectorAll('#grid .tile img').length === 2 && "
+                     "[...document.querySelectorAll('#grid .tile img')].every(i => i.complete)",
+                     "the photo grid")
+
+            tile = "document.querySelector('#grid .tile.disabled')"
+            off_id = cdp.eval(f"{tile}.getAttribute('data-id')")
+            if off_id is None:
+                sys.exit("no disabled tile to toggle")
+            cdp.eval(f"{tile}.querySelector('button.tile-toggle').click()")
+            if cdp.eval(f"document.querySelector('.tile[data-id=\"{off_id}\"]')"
+                        ".classList.contains('disabled')"):
+                sys.exit("toggle did not update the tile at once")
+            wait_api(lambda: api_photos(base)[int(off_id)]["enabled"], "the toggle PATCH")
+            print(f"toggled photo {off_id} on")
+
+            first = "document.querySelector('#grid .tile')"
+            del_id = cdp.eval(f"{first}.getAttribute('data-id')")
+            cdp.eval(f"{first}.querySelector('button.tile-menu').click()")
+            cdp.wait("!document.getElementById('sheet').hidden", "the bottom sheet")
+            labels = cdp.eval("[...document.querySelectorAll('#sheet-actions button')]"
+                              ".map(b => b.textContent)")
+            if "Edit caption" not in labels or "Delete" not in labels:
+                sys.exit(f"bottom sheet buttons are {labels}")
+            time.sleep(0.3)
+            shot = cdp.call("Page.captureScreenshot", format="png")
+            out.write_bytes(base64.b64decode(shot["data"]))
+            with Image.open(out) as img:
+                if img.width != width:
+                    sys.exit(f"{out.name} is {img.width}px wide, expected {width}")
+            print(f"wrote {out.relative_to(ROOT)}")
+
+            cdp.eval("document.getElementById('sheet-delete').click()")
+            if cdp.dialogs != [DELETE_PROMPT]:
+                sys.exit(f"expected one confirm dialog, got {cdp.dialogs}")
+            wait_api(lambda: int(del_id) not in api_photos(base), "the DELETE")
+            cdp.wait(f"!document.querySelector('.tile[data-id=\"{del_id}\"]') && "
+                     "document.querySelectorAll('#grid .tile').length === 1", "the tile removal")
+            print(f"deleted photo {del_id}")
+            cdp.send("Browser.close")
+        proc.wait(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=10)
+
+
 def main() -> None:
     chrome = find_chrome()
     SHOTS.mkdir(exist_ok=True)
@@ -129,6 +259,7 @@ def main() -> None:
         for width, height in SIZES:
             shoot(chrome, f"{base}/admin", width, height, SHOTS / f"admin-{width}.png",
                   tmp / f"chrome-{width}")
+        drive_menu(chrome, base, SHOTS / "admin-390-menu.png", tmp / "chrome-menu")
     finally:
         proc.terminate()
         try:
