@@ -72,16 +72,34 @@ def insert_photo(
     caption: str | None = None,
     uploaded_by: str | None = None,
     enabled: bool = True,
+    source_sha256: str | None = None,
 ) -> sqlite3.Row:
     with conn:
         cur = conn.execute(
             "INSERT INTO photos (filename, thumb, caption, enabled, sort_order, width, height,"
-            " uploaded_at, uploaded_by)"
+            " uploaded_at, uploaded_by, source_sha256)"
             " VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM photos),"
-            " ?, ?, ?, ?)",
-            (filename, thumb, caption, int(enabled), width, height, _now(), uploaded_by),
+            " ?, ?, ?, ?, ?)",
+            (
+                filename,
+                thumb,
+                caption,
+                int(enabled),
+                width,
+                height,
+                _now(),
+                uploaded_by,
+                source_sha256,
+            ),
         )
     return get_photo(conn, cur.lastrowid)
+
+
+def has_source_sha256(conn: sqlite3.Connection, source_sha256: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM photos WHERE source_sha256 = ? LIMIT 1", (source_sha256,)
+    ).fetchone()
+    return row is not None
 
 
 def update_photo(

@@ -21,7 +21,7 @@ def client(tmp_path):
 
 
 def _files(*names):
-    return [("files", (n, _jpeg((255, 0, 0)), "image/jpeg")) for n in names]
+    return [("files", (n, _jpeg((255, i * 40, 0)), "image/jpeg")) for i, n in enumerate(names)]
 
 
 def _dir_files(path):
