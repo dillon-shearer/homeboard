@@ -123,7 +123,7 @@ The Pi now starts the slideshow by itself every time it gets power. You can unpl
 Things that also run by themselves:
 
 - The browser restarts every day at 04:00 to stay fresh.
-- The photos and settings are backed up every night to `/var/backups`. The newest 7 backups are kept.
+- The photos and settings are backed up every night at 03:00. The settings database goes to `/var/backups/homeboard-db`, one file per night, and the newest 7 are kept. The photos are kept once in `/var/backups/homeboard-photos` and updated each night to match the board. See "Restore from a backup" below.
 
 ## Part 6: Secure address for phones (https)
 
@@ -324,6 +324,34 @@ If the update added new Python packages or changed the services, run the install
 sudo bash /opt/homeboard/deploy/install.sh
 sudo reboot
 ```
+
+## Restore from a backup
+
+1. Connect with `ssh dillon@homeboard.local`.
+2. List the database backups and pick a date:
+
+   ```
+   ls /var/backups/homeboard-db
+   ```
+
+3. Stop the server, copy the backup back, fix the owner and start the server. Replace `20261023` with the date you picked:
+
+   ```
+   sudo systemctl stop homeboard-api
+   sudo cp /var/backups/homeboard-db/homeboard-20261023.db /var/lib/homeboard/homeboard.db
+   sudo rm -f /var/lib/homeboard/homeboard.db-wal /var/lib/homeboard/homeboard.db-shm
+   sudo rsync -a /var/backups/homeboard-photos/ /var/lib/homeboard/
+   sudo chown -R homeboard:homeboard /var/lib/homeboard
+   sudo systemctl start homeboard-api
+   ```
+
+The backups are on the same SD card as the board. To keep a copy if the card dies, run this on your PC now and then (in PowerShell or Terminal); it copies them into the current folder:
+
+```
+scp -r dillon@homeboard.local:/var/backups/homeboard-db dillon@homeboard.local:/var/backups/homeboard-photos .
+```
+
+Older versions kept full `.tar.gz` backups in `/var/backups`. After the update they are no longer made, and you can free the space with `sudo rm -f /var/backups/homeboard-*.tar.gz`.
 
 ## Troubleshooting
 
