@@ -104,3 +104,12 @@ def test_empty_screen_shows_https_address_when_host_is_set(monkeypatch, tmp_path
 def test_loopback_client_still_counts_as_display(tmp_path):
     with TestClient(create_app(tmp_path), client=("127.0.0.1", 50000)) as client:
         assert client.get("/healthz").status_code == 200
+
+
+def test_setup_guide_explains_domain_dns_and_token():
+    text = read(DEPLOY / "PI_SETUP.md")
+    assert "## Part 6: Secure address for phones (https)" in text
+    assert "--host homeboard.datawithdillon.com --dns cloudflare" in text
+    assert "DNS only" in text
+    assert "/etc/homeboard/dns-credentials.ini" in text
+    assert "sudo certbot renew --dry-run" in text
