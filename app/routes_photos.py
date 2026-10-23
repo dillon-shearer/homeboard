@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import sqlite3
 from typing import Annotated
@@ -67,6 +68,9 @@ def upload_photos(
                 data = f.file.read(images.MAX_UPLOAD_BYTES + 1)
                 if len(data) > images.MAX_UPLOAD_BYTES:
                     raise images.ImageError("too large")
+                digest = hashlib.sha256(data).hexdigest()
+                if db.has_source_sha256(conn, digest):
+                    raise images.ImageError("already on the board")
                 p = images.process_upload(data, state.photos_dir, state.thumbs_dir)
             except images.ImageError as e:
                 errors.append({"name": f.filename, "error": str(e)})
@@ -77,7 +81,13 @@ def upload_photos(
                 continue
             try:
                 row = db.insert_photo(
-                    conn, p.filename, p.thumb, p.width, p.height, uploaded_by=uploaded_by
+                    conn,
+                    p.filename,
+                    p.thumb,
+                    p.width,
+                    p.height,
+                    uploaded_by=uploaded_by,
+                    source_sha256=digest,
                 )
             except sqlite3.Error:
                 images.delete_files(p.filename, p.thumb, state.photos_dir, state.thumbs_dir)

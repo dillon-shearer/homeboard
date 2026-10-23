@@ -156,7 +156,8 @@
     "cannot open": "This file could not be opened as a photo",
     "unsupported format": TYPE_ERROR,
     "processing failed": "The photo could not be processed",
-    "save failed": "The photo could not be saved"
+    "save failed": "The photo could not be saved",
+    "already on the board": "This photo is already on the board"
   };
   var STATUS_MS = 10000;
   var FIRST_PAGE = 12;
