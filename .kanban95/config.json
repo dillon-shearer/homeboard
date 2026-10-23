@@ -1,4 +1,4 @@
 {
-  "worktree_setup": "python -c \"import os,subprocess,sys; os.path.exists('requirements.txt') and subprocess.check_call([sys.executable,'-m','pip','install','-r','requirements.txt'])\"",
+  "worktree_setup": "python -c \"import os,subprocess,sys; os.path.exists('requirements-dev.txt') and subprocess.check_call([sys.executable,'-m','pip','install','-r','requirements-dev.txt'])\"",
   "test": "python -c \"import glob,subprocess,sys; sys.exit(subprocess.call([sys.executable,'-m','pytest','-q']) if glob.glob('tests/**/test_*.py',recursive=True) else 0)\""
 }

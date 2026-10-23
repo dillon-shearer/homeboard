@@ -6,10 +6,10 @@ A DIY wall board. A Raspberry Pi drives a monitor that shows a full screen photo
 
 Needs Python 3.11 or newer. There is no build step: the server is Python and the pages are plain HTML and JS.
 
-Install the dependencies:
+Install the dependencies and the test tools:
 
 ```
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 ```
 
 Run the tests:
@@ -18,7 +18,7 @@ Run the tests:
 python -m pytest -q
 ```
 
-Tests live under `tests/` as `test_*.py` files. The board runs the same two steps for each ticket: `worktree_setup` and `test` in `.kanban95/config.json`. Both skip cleanly while `requirements.txt` or the tests do not exist yet.
+Tests live under `tests/` as `test_*.py` files. The board runs the same two steps for each ticket: `worktree_setup` and `test` in `.kanban95/config.json`. Both skip cleanly while `requirements-dev.txt` or the tests do not exist yet.
 
 ## Run on the desktop
 
