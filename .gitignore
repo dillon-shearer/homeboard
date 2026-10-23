@@ -16,3 +16,8 @@ build/
 .kanban95/runner.json
 .kanban95/ui.json
 .kanban95/templates/*.replaced.md
+data/
+*.db
+.venv/
+__pycache__/
+.ruff_cache/

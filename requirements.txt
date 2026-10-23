@@ -1,0 +1,10 @@
+fastapi>=0,<1
+uvicorn[standard]>=0,<1
+jinja2>=3,<4
+python-multipart>=0,<1
+pillow>=11,<12
+pillow-heif>=1,<2
+segno>=1,<2
+pytest>=8,<9
+httpx>=0,<1
+ruff>=0,<1
