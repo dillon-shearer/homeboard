@@ -19,3 +19,4 @@ python -m pytest -q
 ```
 
 Tests live under `tests/` as `test_*.py` files. The board runs the same two steps for each ticket: `worktree_setup` and `test` in `.kanban95/config.json`. Both skip cleanly while `requirements.txt` or the tests do not exist yet.
+Board smoke test passed.
