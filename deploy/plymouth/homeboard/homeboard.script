@@ -1,0 +1,70 @@
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+scale_x = screen_width / 1920;
+scale_y = screen_height / 1080;
+
+Window.SetBackgroundTopColor(0.106, 0.247, 0.561);
+Window.SetBackgroundBottomColor(0.561, 0.733, 0.910);
+
+fun scaled(file) {
+    image = Image(file);
+    return image.Scale(Math.Int(image.GetWidth() * global.scale_x + 0.5), Math.Int(image.GetHeight() * global.scale_y + 0.5));
+}
+
+background = Sprite(Image("background.png").Scale(screen_width, screen_height));
+background.SetPosition(0, 0, 0);
+
+track = Sprite(scaled("track.png"));
+track.SetPosition(Math.Int(518 * scale_x), Math.Int(747 * scale_y), 1);
+
+mode = Plymouth.GetMode();
+label_file = "label-boot.png";
+if (mode == "reboot") label_file = "label-reboot.png";
+if (mode == "shutdown") label_file = "label-shutdown.png";
+label = Sprite(scaled(label_file));
+label.SetPosition(Math.Int(516 * scale_x), Math.Int(696 * scale_y), 1);
+
+blocks_image = scaled("blocks.png");
+blocks_width = 526.3125 * scale_x;
+blocks_left = 521 * scale_x;
+clip_left = 519.40625 * scale_x;
+clip_right = 1400.59375 * scale_x;
+steps = 14;
+
+k = 0;
+while (k < steps) {
+    x = blocks_left + (k * 2.7 / steps - 1) * blocks_width;
+    left = Math.Max(x, clip_left);
+    right = Math.Min(x + blocks_width, clip_right);
+    frame_x[k] = Math.Int(left);
+    frame_width[k] = Math.Int(right) - Math.Int(left);
+    if (frame_width[k] > 0)
+        frame_image[k] = blocks_image.Crop(Math.Int(left - x), 0, frame_width[k], blocks_image.GetHeight());
+    k = k + 1;
+}
+
+blocks = Sprite();
+blocks.SetPosition(0, Math.Int(750 * scale_y), 2);
+blocks.SetOpacity(0);
+
+tick = 0;
+step = -1;
+
+fun refresh() {
+    next = Math.Int(global.tick / 5);
+    if (next != global.step) {
+        global.step = next;
+        if (global.frame_width[next] > 0) {
+            global.blocks.SetImage(global.frame_image[next]);
+            global.blocks.SetX(global.frame_x[next]);
+            global.blocks.SetOpacity(1);
+        }
+        else {
+            global.blocks.SetOpacity(0);
+        }
+    }
+    global.tick = global.tick + 1;
+    if (global.tick >= global.steps * 5) global.tick = 0;
+}
+
+Plymouth.SetRefreshFunction(refresh);

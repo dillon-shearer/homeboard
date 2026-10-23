@@ -6,6 +6,8 @@ APP_DIR=/opt/homeboard
 DATA_DIR=/var/lib/homeboard
 KIOSK_USER=dillon
 CONFIG_TXT=/boot/firmware/config.txt
+CMDLINE_TXT=/boot/firmware/cmdline.txt
+THEME_DIR=/usr/share/plymouth/themes/homeboard
 ETC_DIR=/etc/homeboard
 HTTPS_ENV="$ETC_DIR/https.env"
 DNS_CREDENTIALS="$ETC_DIR/dns-credentials.ini"
@@ -75,7 +77,7 @@ systemctl stop homeboard-api.service 2>/dev/null || true
 trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync
+    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync plymouth plymouth-themes
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
 fi
@@ -139,8 +141,42 @@ if [ -f "$CONFIG_TXT" ]; then
             printf '\n[all]\n%s=1\n' "$key" >> "$CONFIG_TXT"
         fi
     done
+    if ! grep -q "^disable_splash=" "$CONFIG_TXT"; then
+        printf '\n[all]\ndisable_splash=1\n' >> "$CONFIG_TXT"
+    fi
 else
     echo "Warning: $CONFIG_TXT not found; skipping display settings" >&2
+fi
+
+echo "== Boot screen"
+install -d "$THEME_DIR"
+install -m 644 "$APP_DIR"/deploy/plymouth/homeboard/* "$THEME_DIR"/
+install -d /etc/systemd/system/plymouth-quit.service.d
+install -m 644 "$APP_DIR"/deploy/plymouth/plymouth-quit.conf /etc/systemd/system/plymouth-quit.service.d/homeboard.conf
+plymouth-set-default-theme -R homeboard
+if [ -f "$CMDLINE_TXT" ]; then
+    if [ ! -e "$CMDLINE_TXT.homeboard.bak" ]; then
+        cp "$CMDLINE_TXT" "$CMDLINE_TXT.homeboard.bak"
+    fi
+    SPLASH_WORDS=(quiet splash loglevel=0 logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles)
+    read -r -a OLD_WORDS < "$CMDLINE_TXT" || true
+    NEW_WORDS=()
+    for word in "${OLD_WORDS[@]}"; do
+        case " ${SPLASH_WORDS[*]} " in
+            *" $word "*) continue ;;
+        esac
+        case "$word" in
+            loglevel=*) continue ;;
+        esac
+        NEW_WORDS+=("$word")
+    done
+    NEW_WORDS+=("${SPLASH_WORDS[@]}")
+    if [ "${NEW_WORDS[*]}" != "${OLD_WORDS[*]}" ]; then
+        printf '%s\n' "${NEW_WORDS[*]}" > "$CMDLINE_TXT.homeboard.tmp"
+        mv -f "$CMDLINE_TXT.homeboard.tmp" "$CMDLINE_TXT"
+    fi
+else
+    echo "Warning: $CMDLINE_TXT not found; skipping boot screen settings" >&2
 fi
 
 echo "== Keeping logs in memory"
