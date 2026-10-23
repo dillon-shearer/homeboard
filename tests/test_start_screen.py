@@ -205,7 +205,7 @@ for (const id of ["photo-count", "display-state", "channel-timeout", "name-dialo
   body.appendChild(make("x", id));
 }
 const row = body.appendChild(make("span", "tv-stops"));
-for (const [ch, label] of [["photos", "Photos"], ["calendar", "Calendar"]]) {
+for (const [ch, label] of [["photos", "Photos"]]) {
   const b = row.appendChild(make("button"));
   b.setAttribute("data-channel", ch);
   b.textContent = label;
@@ -221,7 +221,7 @@ globalThis.document = {
 };
 
 const server = {
-  settings: { channel: "lists", lists_screen_id: 2, channel_timeout_min: 5 },
+  settings: { channel: "screen", screen_id: 2, channel_timeout_min: 5 },
   screens: [{ id: 4, name: "Kitchen", sort_order: 10 }, { id: 2, name: "Chores", sort_order: 20 }],
 };
 const calls = [];
@@ -273,10 +273,9 @@ def test_start_screen_has_tv_buttons_and_edit(client):
     assert row
     assert re.findall(r"<button[^>]*>([^<]*)</button>", row.group(1)) == [
         "Photos",
-        "Calendar",
         "Edit",
     ]
-    assert 'data-channel="photos"' in row.group(1) and 'data-channel="calendar"' in row.group(1)
+    assert 'data-channel="photos"' in row.group(1) and 'data-channel="calendar"' not in row.group(1)
     assert 'id="screens-edit"' in row.group(1)
     dialog = re.search(r'<div id="name-dialog" class="modal" hidden>.*?</form>', page, re.DOTALL)
     assert dialog and ">Rename<" in dialog.group(0)
@@ -312,26 +311,25 @@ def test_start_buttons_follow_screens_and_put_settings():
         byText("Kitchen").fire("click");
         await settle();
         const picked = view();
-        byText("Calendar").fire("click");
+        byText("Photos").fire("click");
         await settle();
         console.log(JSON.stringify({ first, picked, calls }));
         """
     )
     assert r["first"] == [
         ["Photos", "false"],
-        ["Calendar", "false"],
         ["Kitchen", "false"],
         ["Chores", "true"],
         ["Edit", "false"],
     ]
-    assert r["picked"][2] == ["Kitchen", "true"] and r["picked"][3] == ["Chores", "false"]
+    assert r["picked"][1] == ["Kitchen", "true"] and r["picked"][2] == ["Chores", "false"]
     assert r["calls"] == [
         {
             "method": "PUT",
             "url": "/api/settings",
-            "body": {"channel": "lists", "lists_screen_id": 4},
+            "body": {"channel": "screen", "screen_id": 4},
         },
-        {"method": "PUT", "url": "/api/settings", "body": {"channel": "calendar"}},
+        {"method": "PUT", "url": "/api/settings", "body": {"channel": "photos"}},
     ]
 
 
@@ -342,7 +340,7 @@ def test_start_edit_mode_moves_and_renames_screens():
         await settle();
         edit.fire("click");
         const editing = view();
-        row.children[2].children[2].fire("click");
+        row.children[1].children[2].fire("click");
         await settle();
         const moved = view();
         byText("Chores").fire("click");
@@ -358,7 +356,6 @@ def test_start_edit_mode_moves_and_renames_screens():
     )
     assert r["editing"] == [
         ["Photos", "false"],
-        ["Calendar", "false"],
         {"edit": [["Move Kitchen up", True], ["Kitchen", False], ["Move Kitchen down", False]]},
         {"edit": [["Move Chores up", False], ["Chores", False], ["Move Chores down", True]]},
         ["Done", "true"],
@@ -368,7 +365,6 @@ def test_start_edit_mode_moves_and_renames_screens():
     assert r["closed"] is True
     assert r["done"] == [
         ["Photos", "false"],
-        ["Calendar", "false"],
         ["Fridge", "true"],
         ["Kitchen", "false"],
         ["Edit", "false"],

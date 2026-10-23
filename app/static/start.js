@@ -6,7 +6,7 @@
   var DOWN = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="1,3 11,3 6,10" fill="#000"/></svg>';
 
   var screens = [];
-  var shown = { channel: null, lists_screen_id: null };
+  var shown = { channel: null, screen_id: null };
   var editing = false;
   var renameId = null;
 
@@ -15,14 +15,14 @@
   }
 
   function showChannel(channel, screenId) {
-    shown = { channel: channel, lists_screen_id: screenId === undefined ? shown.lists_screen_id : screenId };
-    var current = shown.lists_screen_id;
+    shown = { channel: channel, screen_id: screenId === undefined ? shown.screen_id : screenId };
+    var current = shown.screen_id;
     var known = screens.some(function (s) { return s.id === current; });
     if (!known && screens.length) current = screens[0].id;
     var buttons = document.querySelectorAll("[data-channel]");
     for (var i = 0; i < buttons.length; i++) {
       var on = buttons[i].getAttribute("data-channel") === channel;
-      if (on && channel === "lists") on = buttons[i].getAttribute("data-screen-id") === String(current);
+      if (on && channel === "screen") on = buttons[i].getAttribute("data-screen-id") === String(current);
       buttons[i].classList.toggle("on", on);
       buttons[i].setAttribute("aria-pressed", on ? "true" : "false");
     }
@@ -37,7 +37,7 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     }).then(function (s) {
-      showChannel(s.channel, s.lists_screen_id);
+      showChannel(s.channel, s.screen_id);
       $("channel-timeout").value = String(s.channel_timeout_min);
     }).catch(function () {
       $("display-state").textContent = "Server not reachable";
@@ -68,15 +68,15 @@
     var b = e.currentTarget;
     var channel = b.getAttribute("data-channel");
     var body = { channel: channel };
-    if (channel === "lists") body.lists_screen_id = parseInt(b.getAttribute("data-screen-id"), 10);
-    showChannel(channel, body.lists_screen_id);
+    if (channel === "screen") body.screen_id = parseInt(b.getAttribute("data-screen-id"), 10);
+    showChannel(channel, body.screen_id);
     putSettings(body);
   }
 
   function screenButton(screen) {
     var b = button("w95-btn", "", null);
     b.textContent = screen.name;
-    b.setAttribute("data-channel", "lists");
+    b.setAttribute("data-channel", "screen");
     b.setAttribute("data-screen-id", String(screen.id));
     b.setAttribute("aria-pressed", "false");
     b.addEventListener("click", pick);
@@ -176,7 +176,7 @@
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     }).then(function (s) {
-      showChannel(s.channel, s.lists_screen_id);
+      showChannel(s.channel, s.screen_id);
       $("channel-timeout").value = String(s.channel_timeout_min);
     }).catch(function () {});
   }
@@ -189,7 +189,7 @@
       var n = s.photo_count;
       $("photo-count").textContent = n + (n === 1 ? " photo" : " photos");
       $("display-state").textContent = s.display_connected ? "Display online" : "Display offline";
-      if (s.channel) showChannel(s.channel, s.lists_screen_id);
+      if (s.channel) showChannel(s.channel, s.screen_id);
     }).catch(function () {
       $("display-state").textContent = "Server not reachable";
     });

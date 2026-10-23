@@ -99,7 +99,7 @@ def test_apply_settings_and_backoff():
         "shuffle": True,
         "captions": False,
         "channel": "photos",
-        "lists_screen_id": None,
+        "screen_id": None,
         "channel_timeout_min": 5,
         "clock_size": 5,
         "caption_size": 5,

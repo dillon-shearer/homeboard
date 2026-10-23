@@ -50,7 +50,8 @@ body.tv {
   padding: 3vh 1.5vh 1.5vh;
 }
 
-.tv-card {
+.tv-card,
+.tv-card .tv-up {
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -63,7 +64,8 @@ body.tv {
   box-shadow: inset 1px 1px 0 var(--w95-light), inset -1px -1px 0 var(--w95-shadow);
 }
 
-.tv-card h2 {
+.tv-card h2,
+.tv-up h3 {
   position: absolute;
   top: -2vh;
   left: 1vh;
@@ -280,4 +282,134 @@ body.tv {
 .tv-up li.none {
   border-bottom: 0;
   color: #404040;
+}
+
+.tv-screen {
+  min-height: 0;
+  display: grid;
+  gap: 2vh;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  padding: 3vh 1.5vh 1.5vh;
+}
+
+.tv-screen .tv-card {
+  max-height: none;
+  padding-top: 3vh;
+}
+
+.tv-screen .tv-card.empty {
+  grid-row: 1 / -1;
+  align-self: center;
+  margin-top: 0;
+}
+
+.tv-msg {
+  margin: auto;
+  color: #404040;
+  font-size: 2.6vh;
+  text-align: center;
+}
+
+.tv-face {
+  margin: auto;
+  text-align: center;
+}
+
+.tv-face .time {
+  font-size: 9vh;
+  font-weight: bold;
+  line-height: 1.1;
+}
+
+.tv-card[data-size="2x1"] .tv-face .time {
+  font-size: 12vh;
+}
+
+.tv-card[data-size="2x2"] .tv-face .time {
+  font-size: 18vh;
+}
+
+.tv-face .day {
+  font-size: 3.4vh;
+  font-weight: bold;
+}
+
+.tv-face .date {
+  font-size: 2.8vh;
+}
+
+.tv-card[data-size="2x2"] .tv-face .day {
+  font-size: 5vh;
+}
+
+.tv-card[data-size="2x2"] .tv-face .date {
+  font-size: 4vh;
+}
+
+.tv-card .tv-cal {
+  flex: 1;
+  padding: 1vh 0 0;
+}
+
+.tv-card .tv-up {
+  max-height: none;
+  padding-top: 3vh;
+}
+
+.tv-up h3 {
+  font-size: 2.8vh;
+}
+
+.tv-cal-day {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tv-cal-day ul {
+  flex: none;
+  overflow: visible;
+}
+
+.tv-cal-day li {
+  display: block;
+  padding: 0.6vh 0;
+  font-size: 2.4vh;
+}
+
+.tv-cal-day li .t {
+  margin-right: 1vh;
+}
+
+.tv-cal-day li small {
+  display: block;
+  color: #404040;
+  font-size: 2vh;
+}
+
+.tv-cal-day li.none,
+.tv-cal-day li.more {
+  color: #404040;
+}
+
+.tv-cal-day li.more {
+  font-size: 2.2vh;
+}
+
+.tv-cal-day hr {
+  flex: none;
+  width: 100%;
+  margin: 1vh 0;
+  border: 0;
+  border-top: 1px solid var(--w95-shadow);
+  border-bottom: 1px solid var(--w95-light);
+}
+
+.tv-cal-day h3 {
+  margin: 0 0 0.4vh;
+  font-size: 2.6vh;
 }
