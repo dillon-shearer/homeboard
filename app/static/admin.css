@@ -160,6 +160,10 @@ button, input {
   text-align: center;
 }
 
+.grid-error .error {
+  margin: 0 0 10px;
+}
+
 .more {
   display: flex;
   width: 100%;

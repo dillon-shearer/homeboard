@@ -214,7 +214,19 @@
   function loadGrid() {
     return getJSON("/api/photos?all=1").then(function (list) {
       photos = list;
+      $("grid-error").hidden = true;
       renderGrid();
+    });
+  }
+
+  function refreshGrid() {
+    var retry = $("grid-retry");
+    retry.disabled = true;
+    return loadGrid().catch(function () {
+      $("grid-empty").hidden = true;
+      $("grid-error").hidden = false;
+    }).then(function () {
+      retry.disabled = false;
     });
   }
 
@@ -504,6 +516,7 @@
 
   function addRow(file) {
     var li = document.createElement("li");
+    li.uploadState = "waiting";
     var name = document.createElement("div");
     name.className = "name";
     name.textContent = file.name;
@@ -520,6 +533,7 @@
     li.appendChild(state);
     $("upload-list").appendChild(li);
     return {
+      li: li,
       progress: function (pct) {
         bar.style.width = pct + "%";
         state.textContent = pct + "%";
@@ -528,11 +542,13 @@
         bar.style.width = "100%";
         state.textContent = "Done";
         state.className = "state done";
+        li.uploadState = "done";
       },
       fail: function (msg) {
         frame.hidden = true;
         state.textContent = msg;
         state.className = "state fail";
+        li.uploadState = "fail";
       }
     };
   }
@@ -564,25 +580,41 @@
     $("file-input").focus();
   }
 
+  var activeBatches = 0;
+
+  function clearFinishedRows() {
+    var list = $("upload-list");
+    Array.prototype.slice.call(list.children).forEach(function (li) {
+      if (li.uploadState === "done" || (li.uploadState === "fail" && !li.batch.running)) list.removeChild(li);
+    });
+  }
+
   function onFiles(e) {
     var files = Array.prototype.slice.call(e.target.files || []);
     e.target.value = "";
     if (!files.length) return;
-    $("upload-list").textContent = "";
+    clearFinishedRows();
+    activeBatches++;
+    var batch = { running: true };
     $("upload-close").disabled = true;
     $("upload-dialog").hidden = false;
     var jobs = [];
     files.forEach(function (file) {
       var row = addRow(file);
+      row.li.batch = batch;
       if (!isSupported(file)) row.fail(TYPE_ERROR);
       else jobs.push({ file: file, row: row });
     });
     runLimited(jobs, UPLOAD_LIMIT, function (job) {
       return uploadOne(job.file, job.row);
     }).then(function () {
-      $("upload-close").disabled = false;
-      $("upload-close").focus();
-      loadGrid().catch(function () {});
+      batch.running = false;
+      activeBatches--;
+      if (activeBatches === 0) {
+        $("upload-close").disabled = false;
+        $("upload-close").focus();
+      }
+      refreshGrid();
       loadStatus();
     });
   }
@@ -711,11 +743,12 @@
     var checks = document.querySelectorAll(".checks input[data-key]");
     for (var j = 0; j < checks.length; j++) checks[j].addEventListener("change", onCheckChange);
     initTiles();
+    $("grid-retry").addEventListener("click", refreshGrid);
 
     loadSettings().catch(function () {
       showSettingsError("Could not load settings");
     });
-    loadGrid().catch(function () {});
+    refreshGrid();
     loadStatus();
     setInterval(loadStatus, STATUS_MS);
   }
