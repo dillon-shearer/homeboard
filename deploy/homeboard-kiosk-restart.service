@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart the Home Board kiosk
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart homeboard-kiosk.service

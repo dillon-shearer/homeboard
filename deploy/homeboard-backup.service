@@ -1,0 +1,6 @@
+[Unit]
+Description=Back up Home Board data
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'mkdir -p /var/backups && tar -czf /var/backups/homeboard-$$(date +%%Y%%m%%d).tar.gz -C /var/lib homeboard && ls -1t /var/backups/homeboard-*.tar.gz | tail -n +8 | xargs -r rm -f --'
