@@ -50,7 +50,8 @@ def test_lists_page_has_ids_lists_js_uses(client):
     page = client.get("/admin/lists").text
     js = LISTS_JS.read_text()
     ids = set(re.findall(r'\$\("([\w-]+)"\)', js))
-    assert {"tabs", "items", "item-input", "list-screen", "toast", "toast-text"} <= ids
+    assert {"tabs", "items", "item-input", "list-tv-open", "toast", "toast-text"} <= ids
+    assert 'id="list-screen"' not in page
     for name in ids:
         assert f'id="{name}"' in page, name
     assert "show_on_tv" not in js and "show-on-tv" not in page
@@ -75,25 +76,25 @@ def test_list_options_dialog_markup(client):
     assert re.search(r'<input id="list-name"[^>]*maxlength="60"', html)
     assert 'name="kind" value="checklist"> Checklist' in html
     assert 'name="kind" value="notes"> Notes' in html
-    select = re.search(r'<select id="list-screen".*?</select>', html, re.DOTALL).group(0)
-    options = re.findall(r"<option[^>]*>([^<]*)</option>", select)
-    assert options[0] == "Not shown" and options[-1] == "New screen..."
+    assert (
+        '<label class="w95-check full"><input id="list-tv-open" type="checkbox">'
+        "<span>Open on the TV</span></label>"
+    ) in html
+    assert "<select" not in html
     for label in ("Save", "Cancel", "Delete list"):
         assert f">{label}</button>" in html
     assert 'type="submit" id="list-save" class="w95-btn default">Save<' in html
     assert 'id="delete-list" class="w95-btn del">Delete list<' in html
 
 
-def test_screen_word_only_in_select_and_new_screen_title(client):
+def test_lists_page_has_no_screen_word(client):
     page = client.get("/admin/lists").text
     body = page[page.index("<body") :]
-    body = re.sub(r'<select id="list-screen".*?</select>', "", body, flags=re.DOTALL)
     text = re.sub(r"<[^>]*>", " ", body)
     assert "screen" not in text.lower()
     js = LISTS_JS.read_text()
-    messages = re.findall(r'(?:showError|fail)\("([^"]*)"', js)
-    assert messages and not [m for m in messages if "screen" in m.lower()]
-    assert 'textContent = mode === "screen" ? "New screen" : "New list"' in js
+    assert "screen" not in js.lower()
+    assert "/api/screens" not in js
 
 
 def test_start_lists_icon_links(client):
@@ -229,27 +230,27 @@ def test_swipe_action_from_dx_dy():
 @needs_node
 def test_list_patch_sends_only_changed_fields():
     result = _node(
-        "const l = {id: 1, name: 'Shop', kind: 'checklist', screen_id: 3};"
-        "const off = {id: 2, name: 'Off', kind: 'notes', screen_id: null};"
+        "const l = {id: 1, name: 'Shop', kind: 'checklist', tv_open: true};"
+        "const off = {id: 2, name: 'Off', kind: 'notes', tv_open: false};"
         "console.log(JSON.stringify(["
-        "L.listPatch(l, 'Shop', 'checklist', 3),"
+        "L.listPatch(l, 'Shop', 'checklist', true),"
         "L.listPatch(l, ' Shop ', 'checklist', undefined),"
-        "L.listPatch(l, 'X', 'checklist', 3),"
-        "L.listPatch(l, 'Shop', 'notes', 3),"
-        "L.listPatch(l, 'Shop', 'checklist', null),"
-        "L.listPatch(l, '', 'checklist', 3),"
-        "L.listPatch(off, 'Off', 'notes', null),"
-        "L.listPatch(off, 'Off', 'notes', 5)]))"
+        "L.listPatch(l, 'X', 'checklist', true),"
+        "L.listPatch(l, 'Shop', 'notes', true),"
+        "L.listPatch(l, 'Shop', 'checklist', false),"
+        "L.listPatch(l, '', 'checklist', true),"
+        "L.listPatch(off, 'Off', 'notes', false),"
+        "L.listPatch(off, 'Off', 'notes', true)]))"
     )
     assert result == [
         {},
         {},
         {"name": "X"},
         {"kind": "notes"},
-        {"screen_id": None},
+        {"tv_open": False},
         {},
         {},
-        {"screen_id": 5},
+        {"tv_open": True},
     ]
 
 
@@ -383,6 +384,16 @@ def test_item_window_and_swipe_in_headless_chrome(server, tmp_path):
         chrome.close()
 
 
+def _reopen_options(chrome, checked):
+    for _ in range(100):
+        chrome.eval("document.getElementById('list-options').click()")
+        if chrome.eval(f"document.getElementById('list-tv-open').checked === {checked}"):
+            return
+        chrome.eval("document.getElementById('list-cancel').click()")
+        time.sleep(0.05)
+    raise AssertionError(f"tv_open checkbox never showed {checked}")
+
+
 @needs_chrome
 def test_list_options_window_in_headless_chrome(server, tmp_path):
     with httpx.Client(base_url=server) as c:
@@ -400,28 +411,12 @@ def test_list_options_window_in_headless_chrome(server, tmp_path):
         chrome.eval("document.getElementById('list-options').click()")
         assert chrome.eval(_shown("list-dialog"))
         assert chrome.eval("document.getElementById('list-title').textContent") == "Shop"
-        _wait(chrome, "!document.getElementById('list-screen').disabled")
-        chrome.eval(
-            "const s = document.getElementById('list-screen');"
-            "s.value = 'new'; s.dispatchEvent(new Event('change'))"
-        )
-        assert chrome.eval(_shown("name-dialog"))
-        assert chrome.eval("document.getElementById('name-title').textContent") == "New screen"
-        chrome.eval("document.getElementById('name-cancel').click()")
-        assert chrome.eval("document.getElementById('list-screen').value") == ""
-        chrome.eval(
-            "const s2 = document.getElementById('list-screen');"
-            "s2.value = 'new'; s2.dispatchEvent(new Event('change'));"
-            "document.getElementById('name-input').value = 'Notes';"
-            "document.getElementById('name-save').click()"
-        )
-        _wait(
-            chrome,
-            "document.getElementById('list-screen').selectedOptions[0].textContent === 'Notes'",
-        )
+        assert chrome.eval("document.getElementById('list-screen') === null")
+        assert chrome.eval("document.getElementById('list-tv-open').checked") is True
         chrome.eval(
             "document.getElementById('list-name').value = 'Food';"
             'document.querySelector(\'input[name="kind"][value="notes"]\').click();'
+            "document.getElementById('list-tv-open').click();"
             "document.getElementById('list-save').click()"
         )
         assert not chrome.eval(_shown("list-dialog"))
@@ -431,14 +426,23 @@ def test_list_options_window_in_headless_chrome(server, tmp_path):
                 if row["name"] == "Food":
                     break
                 time.sleep(0.05)
-            screens = c.get("/api/screens").json()
-        assert [s["name"] for s in screens].count("Notes") == 2
-        assert (row["name"], row["kind"]) == ("Food", "notes")
+        assert (row["name"], row["kind"], row["tv_open"]) == ("Food", "notes", False)
         _wait(chrome, f"{tab}.textContent === 'Food'")
 
-        chrome.eval("document.getElementById('list-options').click()")
-        _wait(chrome, "!document.getElementById('list-screen').disabled")
-        assert chrome.eval("document.getElementById('list-screen').value") == ""
+        _reopen_options(chrome, "false")
+        chrome.eval(
+            "document.getElementById('list-tv-open').click();"
+            "document.getElementById('list-save').click()"
+        )
+        with httpx.Client(base_url=server) as c:
+            for _ in range(100):
+                row = next(x for x in c.get("/api/lists").json() if x["id"] == shop["id"])
+                if row["tv_open"]:
+                    break
+                time.sleep(0.05)
+        assert row["tv_open"] is True
+
+        _reopen_options(chrome, "true")
         chrome.eval("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
         assert not chrome.eval(_shown("list-dialog"))
         chrome.eval("document.getElementById('list-options').click()")
