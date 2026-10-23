@@ -72,19 +72,23 @@ def test_tv_lists_route_links_styles_through_static_url(client):
 def test_tv_lists_markup_has_ids_the_script_uses(client):
     page = client.get("/tv/lists").text
     assert 'class="w95-titlebar"' in page
-    assert '<span class="w95-title-text">Lists</span>' in page
+    assert '<span id="title" class="w95-title-text">Lists</span>' in page
     js = TV_JS.read_text(encoding="utf-8")
     ids = set(re.findall(r'getElementById\("([\w-]+)"\)', js))
-    assert {"cards", "clock", "list-count", "today"} <= ids
+    assert {"cards", "clock", "list-count", "today", "title"} <= ids
     for name in ids:
         assert f'id="{name}"' in page, name
 
 
 def test_tv_lists_js_listens_for_changes():
     js = TV_JS.read_text(encoding="utf-8")
-    assert 'addEventListener("lists_changed"' in js
+    assert 'addEventListener("lists_changed", load)' in js
+    assert 'addEventListener("settings_changed", load)' in js
     assert '"/api/events"' in js
     assert '"/api/lists"' in js
+    assert '"/api/screens"' in js
+    assert '"/api/settings"' in js
+    assert "MAX_ITEMS" not in js
 
 
 def test_tv_css_hides_cursor_and_uses_vh_fonts():
@@ -98,23 +102,51 @@ def test_tv_css_hides_cursor_and_uses_vh_fonts():
 
 
 @needs_node
-def test_filter_keeps_open_shown_lists_and_puts_pinned_first():
+def test_sort_items_puts_pinned_then_open_then_done_by_sort_order():
     result = _node(
-        "const lists = ["
-        "{id: 1, name: 'Shop', show_on_tv: true, items: ["
-        "{id: 1, text: 'milk', done: false, pinned: false, sort_order: 10},"
-        "{id: 2, text: 'eggs', done: true, pinned: false, sort_order: 20},"
-        "{id: 3, text: 'dog food', done: false, pinned: true, sort_order: 30}]},"
-        "{id: 2, name: 'Done', show_on_tv: true, items: ["
-        "{id: 4, text: 'x', done: true, pinned: true, sort_order: 10}]},"
-        "{id: 3, name: 'Hidden', show_on_tv: false, items: ["
-        "{id: 5, text: 'y', done: false, pinned: false, sort_order: 10}]}];"
-        "const out = T.visibleLists(lists);"
-        "console.log(JSON.stringify({same: globalThis.TvLists === T,"
-        " lists: out.map(l => [l.name, l.items.map(i => i.text)])}))"
+        "const items = ["
+        "{text: 'done b', done: true, pinned: false, sort_order: 40},"
+        "{text: 'open b', done: false, pinned: false, sort_order: 30},"
+        "{text: 'done pin', done: true, pinned: true, sort_order: 5},"
+        "{text: 'pin', done: false, pinned: true, sort_order: 50},"
+        "{text: 'open a', done: false, pinned: false, sort_order: 10},"
+        "{text: 'done a', done: true, pinned: false, sort_order: 20}];"
+        "console.log(JSON.stringify({same: globalThis.TvLists === T, has: 'MAX_ITEMS' in T,"
+        " order: T.sortItems(items).map(i => i.text)}))"
     )
     assert result["same"] is True
-    assert result["lists"] == [["Shop", ["dog food", "milk"]]]
+    assert result["has"] is False
+    assert result["order"] == ["pin", "open a", "open b", "done pin", "done a", "done b"]
+
+
+@needs_node
+def test_visible_lists_filters_by_screen_and_keeps_done_only_lists():
+    result = _node(
+        "const screens = [{id: 7, name: 'B', sort_order: 2}, {id: 3, name: 'A', sort_order: 1}];"
+        "const lists = ["
+        "{id: 1, name: 'Shop', screen_id: 3, items: ["
+        "{id: 1, text: 'milk', done: false, pinned: false, sort_order: 10},"
+        "{id: 2, text: 'eggs', done: true, pinned: false, sort_order: 5},"
+        "{id: 3, text: 'dog food', done: false, pinned: true, sort_order: 30}]},"
+        "{id: 2, name: 'Done', screen_id: 3, items: ["
+        "{id: 4, text: 'x', done: true, pinned: true, sort_order: 10}]},"
+        "{id: 3, name: 'Empty', screen_id: 3, items: []},"
+        "{id: 4, name: 'Other', screen_id: 7, items: ["
+        "{id: 5, text: 'y', done: false, pinned: false, sort_order: 10}]},"
+        "{id: 5, name: 'Hidden', screen_id: null, items: ["
+        "{id: 6, text: 'z', done: false, pinned: false, sort_order: 10}]}];"
+        "const f = out => out.map(l => [l.name, l.items.map(i => i.text)]);"
+        "console.log(JSON.stringify({first: f(T.visibleLists(lists, screens, null)),"
+        " seven: f(T.visibleLists(lists, screens, 7)),"
+        " none: f(T.visibleLists(lists, [], null)),"
+        " title: T.currentScreen(screens, null).name,"
+        " more: [T.moreLabel(3, 2), T.moreLabel(1, 0)]}))"
+    )
+    assert result["first"] == [["Shop", ["dog food", "milk", "eggs"]], ["Done", ["x"]]]
+    assert result["seven"] == [["Other", ["y"]]]
+    assert result["none"] == []
+    assert result["title"] == "A"
+    assert result["more"] == ["+3 more, 2 done", "+1 more"]
 
 
 @needs_node
@@ -277,3 +309,81 @@ def test_headless_screenshot_shows_two_cards(server, tmp_path, width, height):
     ]
     assert yellow
     assert max(x for x, _ in yellow) < width // 2
+
+
+def _seed_screen(base):
+    with httpx.Client(base_url=base) as c:
+        screen = c.post("/api/screens", json={"name": "To dos"}).json()
+        big = c.post("/api/lists", json={"name": "Big"}).json()
+        c.patch(f"/api/lists/{big['id']}", json={"screen_id": screen["id"]})
+        for n in range(40):
+            c.post(f"/api/lists/{big['id']}/items", json={"text": f"Item {n + 1}"})
+        small = c.post("/api/lists", json={"name": "Small"}).json()
+        c.patch(f"/api/lists/{small['id']}", json={"screen_id": screen["id"]})
+        c.post(f"/api/lists/{small['id']}/items", json={"text": "Open one"})
+        done = c.post(f"/api/lists/{small['id']}/items", json={"text": "Done one"}).json()
+        c.patch(f"/api/items/{done['id']}", json={"done": True})
+        other = c.post("/api/lists", json={"name": "Elsewhere"}).json()
+        c.post(f"/api/lists/{other['id']}/items", json={"text": "Not here"})
+        r = c.put("/api/settings", json={"lists_screen_id": screen["id"]})
+        assert r.status_code == 200
+
+
+FIT = """JSON.stringify((() => {
+  const title = document.getElementById('title').textContent;
+  const cards = [...document.querySelectorAll('#cards .tv-card')];
+  const big = cards.find(c => c.querySelector('h2').textContent === 'Big');
+  const small = cards.find(c => c.querySelector('h2').textContent === 'Small');
+  if (!big || !small) return {title, ready: false};
+  const ul = big.querySelector('ul');
+  const more = big.querySelector('.more');
+  const hiddenRows = [...ul.children].filter(li => li.hidden);
+  const shownRows = [...ul.children].filter(li => !li.hidden).length;
+  const result = {
+    title, ready: true,
+    names: cards.map(c => c.querySelector('h2').textContent),
+    bottom: big.getBoundingClientRect().bottom,
+    h: innerHeight,
+    more: more ? more.textContent : null,
+    hidden: hiddenRows.length,
+    shown: shownRows,
+    fits: ul.scrollHeight <= ul.clientHeight,
+  };
+  if (hiddenRows.length) {
+    hiddenRows[0].hidden = false;
+    result.overflowsWithOneMore = ul.scrollHeight > ul.clientHeight;
+    hiddenRows[0].hidden = true;
+  }
+  const done = [...small.querySelectorAll('li')].find(li => li.textContent === 'Done one');
+  result.doneClass = done ? done.className : null;
+  result.doneDecoration = done ? getComputedStyle(done).textDecorationLine : null;
+  result.doneTick = done ? !!done.querySelector('.box.tick') : false;
+  return result;
+})())"""
+
+
+@needs_chrome
+def test_tv_lists_fits_long_list_shows_done_and_screen_name(server, tmp_path):
+    _seed_screen(server)
+    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
+    try:
+        chrome.send("Page.navigate", {"url": f"{server}/tv/lists"})
+        fit = None
+        for _ in range(100):
+            fit = json.loads(chrome.eval(FIT) or "null")
+            if fit and fit["ready"] and fit["title"] == "To dos":
+                break
+            time.sleep(0.05)
+    finally:
+        chrome.close()
+    assert fit["title"] == "To dos", fit
+    assert fit["names"] == ["Big", "Small"]
+    assert fit["bottom"] <= fit["h"] == 1080
+    assert fit["fits"] is True
+    assert fit["hidden"] > 0 and fit["shown"] > 5
+    assert fit["hidden"] + fit["shown"] == 40
+    assert fit["more"] == f"+{fit['hidden']} more"
+    assert fit["overflowsWithOneMore"] is True
+    assert fit["doneClass"] == "done"
+    assert "line-through" in fit["doneDecoration"]
+    assert fit["doneTick"] is True

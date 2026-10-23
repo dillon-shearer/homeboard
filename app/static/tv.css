@@ -44,7 +44,8 @@ body.tv {
   display: grid;
   gap: 4vh 2vh;
   grid-template-columns: repeat(auto-fit, minmax(28vw, 1fr));
-  align-content: start;
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: start;
   overflow: hidden;
   padding: 3vh 1.5vh 1.5vh;
 }
@@ -52,6 +53,10 @@ body.tv {
 .tv-card {
   position: relative;
   min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   padding: 2vh 1.5vh 1.5vh;
   border: 1px solid;
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
@@ -75,9 +80,11 @@ body.tv {
 }
 
 .tv-card ul {
+  min-height: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow: hidden;
 }
 
 .tv-card li {
@@ -97,6 +104,31 @@ body.tv {
   border: 1px solid;
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
   box-shadow: inset 1px 1px 0 var(--w95-dark);
+}
+
+.tv-card li[hidden] {
+  display: none;
+}
+
+.tv-card li.done {
+  color: var(--w95-shadow);
+  text-decoration: line-through;
+}
+
+.tv-card .box.tick {
+  position: relative;
+}
+
+.tv-card .box.tick::after {
+  content: "";
+  position: absolute;
+  left: 0.7vh;
+  top: 0.2vh;
+  width: 0.6vh;
+  height: 1.3vh;
+  border: solid var(--w95-dark);
+  border-width: 0 0.35vh 0.35vh 0;
+  transform: rotate(45deg);
 }
 
 .tv-card li.pin {
@@ -128,6 +160,7 @@ body.tv {
 }
 
 .tv-card .more {
+  flex: none;
   margin-top: 0.6vh;
   color: #404040;
   font-size: 2.2vh;
