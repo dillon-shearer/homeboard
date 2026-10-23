@@ -137,7 +137,7 @@ Words used here:
 - **Nameservers**: two addresses at GoDaddy that say which company runs your DNS.
 - **API token**: a password that lets the Pi add one temporary entry to your DNS, to prove you own the domain. Let's Encrypt checks it every 2 to 3 months.
 
-20. Give the Pi a fixed number on your Wi-Fi. Log in to your router's admin page (often printed on a sticker on the router) and find **DHCP reservation**, **Address reservation** or **Static lease**. Pick `homeboard` from the list and reserve the number it has now. On the Pi, `hostname -I` shows that number; the first one, like `192.168.1.235`, is the one you want. If you skip this, the router may give the Pi a new number later and the phone address stops working.
+20. Give the Pi a fixed number on your Wi-Fi. Log in to your router's admin page (often printed on a sticker on the router) and find **DHCP reservation**, **Address reservation** or **Static lease**. Pick `homeboard` from the list and reserve the number it has now. On the Pi, `hostname -I` shows that number; the first one, like `192.168.1.50`, is the one you want. On an AT&T router, open `http://192.168.1.254`, go to **Home Network** > **IP Allocation**, and use the access code printed on the router's sticker. If you skip this, the router may give the Pi a new number later and the phone address stops working.
 
 21. Move the domain's DNS to Cloudflare. Your website and email keep working; Cloudflare copies their records first.
     1. Make a free account at https://dash.cloudflare.com/sign-up.
@@ -154,7 +154,7 @@ Words used here:
 
     Save it. Anyone can see this record, but the number only works inside your home, so that is fine.
 
-23. Make the API token. In Cloudflare, click the person icon at the top right > **My Profile** > **API Tokens** > **Create Token**. Next to **Edit zone DNS**, click **Use template**. Under **Zone Resources**, pick `datawithdillon.com`. Click **Continue to summary** > **Create Token**. Copy the token it shows. It is shown only once.
+23. Make the API token. Open https://dash.cloudflare.com/profile/api-tokens and click **Create Token**. Next to **Edit zone DNS**, click **Use template**. Under **Zone Resources**, pick `datawithdillon.com`. Click **Continue to summary** > **Create Token**. Copy the token it shows. It is shown only once.
 
     Keep the token secret. Do not put it in an email, a chat, or a file on your PC. It goes only into the Pi in the next step.
 
@@ -168,7 +168,11 @@ Words used here:
 
     It is done when the last line says `Install finished. reboot now: sudo reboot`. Run `sudo reboot`.
 
-25. On your phone, on the home Wi-Fi, open `https://homeboard.datawithdillon.com/admin`. It should open with the lock icon and no warning. Add it to your home screen if you like. The old `http://` addresses now send the phone to the `https` one.
+25. Set up the phone once. Both settings are needed on Android:
+    1. **Private DNS**: Settings > **Network & internet** (Samsung: **Connections** > **More connection settings**) > **Private DNS** > **Private DNS provider hostname**, type `one.one.one.one` (the word "one", four times, with dots), and tap **Save**. AT&T routers hide any name that points inside your home, and this cannot be turned off on the router. This makes the phone ask Cloudflare instead.
+    2. **Nearby devices for Chrome**: Settings > **Apps** > **Chrome** > **Permissions** > **Nearby devices** > **Allow**. Newer Android blocks apps from reaching devices on your Wi-Fi without it; Chrome then shows `ERR_TOO_MANY_RETRIES` and the Pi never sees the phone. Close Chrome fully (swipe it away in recent apps) after changing it.
+
+    On your phone, on the home Wi-Fi, open `https://homeboard.datawithdillon.com/admin`. It should open with the lock icon and no warning. Add it to your home screen if you like. The old `http://` addresses now send the phone to the `https` one.
 
 26. Check that renewal works. Certificates last 90 days. The Pi renews by itself twice a day when the certificate is close to running out, then reloads the web server. To test it without changing anything:
 
@@ -277,15 +281,16 @@ Some phones do not understand `.local` names. Use the Pi's number instead. On th
 
 ### Android Chrome shows ERR_TOO_MANY_RETRIES or cannot reach the site
 
-Chrome on the phone may refuse plain `http` addresses (for example with **Always use secure connections** turned on in Settings > Privacy and security). Then it does not open `http://homeboard.local/` or the Pi's number, and the Pi never sees the request. Set up the secure address in Part 6 and use `https://homeboard.datawithdillon.com/admin`.
+Chrome on the phone may refuse plain `http` addresses (for example with **Always use secure connections** turned on in Settings > Privacy and security). Then it does not open `http://homeboard.local/` or the Pi's number, and the Pi never sees the request. Set up the secure address in Part 6 and use `https://homeboard.datawithdillon.com/admin`. If the https address shows the same error, give Chrome the **Nearby devices** permission (step 25).
 
 ### The https address does not open on the phone
 
 1. Check the phone is on the home Wi-Fi, not mobile data. The address points to a number that only works at home.
 2. On your PC, run `nslookup homeboard.datawithdillon.com`. It should show the Pi's number. If it shows nothing, check the DNS record from step 22. If it shows other numbers on Cloudflare, the cloud is still orange; make it grey (**DNS only**).
-3. If `nslookup homeboard.datawithdillon.com 1.1.1.1` shows the Pi's number but plain `nslookup homeboard.datawithdillon.com` does not, your router blocks names that point inside your home (often called **DNS rebinding protection**). Allow your domain in the router's settings, or set the phone's **Private DNS** to `one.one.one.one`.
+3. If `nslookup homeboard.datawithdillon.com 1.1.1.1` shows the Pi's number but plain `nslookup homeboard.datawithdillon.com` does not, your router blocks names that point inside your home (often called **DNS rebinding protection**). Allow your domain in the router's settings, or set the phone's **Private DNS** to `one.one.one.one` (step 25). AT&T routers have no setting for this, so use Private DNS.
 4. Check the Pi's number has not changed: run `hostname -I` on the Pi and compare with the DNS record. If it changed, fix the record and set up the reservation in step 20.
-5. Check the web server: `systemctl status nginx` should say `active (running)`. If not, `journalctl -u nginx -n 50` shows why.
+5. Check Chrome has the **Nearby devices** permission (step 25).
+6. Check the web server: `systemctl status nginx` should say `active (running)`. If not, `journalctl -u nginx -n 50` shows why.
 
 ### The certificate expired or the phone shows a certificate warning
 
