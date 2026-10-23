@@ -8,6 +8,8 @@
   --w95-title-off: #808080;
   --w95-select: #000080;
   --w95-font: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  --w95-fs: clamp(13px, 1.1vw + 10px, 16px);
+  --w95-pad: 12px;
   color-scheme: light;
 }
 
@@ -18,11 +20,11 @@
   background: var(--w95-desk);
   color: var(--w95-dark);
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: clamp(13px, 1.1vw + 10px, 16px);
   line-height: 1.3;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  padding: max(var(--w95-pad), env(safe-area-inset-top)) max(var(--w95-pad), env(safe-area-inset-right)) max(var(--w95-pad), env(safe-area-inset-bottom)) max(var(--w95-pad), env(safe-area-inset-left));
   box-sizing: border-box;
 }
 
@@ -46,27 +48,32 @@
 
 .w95-window {
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: var(--w95-fs);
   color: var(--w95-dark);
   background: var(--w95-face);
   border: 1px solid;
   border-color: #dfdfdf var(--w95-dark) var(--w95-dark) #dfdfdf;
   box-shadow: inset 1px 1px 0 var(--w95-light), inset -1px -1px 0 var(--w95-shadow);
   padding: 3px;
-  max-width: 720px;
+  width: 100%;
+  max-width: 960px;
+  min-height: calc(100vh - 2 * var(--w95-pad));
+  min-height: calc(100dvh - max(var(--w95-pad), env(safe-area-inset-top)) - max(var(--w95-pad), env(safe-area-inset-bottom)));
+  display: flex;
+  flex-direction: column;
   margin: 0 auto;
 }
 
 .w95-titlebar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 22px;
-  padding: 2px 2px 2px 4px;
+  gap: 6px;
+  min-height: 40px;
+  padding: 4px 4px 4px 8px;
   background: var(--w95-title);
   color: var(--w95-light);
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: calc(var(--w95-fs) + 2px);
   font-weight: bold;
   line-height: 1;
 }
@@ -87,8 +94,8 @@
 .w95-close {
   flex: none;
   position: relative;
-  width: 16px;
-  height: 14px;
+  width: 28px;
+  height: 26px;
   background: var(--w95-face);
   border: 1px solid;
   border-color: var(--w95-light) var(--w95-dark) var(--w95-dark) var(--w95-light);
@@ -98,9 +105,9 @@
 .w95-close::before, .w95-close::after {
   content: "";
   position: absolute;
-  left: 3px;
-  top: 5px;
-  width: 8px;
+  left: 7px;
+  top: 11px;
+  width: 12px;
   height: 2px;
   background: var(--w95-dark);
   transform: rotate(45deg);
@@ -115,8 +122,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 18px;
-  padding: 1px 8px;
+  min-height: 32px;
+  padding: 4px 12px;
   background: var(--w95-face);
   color: var(--w95-dark);
   font-weight: bold;
@@ -133,13 +140,14 @@
 }
 
 .w95-body {
-  padding: 8px 6px;
+  flex: 1;
+  padding: 10px 8px;
 }
 
 .w95-group {
   position: relative;
-  margin: 12px 0 0;
-  padding: 14px 8px 8px;
+  margin: 14px 0 0;
+  padding: 16px 10px 10px;
   border: 1px solid;
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
   box-shadow: inset 1px 1px 0 var(--w95-light), inset -1px -1px 0 var(--w95-shadow);
@@ -152,30 +160,30 @@
 }
 
 .w95-group > legend, .w95-legend {
-  padding: 0 3px;
+  padding: 0 4px;
   margin-left: 4px;
   background: var(--w95-face);
-  font-size: 12px;
+  font-size: inherit;
   font-weight: normal;
 }
 
 .w95-legend {
   position: absolute;
-  top: -8px;
-  left: 4px;
+  top: -9px;
+  left: 6px;
   margin: 0;
-  line-height: 14px;
+  line-height: 16px;
 }
 
 .w95-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 75px;
-  min-height: 23px;
-  padding: 3px 12px;
+  min-width: 80px;
+  min-height: 32px;
+  padding: 4px 14px;
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: inherit;
   color: var(--w95-dark);
   text-decoration: none;
   background: var(--w95-face);
@@ -191,7 +199,7 @@
 .w95-btn:active:not(:disabled) {
   border-color: var(--w95-dark) var(--w95-light) var(--w95-light) var(--w95-dark);
   box-shadow: inset 1px 1px 0 var(--w95-shadow), inset -1px -1px 0 #dfdfdf;
-  padding: 4px 11px 2px 13px;
+  padding: 5px 13px 3px 15px;
 }
 
 .w95-btn.default {
@@ -208,10 +216,10 @@
 .w95-check {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 20px;
+  gap: 8px;
+  min-height: 32px;
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: inherit;
   cursor: pointer;
   position: relative;
 }
@@ -220,8 +228,8 @@
   -webkit-appearance: none;
   appearance: none;
   flex: none;
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   margin: 0;
   background: var(--w95-light);
   border: 1px solid;
@@ -233,8 +241,8 @@
 
 .w95-check input::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   transform: scale(0);
   background: var(--w95-dark);
   clip-path: polygon(0 45%, 0 70%, 35% 100%, 100% 30%, 100% 5%, 35% 70%);
@@ -250,10 +258,10 @@
 
 .w95-input {
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: inherit;
   color: var(--w95-dark);
-  min-height: 21px;
-  padding: 3px 4px;
+  min-height: 32px;
+  padding: 4px 6px;
   background: var(--w95-light);
   border: 1px solid;
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
@@ -286,14 +294,14 @@
   gap: 2px;
   margin-top: 4px;
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: inherit;
 }
 
 .w95-statusbar > * {
   flex: 1;
   min-width: 0;
-  min-height: 20px;
-  padding: 2px 4px;
+  min-height: 26px;
+  padding: 4px 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -303,8 +311,8 @@
 
 .w95-icons {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -314,32 +322,32 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  min-height: 76px;
-  padding: 6px 2px;
+  gap: 8px;
+  min-height: 120px;
+  padding: 10px 4px;
   color: var(--w95-dark);
   text-decoration: none;
   text-align: center;
   font-family: var(--w95-font);
-  font-size: 12px;
+  font-size: inherit;
   border: 1px solid transparent;
 }
 
 .w95-icon-img {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 64px;
+  height: 64px;
   image-rendering: pixelated;
 }
 
 .w95-icon-label {
-  padding: 1px 2px;
+  padding: 1px 3px;
   line-height: 1.2;
 }
 
 .w95-icon-note {
   color: var(--w95-shadow);
-  font-size: 11px;
+  font-size: 0.85em;
 }
 
 a.w95-icon:active .w95-icon-label, a.w95-icon:hover .w95-icon-label {
@@ -361,6 +369,16 @@ a.w95-icon:active .w95-icon-label, a.w95-icon:hover .w95-icon-label {
   text-shadow: 1px 1px 0 var(--w95-light);
 }
 
+.w95-footlink {
+  margin: 14px 2px 0;
+  text-align: right;
+  font-size: 0.9em;
+}
+
+.w95-footlink a {
+  color: var(--w95-dark);
+}
+
 .w95-fields {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -376,8 +394,8 @@ a.w95-icon:active .w95-icon-label, a.w95-icon:hover .w95-icon-label {
 .w95-fields dd {
   margin: 0;
   min-width: 0;
-  min-height: 21px;
-  padding: 3px 4px;
+  min-height: 32px;
+  padding: 4px 6px;
   overflow-wrap: anywhere;
   background: var(--w95-light);
   border: 1px solid;
@@ -421,6 +439,6 @@ a.w95-icon:active .w95-icon-label, a.w95-icon:hover .w95-icon-label {
   }
 
   .w95-icon {
-    min-height: 88px;
+    min-height: 120px;
   }
 }
