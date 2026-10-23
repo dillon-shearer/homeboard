@@ -197,6 +197,7 @@
   const CAPTION_FADE_MS = 500;
   const IDLE_CHECK_MS = 15000;
   const SWIPE_PX = 80;
+  const SPLASH_FADE_MS = 500;
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
@@ -205,6 +206,7 @@
   const channelEl = document.getElementById("channel");
   const swipeEl = document.getElementById("swipe");
   const overlayEl = document.getElementById("overlay");
+  const splashEl = document.getElementById("splash");
 
   const state = {
     photos: [],
@@ -437,6 +439,14 @@
     }).catch(function () {});
   }
 
+  function hideSplash(delay) {
+    if (!splashEl || splashEl.hidden || splashEl.classList.contains("fade")) return;
+    setTimeout(function () {
+      splashEl.classList.add("fade");
+      setTimeout(function () { splashEl.hidden = true; }, SPLASH_FADE_MS);
+    }, delay);
+  }
+
   function emptyEl() {
     return document.getElementById("empty");
   }
@@ -452,6 +462,7 @@
     const el = emptyEl();
     if (el) {
       el.hidden = false;
+      hideSplash(0);
       return;
     }
     state.needEmpty = true;
@@ -465,6 +476,7 @@
       const node = document.importNode(found, true);
       node.hidden = state.photos.length > 0;
       document.body.insertBefore(node, overlayEl);
+      if (!node.hidden) hideSplash(0);
     }).catch(function () {});
   }
 
@@ -524,6 +536,7 @@
     state.resumeId = null;
     reportCurrent(photo.id);
     showCaption(photo);
+    hideSplash(transitionMs());
     schedule();
     setTimeout(function () { preload(token); }, transitionMs() + 50);
   }

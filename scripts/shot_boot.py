@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 import httpx
-from shot import ROOT, SHOTS, Cdp, find_chrome, free_port, shoot
+from shot import ROOT, SHOTS, Cdp, find_chrome, free_port, open_page
 from websockets.sync.client import connect
 
 BOOT = ROOT / "deploy" / "splash" / "boot.html"
@@ -144,6 +144,21 @@ def export_plymouth(chrome: str, profile: Path) -> None:
             proc.wait(timeout=10)
 
 
+def shoot(chrome: str, url: str, out: Path, profile: Path) -> None:
+    with open_page(chrome, profile, WIDTH, HEIGHT) as cdp:
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride",
+            width=WIDTH,
+            height=HEIGHT,
+            deviceScaleFactor=1,
+            mobile=False,
+        )
+        cdp.call("Page.navigate", url=url)
+        cdp.wait("document.readyState === 'complete'", "the boot page")
+        time.sleep(0.3)
+        capture(cdp, out)
+
+
 def main() -> None:
     bare = "--bare" in sys.argv[1:]
     plymouth = "--plymouth" in sys.argv[1:]
@@ -156,7 +171,7 @@ def main() -> None:
         SHOTS.mkdir(exist_ok=True)
         url = BOOT.as_uri() + ("?bare=1" if bare else "")
         name = f"boot-{WIDTH}x{HEIGHT}" + ("-bare" if bare else "") + ".png"
-        shoot(chrome, url, WIDTH, HEIGHT, SHOTS / name, tmp / "chrome")
+        shoot(chrome, url, SHOTS / name, tmp / "chrome")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
