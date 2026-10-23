@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#008080">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Home Board">
+<title>Lists - Home Board</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-512.png">
+<link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
+<link rel="stylesheet" href="{{ static_url('admin.css') }}">
+<link rel="stylesheet" href="{{ static_url('lists.css') }}">
+</head>
+<body class="w95-desktop">
+<div id="toast" class="toast w95-window" role="alert" hidden>
+<div class="w95-titlebar"><span class="w95-title-text">Home Board</span></div>
+<div class="toast-body">
+<svg class="toast-icon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="#000"/><circle cx="15" cy="15" r="13" fill="#ff0000"/><path d="M10 10l10 10M20 10L10 20" stroke="#fff" stroke-width="3"/></svg>
+<span id="toast-text"></span>
+</div>
+</div>
+<main class="w95-window">
+<div class="w95-titlebar">
+<a class="w95-back" href="/admin">Start</a>
+<span class="w95-title-text">Lists</span>
+<span class="w95-close" aria-hidden="true"></span>
+</div>
+<div class="w95-body">
+<div id="tabs" class="tabs" role="tablist" aria-label="Lists"></div>
+<div id="panel" class="panel" role="tabpanel" hidden>
+<form id="add-form" class="add-row">
+<input id="item-input" class="w95-input" type="text" maxlength="200" placeholder="Add an item..." enterkeyhint="done" aria-label="New item">
+<button type="submit" id="item-add" class="w95-btn default">Add</button>
+</form>
+<ul id="items" class="items"></ul>
+<p id="items-empty" class="items-empty" hidden>Nothing on this list yet.</p>
+<div class="form">
+<span id="kind-label">Kind</span>
+<div class="choices" role="radiogroup" aria-labelledby="kind-label">
+<label class="w95-check w95-radio"><input type="radio" name="kind" value="checklist"> Checklist</label>
+<label class="w95-check w95-radio"><input type="radio" name="kind" value="notes"> Notes</label>
+</div>
+<div class="checks">
+<label class="w95-check"><input id="show-on-tv" type="checkbox"><span>Show this list on the TV</span></label>
+</div>
+<div class="list-buttons">
+<button type="button" id="clear-done" class="w95-btn">Clear done</button>
+<button type="button" id="rename-list" class="w95-btn">Rename</button>
+<button type="button" id="delete-list" class="w95-btn">Delete list</button>
+</div>
+</div>
+</div>
+<p id="lists-empty" class="empty w95-sunken" hidden>No lists yet. Tap + to make one.</p>
+<div id="lists-error" class="empty w95-sunken" role="alert" hidden>
+<p class="error">Could not load the lists.</p>
+<button type="button" id="lists-retry" class="w95-btn">Try Again</button>
+</div>
+</div>
+<div class="w95-statusbar" role="status">
+<span id="list-count">0 lists</span>
+<span id="display-state">Display ...</span>
+</div>
+</main>
+
+<div id="name-dialog" class="modal" hidden>
+<div id="name-backdrop" class="modal-backdrop"></div>
+<form id="name-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="name-title">
+<div class="w95-titlebar">
+<span id="name-title" class="w95-title-text">New list</span>
+<button type="button" id="name-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<label class="field-label" for="name-input">Name:</label>
+<input id="name-input" class="w95-input" type="text" maxlength="60" enterkeyhint="done">
+<div class="buttons">
+<button type="submit" id="name-save" class="w95-btn default">OK</button>
+<button type="button" id="name-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</form>
+</div>
+
+<div id="delete-dialog" class="modal" hidden>
+<div id="delete-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+<div class="w95-titlebar">
+<span id="delete-title" class="w95-title-text">Delete list</span>
+<button type="button" id="delete-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="confirm">
+<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
+<p id="delete-text">Delete this list and everything on it?</p>
+</div>
+<div class="buttons">
+<button type="button" id="confirm-delete" class="w95-btn default">Delete</button>
+<button type="button" id="confirm-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
+<script src="{{ static_url('lists.js') }}"></script>
+</body>
+</html>
