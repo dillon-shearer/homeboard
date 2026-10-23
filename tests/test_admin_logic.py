@@ -51,5 +51,5 @@ def test_admin_js_tile_actions():
     assert "setToggle(tile, !next)" in js
     assert 'send("PUT", "/api/photos/order", { ids: ids })' in js
     assert '"pointerdown"' in js and '"pointermove"' in js and '"pointerup"' in js
-    confirm = js.index("window.confirm(")
-    assert confirm < js.index('send("DELETE"', confirm)
+    assert "window.confirm(" not in js
+    assert '$("confirm-delete").addEventListener("click", deletePhoto)' in js
