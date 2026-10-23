@@ -174,17 +174,11 @@ button, input {
   margin-top: 18px;
 }
 
-.settings .row {
-  display: flex;
-  flex-wrap: wrap;
+.settings .form {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 12px 14px;
   align-items: center;
-  gap: 4px 12px;
-  min-height: 32px;
-  margin-bottom: 6px;
-}
-
-.settings .label {
-  min-width: 120px;
 }
 
 .stepper {
@@ -218,13 +212,32 @@ button, input {
 
 .choices {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 0 16px;
 }
 
 .checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 18px;
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+}
+
+.checks .w95-check {
+  align-items: flex-start;
+}
+
+.checks .w95-check input {
+  margin-top: 8px;
+}
+
+.checks .w95-check > span {
+  padding-top: 7px;
+}
+
+.checks .hint {
+  display: block;
+  font-size: 0.85em;
+  color: #404040;
 }
 
 .w95-radio input {
