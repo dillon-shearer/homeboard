@@ -41,6 +41,14 @@ async def lifespan(app: FastAPI):
 templates = Jinja2Templates(directory=APP_DIR / "templates")
 
 
+def static_url(name: str) -> str:
+    version = int((APP_DIR / "static" / name).stat().st_mtime)
+    return f"/static/{name}?v={version}"
+
+
+templates.env.globals["static_url"] = static_url
+
+
 def create_app(data_dir=None) -> FastAPI:
     data_dir = Path(data_dir) if data_dir is not None else settings.DATA_DIR
     db_path = data_dir / settings.DB_PATH.name

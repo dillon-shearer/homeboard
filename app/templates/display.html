@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>homeboard</title>
-<link rel="stylesheet" href="/static/display.css">
+<link rel="stylesheet" href="{{ static_url('display.css') }}">
 </head>
 <body>
 <img id="layer-a" class="layer" alt=""{% if empty %} hidden{% endif %}>
@@ -19,6 +19,6 @@
 {% endif %}
 <div id="caption"></div>
 <div id="clock"></div>
-<script src="/static/display.js"></script>
+<script src="{{ static_url('display.js') }}"></script>
 </body>
 </html>
