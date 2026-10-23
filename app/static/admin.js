@@ -28,6 +28,22 @@
     return patch;
   }
 
+  function focusAxis(start, delta, overflow) {
+    if (!(overflow > 0.5)) return 50;
+    var v = start - (delta * 100) / overflow;
+    return Math.round(Math.min(100, Math.max(0, v)));
+  }
+
+  function focusFromDrag(start, dx, dy, photo, frame) {
+    var pw = photo.width || 1;
+    var ph = photo.height || 1;
+    var scale = Math.max(frame.width / pw, frame.height / ph);
+    return {
+      x: focusAxis(start.x, dx, pw * scale - frame.width),
+      y: focusAxis(start.y, dy, ph * scale - frame.height),
+    };
+  }
+
   function svgIcon(d) {
     var ns = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(ns, "svg");
@@ -144,7 +160,7 @@
     return "Card almost full: " + (Math.max(0, freeBytes) / 1e9).toFixed(1) + " GB left";
   }
 
-  var Admin = { moveId: moveId, runLimited: runLimited, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState, diskWarning: diskWarning };
+  var Admin = { moveId: moveId, runLimited: runLimited, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState, diskWarning: diskWarning, focusFromDrag: focusFromDrag };
   root.Admin = Admin;
   if (typeof module !== "undefined" && module.exports) module.exports = Admin;
   if (typeof document === "undefined") return;
@@ -440,6 +456,40 @@
   }
 
   var dialogTile = null;
+  var focus = { x: 50, y: 50 };
+  var focusDrag = null;
+
+  function showFocus() {
+    $("photo-thumb").style.objectPosition = focus.x + "% " + focus.y + "%";
+  }
+
+  function onFocusDown(e) {
+    var p = dialogTile && findPhoto(tileId(dialogTile));
+    if (!p) return;
+    e.preventDefault();
+    var frame = $("focus-frame");
+    if (frame.setPointerCapture) {
+      try { frame.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    focusDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, start: { x: focus.x, y: focus.y }, photo: p };
+  }
+
+  function onFocusMove(e) {
+    if (!focusDrag || e.pointerId !== focusDrag.id) return;
+    var frame = $("focus-frame");
+    focus = focusFromDrag(focusDrag.start, e.clientX - focusDrag.x, e.clientY - focusDrag.y,
+      focusDrag.photo, { width: frame.clientWidth, height: frame.clientHeight });
+    showFocus();
+  }
+
+  function onFocusUp(e) {
+    if (focusDrag && e.pointerId === focusDrag.id) focusDrag = null;
+  }
+
+  function centreFocus() {
+    focus = { x: 50, y: 50 };
+    showFocus();
+  }
 
   function showDialogPart(name) {
     $("photo-edit").hidden = name !== "edit";
@@ -451,6 +501,9 @@
     if (!p) return;
     dialogTile = tile;
     $("photo-thumb").src = tile.querySelector("img").src;
+    focus = { x: typeof p.focus_x === "number" ? p.focus_x : 50, y: typeof p.focus_y === "number" ? p.focus_y : 50 };
+    focusDrag = null;
+    showFocus();
     $("caption-input").value = p.caption || "";
     $("photo-enabled").checked = !!p.enabled;
     showDialogPart("edit");
@@ -482,6 +535,8 @@
     var p = findPhoto(tileId(tile));
     if (!p) return;
     var patch = photoPatch(p, $("caption-input").value, $("photo-enabled").checked);
+    if (focus.x !== (typeof p.focus_x === "number" ? p.focus_x : 50)) patch.focus_x = focus.x;
+    if (focus.y !== (typeof p.focus_y === "number" ? p.focus_y : 50)) patch.focus_y = focus.y;
     if (!Object.keys(patch).length) {
       closeDialog();
       return;
@@ -536,6 +591,11 @@
     $("photo-cancel").addEventListener("click", closeDialog);
     $("photo-save").addEventListener("click", savePhoto);
     $("photo-delete").addEventListener("click", openConfirm);
+    $("focus-frame").addEventListener("pointerdown", onFocusDown);
+    $("focus-frame").addEventListener("pointermove", onFocusMove);
+    $("focus-frame").addEventListener("pointerup", onFocusUp);
+    $("focus-frame").addEventListener("pointercancel", onFocusUp);
+    $("focus-centre").addEventListener("click", centreFocus);
     $("confirm-delete").addEventListener("click", deletePhoto);
     $("confirm-cancel").addEventListener("click", backToEdit);
     $("show-more").addEventListener("click", showMore);

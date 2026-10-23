@@ -37,7 +37,7 @@ function el(id) {
   const classes = new Set();
   const attrs = {};
   const e = {
-    id, hidden: false, textContent: "", dataset: {}, complete: false, naturalWidth: 0,
+    id, hidden: false, textContent: "", dataset: {}, style: {}, complete: false, naturalWidth: 0,
     onload: null, onerror: null,
     classList: {
       add: (c) => classes.add(c), remove: (c) => classes.delete(c),

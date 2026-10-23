@@ -162,6 +162,12 @@
     return h + ":" + m + " " + (d.getHours() < 12 ? "am" : "pm");
   }
 
+  function focusPosition(photo) {
+    const x = photo && typeof photo.focus_x === "number" ? photo.focus_x : 50;
+    const y = photo && typeof photo.focus_y === "number" ? photo.focus_y : 50;
+    return x + "% " + y + "%";
+  }
+
   const Slideshow = {
     DEFAULTS: DEFAULTS,
     applySettings: applySettings,
@@ -179,6 +185,7 @@
     buildStops: buildStops,
     nextStop: nextStop,
     shouldReturn: shouldReturn,
+    focusPosition: focusPosition,
   };
 
   root.Slideshow = Slideshow;
@@ -379,6 +386,10 @@
     state.photos = list;
     state.byId = {};
     list.forEach(function (p) { state.byId[p.id] = p; });
+    [layerA, layerB].forEach(function (l) {
+      const p = state.byId[l.dataset.id];
+      if (p) l.style.objectPosition = focusPosition(p);
+    });
     state.upcoming = null;
     if (!newIds.length) {
       state.order = [];
@@ -498,12 +509,14 @@
     const layer = state.back;
     layer.onload = layer.onerror = null;
     layer.dataset.id = String(id);
+    layer.style.objectPosition = focusPosition(photo);
     layer.src = photo.url;
   }
 
   function swap(layer, photo, token) {
     state.back = state.front;
     state.front = layer;
+    layer.style.objectPosition = focusPosition(photo);
     layer.classList.add("front");
     state.back.classList.remove("front");
     state.currentId = photo.id;

@@ -145,13 +145,22 @@ def has_source_sha256(conn: sqlite3.Connection, source_sha256: str) -> bool:
 
 
 def update_photo(
-    conn: sqlite3.Connection, id: int, caption=_UNSET, enabled=_UNSET
+    conn: sqlite3.Connection,
+    id: int,
+    caption=_UNSET,
+    enabled=_UNSET,
+    focus_x=_UNSET,
+    focus_y=_UNSET,
 ) -> sqlite3.Row | None:
     fields = {}
     if caption is not _UNSET:
         fields["caption"] = caption
     if enabled is not _UNSET:
         fields["enabled"] = int(enabled)
+    if focus_x is not _UNSET:
+        fields["focus_x"] = int(focus_x)
+    if focus_y is not _UNSET:
+        fields["focus_y"] = int(focus_y)
     if fields:
         sets = ", ".join(f"{k} = ?" for k in fields)
         with conn:

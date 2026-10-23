@@ -124,7 +124,8 @@
 <button type="button" id="photo-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
 </div>
 <div id="photo-edit" class="w95-body">
-<img id="photo-thumb" class="photo-thumb" alt="">
+<div id="focus-frame" class="focus-frame"><img id="photo-thumb" class="photo-thumb" alt="" draggable="false"></div>
+<div class="focus-row"><span class="hint">Drag to choose what shows in Fill screen mode</span><button type="button" id="focus-centre" class="w95-btn">Centre</button></div>
 <label class="field-label" for="caption-input">Caption:</label>
 <input id="caption-input" class="w95-input" type="text" maxlength="120" placeholder="No caption" enterkeyhint="done">
 <label class="w95-check"><input id="photo-enabled" type="checkbox"> Show on the board</label>
