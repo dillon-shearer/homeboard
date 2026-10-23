@@ -57,6 +57,10 @@ mkdir -p /var/backups
 echo "== Installing services and timers"
 install -m 644 "$APP_DIR"/deploy/*.service "$APP_DIR"/deploy/*.timer /etc/systemd/system/
 
+echo "== Hiding the mouse pointer"
+install -m 644 "$APP_DIR"/deploy/90-homeboard-ignore-cec-input.rules /etc/udev/rules.d/
+udevadm control --reload
+
 echo "== Display settings"
 if [ -f "$CONFIG_TXT" ]; then
     for key in hdmi_force_hotplug disable_overscan; do
