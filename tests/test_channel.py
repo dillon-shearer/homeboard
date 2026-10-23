@@ -22,6 +22,7 @@ KIOSK = r"""
 let idle = null;
 globalThis.setInterval = (fn) => { idle = fn; return 1; };
 const puts = [];
+server.screens = [];
 const baseFetch = globalThis.fetch;
 globalThis.fetch = (url, opts) => {
   if (opts && opts.method === "PUT" && url === "/api/settings") {
@@ -29,8 +30,21 @@ globalThis.fetch = (url, opts) => {
     puts.push(body);
     server.settings = Object.assign({}, server.settings, body);
   }
+  if (url === "/api/screens") {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(server.screens) });
+  }
   return baseFetch(url, opts);
 };
+const touch = {};
+document.addEventListener = (k, fn) => { touch[k] = fn; };
+const swipe = (dx) => {
+  touch.touchstart({ changedTouches: [{ clientX: 500, clientY: 300 }] });
+  touch.touchend({ changedTouches: [{ clientX: 500 + dx, clientY: 300 }] });
+};
+let channelSets = 0;
+els.channel = new Proxy(els.channel, {
+  set(t, k, v) { if (k === "src") channelSets++; t[k] = v; return true; },
+});
 """
 
 
@@ -94,10 +108,11 @@ def test_invalid_is_422(client, body):
 def test_start_screen_markup(client):
     page = client.get("/admin").text
     assert ">TV channel<" in page
-    for name in ("photos", "calendar", "lists"):
+    for name in ("photos", "calendar"):
         assert re.search(
             rf'<button class="w95-btn"[^>]*data-channel="{name}"[^>]*aria-pressed', page
         )
+    assert 'data-channel="lists"' not in page
     select = re.search(r'<select id="channel-timeout".*?</select>', page, re.DOTALL)
     assert select
     assert re.findall(r'<option value="(\d+)"', select.group(0)) == ["0", "2", "5", "10", "30"]
@@ -108,7 +123,8 @@ def test_start_screen_markup(client):
 
 def test_start_js_puts_channel_and_timeout():
     js = (ROOT / "static" / "start.js").read_text(encoding="utf-8")
-    assert "putSettings({ channel: channel })" in js
+    assert "var body = { channel: channel };" in js and "putSettings(body)" in js
+    assert 'if (channel === "lists") body.lists_screen_id = parseInt(' in js
     assert "channel_timeout_min: parseInt" in js
     assert 'classList.toggle("on", on)' in js and "aria-pressed" in js
 
@@ -135,13 +151,75 @@ def test_activity_resets():
     assert 'addEventListener("touchend", onTouchEnd' in JS
 
 
+PHOTOS = {"channel": "photos"}
+CALENDAR = {"channel": "calendar"}
+
+
 @needs_node
-def test_next_channel():
+def test_build_stops():
     result = _node(
-        "console.log(JSON.stringify(['photos', 'calendar', 'lists']"
-        ".map(c => [S.nextChannel(c), S.nextChannel(c, -1)])))"
+        """
+        console.log(JSON.stringify([S.buildStops([]), S.buildStops(null),
+          S.buildStops([{id: 4, name: "Kitchen"}, {id: 2, name: "Chores"}])]));
+        """
     )
-    assert result == [["calendar", "lists"], ["lists", "photos"], ["photos", "calendar"]]
+    assert result[0] == [PHOTOS, CALENDAR]
+    assert result[1] == [PHOTOS, CALENDAR]
+    assert result[2] == [
+        PHOTOS,
+        CALENDAR,
+        {"channel": "lists", "screen_id": 4},
+        {"channel": "lists", "screen_id": 2},
+    ]
+
+
+@needs_node
+def test_next_stop_walks_and_wraps():
+    result = _node(
+        """
+        const stops = S.buildStops([{id: 4}, {id: 2}]);
+        const at = (channel, id) => ({channel: channel, lists_screen_id: id === undefined ? null : id});
+        console.log(JSON.stringify([
+          S.nextStop(stops, at("photos"), 1),
+          S.nextStop(stops, at("calendar"), 1),
+          S.nextStop(stops, at("lists", 4), 1),
+          S.nextStop(stops, at("lists", 2), 1),
+          S.nextStop(stops, at("photos"), -1),
+          S.nextStop(stops, at("lists", 2), -1),
+          S.nextStop(stops, at("lists", 4), -1),
+          S.nextStop(stops, at("lists", null), 1),
+          S.nextStop(stops, at("photos")),
+        ]));
+        """
+    )
+    assert result == [
+        CALENDAR,
+        {"channel": "lists", "screen_id": 4},
+        {"channel": "lists", "screen_id": 2},
+        PHOTOS,
+        {"channel": "lists", "screen_id": 2},
+        {"channel": "lists", "screen_id": 4},
+        CALENDAR,
+        {"channel": "lists", "screen_id": 2},
+        CALENDAR,
+    ]
+
+
+@needs_node
+def test_next_stop_skips_lists_without_screens():
+    result = _node(
+        """
+        const stops = S.buildStops([]);
+        console.log(JSON.stringify([
+          S.nextStop(stops, {channel: "photos"}, 1),
+          S.nextStop(stops, {channel: "calendar"}, 1),
+          S.nextStop(stops, {channel: "photos"}, -1),
+          S.nextStop(stops, {channel: "lists", lists_screen_id: null}, 1),
+          S.nextStop(stops, {channel: "lists", lists_screen_id: null}, -1),
+        ]));
+        """
+    )
+    assert result == [CALENDAR, PHOTOS, CALENDAR, PHOTOS, CALENDAR]
 
 
 @needs_node
@@ -169,11 +247,15 @@ def test_apply_settings_keeps_channel_fields():
         const a = S.applySettings(null, null);
         const b = S.applySettings(a, {channel: "lists", channel_timeout_min: 0});
         const c = S.applySettings(b, {channel: "tv", channel_timeout_min: -3});
+        const d = S.applySettings(c, {lists_screen_id: 7});
+        const e = S.applySettings(d, {lists_screen_id: "x"});
+        const f = S.applySettings(e, {lists_screen_id: null});
         console.log(JSON.stringify([a.channel, a.channel_timeout_min, b.channel,
-          b.channel_timeout_min, c.channel, c.channel_timeout_min]));
+          b.channel_timeout_min, c.channel, c.channel_timeout_min, a.lists_screen_id,
+          d.lists_screen_id, e.lists_screen_id, f.lists_screen_id]));
         """
     )
-    assert result == ["photos", 5, "lists", 0, "lists", 0]
+    assert result == ["photos", 5, "lists", 0, "lists", 0, None, 7, 7, None]
 
 
 @needs_node
@@ -210,3 +292,81 @@ def test_kiosk_shows_frame_and_returns_to_photos_after_idle():
     assert result["puts"] == [{"channel": "photos"}]
     assert result["end"] == {"src": "about:blank", "hidden": True, "swipe": True}
     assert result["channel"] == "photos"
+
+
+@needs_node
+def test_kiosk_swipe_walks_screens_and_puts_screen_id():
+    result = _kiosk(
+        """
+        await advance(100);
+        server.screens = [{id: 4, name: "Kitchen"}, {id: 2, name: "Chores"}];
+        server.settings = Object.assign({}, server.settings, {channel: "calendar"});
+        sources[0].emit("settings_changed");
+        sources[0].emit("lists_changed");
+        await advance(10);
+        swipe(-200);
+        await advance(10);
+        const first = {src: els.channel.src, sets: channelSets};
+        swipe(-200);
+        await advance(10);
+        const second = {src: els.channel.src, sets: channelSets};
+        swipe(-200);
+        await advance(10);
+        swipe(200);
+        await advance(10);
+        swipe(200);
+        await advance(10);
+        swipe(200);
+        await advance(10);
+        swipe(30);
+        await advance(10);
+        console.log(JSON.stringify({first, second, puts, src: els.channel.src}));
+        """
+    )
+    assert result["puts"] == [
+        {"channel": "lists", "lists_screen_id": 4},
+        {"channel": "lists", "lists_screen_id": 2},
+        {"channel": "photos"},
+        {"channel": "lists", "lists_screen_id": 2},
+        {"channel": "lists", "lists_screen_id": 4},
+        {"channel": "calendar"},
+    ]
+    assert result["first"]["src"] == "/tv/lists"
+    assert result["second"] == result["first"]
+    assert result["src"] == "/tv/calendar"
+
+
+@needs_node
+def test_kiosk_reloads_screens_on_lists_changed():
+    result = _kiosk(
+        """
+        await advance(100);
+        server.settings = Object.assign({}, server.settings, {channel: "calendar"});
+        sources[0].emit("settings_changed");
+        await advance(10);
+        swipe(-200);
+        await advance(10);
+        server.screens = [{id: 9, name: "Kitchen"}];
+        sources[0].emit("lists_changed");
+        await advance(10);
+        swipe(-200);
+        await advance(10);
+        swipe(-200);
+        await advance(10);
+        console.log(JSON.stringify(puts));
+        """
+    )
+    assert result == [
+        {"channel": "photos"},
+        {"channel": "calendar"},
+        {"channel": "lists", "lists_screen_id": 9},
+    ]
+
+
+def test_lists_screen_id_round_trip(client):
+    screen = client.get("/api/screens").json()[0]["id"]
+    r = client.put("/api/settings", json={"channel": "lists", "lists_screen_id": screen})
+    assert r.status_code == 200
+    assert (r.json()["channel"], r.json()["lists_screen_id"]) == ("lists", screen)
+    status = client.get("/api/status").json()
+    assert (status["channel"], status["lists_screen_id"]) == ("lists", screen)

@@ -8,6 +8,7 @@
     shuffle: false,
     captions: false,
     channel: "photos",
+    lists_screen_id: null,
     channel_timeout_min: 5,
     clock_size: 5,
     caption_size: 5,
@@ -37,6 +38,9 @@
     if ("shuffle" in s) out.shuffle = !!s.shuffle;
     if ("captions" in s) out.captions = !!s.captions;
     if (CHANNELS.indexOf(s.channel) !== -1) out.channel = s.channel;
+    if (s.lists_screen_id === null || Number.isInteger(s.lists_screen_id)) {
+      out.lists_screen_id = s.lists_screen_id;
+    }
     if (typeof s.channel_timeout_min === "number" && s.channel_timeout_min >= 0) {
       out.channel_timeout_min = s.channel_timeout_min;
     }
@@ -57,10 +61,32 @@
     };
   }
 
-  function nextChannel(channel, step) {
-    const n = CHANNELS.length;
-    const i = Math.max(0, CHANNELS.indexOf(channel));
-    return CHANNELS[(((i + (step === undefined ? 1 : step)) % n) + n) % n];
+  function buildStops(screens) {
+    const stops = [{ channel: "photos" }, { channel: "calendar" }];
+    (Array.isArray(screens) ? screens : []).forEach(function (screen) {
+      if (screen && Number.isInteger(screen.id)) stops.push({ channel: "lists", screen_id: screen.id });
+    });
+    return stops;
+  }
+
+  function stopIndex(stops, settings) {
+    const s = settings || {};
+    let firstList = -1;
+    for (let i = 0; i < stops.length; i++) {
+      if (stops[i].channel !== s.channel) continue;
+      if (s.channel !== "lists" || stops[i].screen_id === s.lists_screen_id) return i;
+      if (firstList === -1) firstList = i;
+    }
+    if (firstList !== -1) return firstList;
+    return s.channel === "lists" ? -1 : 0;
+  }
+
+  function nextStop(stops, settings, step) {
+    const n = stops.length;
+    const d = step === undefined ? 1 : step;
+    let i = stopIndex(stops, settings);
+    if (i === -1) i = d > 0 ? n - 1 : n;
+    return stops[(((i + d) % n) + n) % n];
   }
 
   function shouldReturn(now, last, timeoutMin, channel) {
@@ -150,7 +176,8 @@
     nextBackoff: nextBackoff,
     formatClock: formatClock,
     CHANNELS: CHANNELS,
-    nextChannel: nextChannel,
+    buildStops: buildStops,
+    nextStop: nextStop,
     shouldReturn: shouldReturn,
   };
 
@@ -178,6 +205,7 @@
     order: [],
     pos: -1,
     settings: applySettings(null, null),
+    stops: buildStops([]),
     currentId: null,
     resumeId: null,
     reportedId: null,
@@ -265,14 +293,19 @@
     swipeEl.hidden = false;
   }
 
-  function setChannel(channel) {
-    if (channel === state.settings.channel) return;
-    state.settings = applySettings(state.settings, { channel: channel });
+  function setChannel(stop) {
+    const body = { channel: stop.channel };
+    if (stop.channel === "lists") body.lists_screen_id = stop.screen_id;
+    const s = state.settings;
+    if (body.channel === s.channel && (body.channel !== "lists" || body.lists_screen_id === s.lists_screen_id)) {
+      return;
+    }
+    state.settings = applySettings(state.settings, body);
     applyChannel();
     fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel: channel }),
+      body: JSON.stringify(body),
     }).then(function (r) {
       if (!r.ok) throw new Error(r.status);
     }).catch(function () {
@@ -298,13 +331,13 @@
     const dy = t.clientY - touchStart.y;
     touchStart = null;
     if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) {
-      setChannel(nextChannel(state.settings.channel, dx < 0 ? 1 : -1));
+      setChannel(nextStop(state.stops, state.settings, dx < 0 ? 1 : -1));
     }
   }
 
   function checkIdle() {
     const s = state.settings;
-    if (shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, s.channel)) setChannel("photos");
+    if (shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, s.channel)) setChannel({ channel: "photos" });
   }
 
   function setSettings(data) {
@@ -331,6 +364,12 @@
     }, function () {
       state.needSettings = true;
     });
+  }
+
+  function loadScreens() {
+    return fetchJson("/api/screens").then(function (list) {
+      state.stops = buildStops(list);
+    }, function () {});
   }
 
   function setPhotos(list) {
@@ -566,6 +605,7 @@
     }
     es.onopen = function () { backoff = 1; };
     es.addEventListener("hello", function () {
+      loadScreens();
       onSettingsChanged();
       onPhotosChanged();
     });
@@ -577,7 +617,10 @@
       markActivity();
       onSettingsChanged();
     });
-    es.addEventListener("lists_changed", markActivity);
+    es.addEventListener("lists_changed", function () {
+      markActivity();
+      loadScreens();
+    });
     es.addEventListener("events_changed", markActivity);
     es.onerror = function () {
       es.close();
@@ -598,7 +641,7 @@
     document.addEventListener("touchstart", onTouchStart, { passive: true });
     document.addEventListener("touchend", onTouchEnd, { passive: true });
     setInterval(checkIdle, IDLE_CHECK_MS);
-    Promise.all([loadResume(), loadSettings()]).then(loadPhotos).then(function () {
+    Promise.all([loadResume(), loadSettings(), loadScreens()]).then(loadPhotos).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);
       connect();
     });
