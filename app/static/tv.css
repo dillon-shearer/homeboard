@@ -142,3 +142,109 @@ body.tv {
   text-align: center;
   font-size: 3vh;
 }
+
+.tv-cal {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2vh;
+  overflow: hidden;
+  padding: 3vh 1.5vh 1.5vh;
+}
+
+.tv-cal-grid {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 2px;
+  padding: 2px;
+  background: var(--w95-light);
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-dark);
+}
+
+.tv-cal-grid .h {
+  padding: 0.6vh 0;
+  text-align: center;
+  font-weight: bold;
+  background: var(--w95-face);
+}
+
+.tv-cal-grid .d {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.4vh 0.6vh;
+  border: 1px solid #dfdfdf;
+  font-size: 2vh;
+  overflow: hidden;
+}
+
+.tv-cal-grid .d b {
+  font-size: 2.2vh;
+}
+
+.tv-cal-grid .d.other {
+  color: var(--w95-shadow);
+}
+
+.tv-cal-grid .d.today {
+  outline: 3px solid var(--w95-title);
+  outline-offset: -3px;
+}
+
+.tv-cal-grid .chips {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tv-cal-grid .ev {
+  display: block;
+  margin-top: 0.3vh;
+  padding: 0 0.4vh;
+  background: var(--w95-select);
+  color: var(--w95-light);
+  font-style: normal;
+  font-size: 1.8vh;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-cal-grid .ev.more {
+  background: none;
+  color: var(--w95-dark);
+}
+
+.tv-up {
+  min-height: 0;
+}
+
+.tv-up ul {
+  height: 100%;
+  overflow: hidden;
+}
+
+.tv-up li {
+  display: block;
+  padding: 0.8vh 0;
+  border-bottom: 1px dotted var(--w95-shadow);
+  font-size: 2.4vh;
+}
+
+.tv-up li small {
+  display: block;
+  color: #404040;
+  font-size: 2vh;
+}
+
+.tv-up li.none {
+  border-bottom: 0;
+  color: #404040;
+}
