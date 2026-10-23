@@ -18,4 +18,4 @@ This is phase 1 (MVP) of a larger Skylight style board. Later phases add weather
 
 ## How the operator works
 
-Mode: GitHub repo with push. The repo is `homeboard` on GitHub (MIT); the board pushes merged work and the Pi pulls from GitHub. The remote is not set up yet, so until `origin` exists merges land locally only. Do not create or change the remote; ask the operator.
+Mode: GitHub repo with push. The repo is `homeboard` on GitHub (MIT); the board pushes merged work and the Pi pulls from GitHub. The remote is `origin` on GitHub (dillon-shearer/homeboard); master tracks origin/main and merges push.
