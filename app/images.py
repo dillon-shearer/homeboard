@@ -113,8 +113,19 @@ def _process(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
     stem = uuid.uuid4().hex
     filename = f"{stem}.jpg"
     thumb_name = f"{stem}_t.jpg"
-    _save(full, Path(photos_dir) / filename, FULL_JPEG_QUALITY, icc)
-    _save(thumb, Path(thumbs_dir) / thumb_name, icc_profile=icc)
+    full_path = Path(photos_dir) / filename
+    thumb_path = Path(thumbs_dir) / thumb_name
+    full_tmp = full_path.with_suffix(".tmp")
+    thumb_tmp = thumb_path.with_suffix(".tmp")
+    try:
+        _save(full, full_tmp, FULL_JPEG_QUALITY, icc)
+        _save(thumb, thumb_tmp, icc_profile=icc)
+        full_tmp.replace(full_path)
+        thumb_tmp.replace(thumb_path)
+    except BaseException:
+        for path in (full_tmp, thumb_tmp, full_path, thumb_path):
+            path.unlink(missing_ok=True)
+        raise
     return ProcessedImage(filename, thumb_name, full.width, full.height)
 
 
