@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from typing import Annotated
 
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 from app import db, events, images
 
 router = APIRouter(prefix="/api/photos")
+log = logging.getLogger(__name__)
 
 
 class PhotoPatch(BaseModel):
@@ -58,29 +60,32 @@ def upload_photos(
     state = request.app.state
     uploaded_by = (request.headers.get("user-agent") or "")[:200] or None
     created, errors = [], []
-    for f in files:
-        try:
-            data = f.file.read(images.MAX_UPLOAD_BYTES + 1)
-            if len(data) > images.MAX_UPLOAD_BYTES:
-                raise images.ImageError("too large")
-            p = images.process_upload(data, state.photos_dir, state.thumbs_dir)
-        except images.ImageError as e:
-            errors.append({"name": f.filename, "error": str(e)})
-            continue
-        except OSError:
-            errors.append({"name": f.filename, "error": "processing failed"})
-            continue
-        try:
-            row = db.insert_photo(
-                conn, p.filename, p.thumb, p.width, p.height, uploaded_by=uploaded_by
-            )
-        except sqlite3.Error:
-            images.delete_files(p.filename, p.thumb, state.photos_dir, state.thumbs_dir)
-            errors.append({"name": f.filename, "error": "save failed"})
-            continue
-        created.append(photo_dict(row))
-    if created:
-        events.publish("photos_changed")
+    try:
+        for f in files:
+            try:
+                data = f.file.read(images.MAX_UPLOAD_BYTES + 1)
+                if len(data) > images.MAX_UPLOAD_BYTES:
+                    raise images.ImageError("too large")
+                p = images.process_upload(data, state.photos_dir, state.thumbs_dir)
+            except images.ImageError as e:
+                errors.append({"name": f.filename, "error": str(e)})
+                continue
+            except Exception:
+                log.exception("processing %s failed", f.filename)
+                errors.append({"name": f.filename, "error": "processing failed"})
+                continue
+            try:
+                row = db.insert_photo(
+                    conn, p.filename, p.thumb, p.width, p.height, uploaded_by=uploaded_by
+                )
+            except sqlite3.Error:
+                images.delete_files(p.filename, p.thumb, state.photos_dir, state.thumbs_dir)
+                errors.append({"name": f.filename, "error": "save failed"})
+                continue
+            created.append(photo_dict(row))
+    finally:
+        if created:
+            events.publish("photos_changed")
     return JSONResponse({"created": created, "errors": errors}, status_code=201 if created else 400)
 
 
