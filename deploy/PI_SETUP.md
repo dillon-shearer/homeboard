@@ -114,7 +114,7 @@ A few words used below:
 
 ## Part 5: What you should see after the reboot
 
-18. Watch the monitor. Text scrolls for about a minute. Then the screen goes black for a few seconds while the browser starts. Then the Home Board page fills the whole screen, with no window borders and no mouse pointer. Once photos are added from a phone, the slideshow runs here.
+18. Watch the monitor. Right after power on it shows the Home Board screen: a blue sky with clouds, the four colour flag, `Data with Dillon` over `Home Board`, the words `Starting Home Board...` and a dark bar with white blocks moving across. There is no rainbow square and no scrolling text. It stays for about a minute while the Pi starts. Then the browser opens and shows the same screen until the site is ready. Then the Home Board page fills the whole screen, with no window borders and no mouse pointer. Once photos are added from a phone, the slideshow runs here. When the Pi restarts or shuts down, the same screen shows with `Home Board is restarting...` or `Home Board is shutting down...`.
 
 19. Check the admin site from your phone. On the same Wi-Fi, open `http://homeboard.local/` in the browser. You should see the Home Board page.
 
@@ -426,6 +426,42 @@ sudo reboot
 If the file is missing, run the installer again (`sudo bash /opt/homeboard/deploy/install.sh`).
 
 Do not tell the system to ignore these inputs completely. With no input devices at all, the browser never starts and the screen stays on boot text.
+
+### The boot screen shows text instead of the Home Board picture
+
+A few seconds of text at the very start can be normal; the picture should cover the rest. If text scrolls the whole time, connect with `ssh dillon@homeboard.local` and run these checks:
+
+1. The theme should be `homeboard`:
+
+   ```
+   plymouth-set-default-theme
+   ```
+
+2. The boot settings should hold `quiet splash loglevel=0 logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles`, all on one line:
+
+   ```
+   cat /boot/firmware/cmdline.txt
+   ```
+
+3. This should print `disable_splash=1`:
+
+   ```
+   grep disable_splash=1 /boot/firmware/config.txt
+   ```
+
+4. The boot screen should start and stop with no errors:
+
+   ```
+   journalctl -b -u plymouth-start -u plymouth-quit
+   ```
+
+5. The browser should be running; this prints `active`:
+
+   ```
+   systemctl is-active homeboard-kiosk
+   ```
+
+If any check is wrong, run the installer again (`sudo bash /opt/homeboard/deploy/install.sh`), then `sudo reboot`. The installer keeps a copy of the original boot settings in `/boot/firmware/cmdline.txt.homeboard.bak`. If the Pi does not start after a change to `cmdline.txt`, put the SD card in your PC and copy that file back over `cmdline.txt`.
 
 ### Photos stop changing or the page looks stuck
 

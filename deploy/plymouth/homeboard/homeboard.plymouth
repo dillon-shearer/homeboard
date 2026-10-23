@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Home Board
+Description=Home Board boot screen from deploy/splash/boot.html
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/homeboard
+ScriptFile=/usr/share/plymouth/themes/homeboard/homeboard.script
