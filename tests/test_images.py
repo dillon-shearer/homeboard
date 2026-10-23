@@ -32,9 +32,9 @@ def test_exif_orientation_applied_and_stripped(tmp_path):
     exif[0x0112] = 6
     exif[0x8825] = {1: "N"}
     result = process_upload(_jpeg((4000, 3000), exif), photos, thumbs)
-    assert (result.width, result.height) == (1440, 1920)
+    assert (result.width, result.height) == (1920, 2560)
     with Image.open(photos / result.filename) as out:
-        assert out.size == (1440, 1920)
+        assert out.size == (1920, 2560)
         assert out.format == "JPEG"
         assert "exif" not in out.info
         assert len(out.getexif()) == 0
@@ -57,6 +57,32 @@ def test_small_image_not_upscaled(tmp_path):
     assert (result.width, result.height) == (800, 600)
     with Image.open(photos / result.filename) as out:
         assert out.size == (800, 600)
+
+
+def test_portrait_stored_wide_enough_to_cover(tmp_path):
+    photos, thumbs = _dirs(tmp_path)
+    result = process_upload(_jpeg((3000, 4000)), photos, thumbs)
+    assert (result.width, result.height) == (1920, 2560)
+    with Image.open(photos / result.filename) as out:
+        assert out.size == (1920, 2560)
+
+
+def test_landscape_stored_to_cover_both_edges(tmp_path):
+    photos, thumbs = _dirs(tmp_path)
+    result = process_upload(_jpeg((4000, 3000)), photos, thumbs)
+    assert (result.width, result.height) == (1920, 1440)
+
+
+def test_wide_panorama_keeps_full_screen_height(tmp_path):
+    photos, thumbs = _dirs(tmp_path)
+    result = process_upload(_jpeg((6000, 1500)), photos, thumbs)
+    assert (result.width, result.height) == (4320, 1080)
+
+
+def test_image_smaller_than_screen_on_one_edge_not_resized(tmp_path):
+    photos, thumbs = _dirs(tmp_path)
+    result = process_upload(_jpeg((1600, 2400)), photos, thumbs)
+    assert (result.width, result.height) == (1600, 2400)
 
 
 def test_thumb_long_edge(tmp_path):
