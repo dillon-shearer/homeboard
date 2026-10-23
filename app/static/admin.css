@@ -1,0 +1,246 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  background: #111;
+  color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+main {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 12px 16px 32px;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0;
+}
+
+h2 {
+  font-size: 17px;
+  margin: 0 0 8px;
+  color: #aaa;
+  font-weight: 600;
+}
+
+section {
+  margin-top: 20px;
+}
+
+button, input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  min-height: 44px;
+  min-width: 44px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #222;
+  cursor: pointer;
+}
+
+button:focus-visible, input:focus-visible, .upload-btn:focus-within, a:focus-visible {
+  outline: 2px solid #4a9eff;
+  outline-offset: 2px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #aaa;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #d33;
+  display: inline-block;
+}
+
+.dot.on {
+  background: #2c2;
+}
+
+.upload-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 56px;
+  border-radius: 10px;
+  background: #4a9eff;
+  color: #000;
+  font-weight: 600;
+  font-size: 18px;
+  cursor: pointer;
+  position: relative;
+}
+
+.upload-btn input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.upload-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.upload-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #222;
+}
+
+.upload-list .name {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.upload-list .name span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.upload-list progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 6px;
+}
+
+.upload-list .done {
+  color: #2c2;
+}
+
+.error, .upload-list .fail {
+  color: #f66;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  min-height: 56px;
+  border-bottom: 1px solid #222;
+}
+
+.label {
+  min-width: 0;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepper button {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.stepper input {
+  width: 72px;
+  min-height: 44px;
+  text-align: center;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #1a1a1a;
+}
+
+.seg {
+  display: flex;
+}
+
+.seg button {
+  border-radius: 0;
+  padding: 0 14px;
+  color: #aaa;
+}
+
+.seg button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.seg button:last-child {
+  border-radius: 0 8px 8px 0;
+  border-left: 0;
+}
+
+.seg button.active {
+  background: #4a9eff;
+  border-color: #4a9eff;
+  color: #000;
+  font-weight: 600;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.tile {
+  aspect-ratio: 1 / 1;
+  background: #222;
+  overflow: hidden;
+}
+
+.tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile.disabled img {
+  opacity: 0.4;
+}
+
+.empty {
+  color: #888;
+}
+
+.foot {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13px;
+  color: #888;
+}
+
+.foot a {
+  color: #4a9eff;
+}
