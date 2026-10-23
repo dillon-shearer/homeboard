@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from app import db, settings
 from app.auth import TunnelGate
 from app.routes_photos import router as photos_router
-from app.routes_settings import _ip
+from app.routes_settings import lan_ip
 from app.routes_settings import router as settings_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -100,7 +100,7 @@ def create_app(data_dir=None) -> FastAPI:
             else:
                 hostname = socket.gethostname()
                 admin_url = f"http://{hostname.split('.')[0]}.local/admin"
-                ip = _ip()
+                ip = lan_ip()
             context.update(
                 admin_url=admin_url,
                 ip_url=f"http://{ip}/admin" if ip else "",

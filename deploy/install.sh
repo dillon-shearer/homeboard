@@ -82,7 +82,7 @@ fi
 if [ "$TUNNEL" -eq 1 ]; then
     install -d -m 755 /usr/share/keyrings
     curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /usr/share/keyrings/cloudflare-main.gpg
-    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main"         > /etc/apt/sources.list.d/cloudflared.list
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main" > /etc/apt/sources.list.d/cloudflared.list
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared
 fi
@@ -219,8 +219,7 @@ if [ "$TUNNEL" -eq 1 ]; then
             echo "No tunnel token given" >&2
             exit 1
         fi
-        (umask 077 && printf 'TUNNEL_TOKEN=%s
-' "$TUNNEL_TOKEN" > "$TUNNEL_ENV")
+        (umask 077 && printf 'TUNNEL_TOKEN=%s\n' "$TUNNEL_TOKEN" > "$TUNNEL_ENV")
         unset TUNNEL_TOKEN
     fi
     chown root:root "$TUNNEL_ENV"
@@ -237,8 +236,7 @@ if [ "$TUNNEL" -eq 1 ]; then
         fi
         PASSWORD_LINE="$(printf '%s' "$PASSWORD" | (cd "$APP_DIR" && .venv/bin/python -m app.auth))"
         unset PASSWORD PASSWORD_AGAIN
-        (umask 077 && printf '%s
-' "$PASSWORD_LINE" > "$PASSWORD_HASH")
+        (umask 077 && printf '%s\n' "$PASSWORD_LINE" > "$PASSWORD_HASH")
         unset PASSWORD_LINE
     fi
     chown root:root "$PASSWORD_HASH"
@@ -246,9 +244,7 @@ if [ "$TUNNEL" -eq 1 ]; then
     install -m 644 "$APP_DIR"/deploy/nginx/homeboard-tunnel.conf /etc/nginx/sites-available/homeboard-tunnel
     ln -sf /etc/nginx/sites-available/homeboard-tunnel /etc/nginx/sites-enabled/homeboard-tunnel
     mkdir -p "$API_DROPIN_DIR"
-    printf '[Service]
-LoadCredential=tunnel-password:%s
-' "$PASSWORD_HASH" > "$API_DROPIN_DIR/homeboard-tunnel.conf"
+    printf '[Service]\nLoadCredential=tunnel-password:%s\n' "$PASSWORD_HASH" > "$API_DROPIN_DIR/homeboard-tunnel.conf"
 else
     rm -f /etc/nginx/sites-enabled/homeboard-tunnel "$API_DROPIN_DIR/homeboard-tunnel.conf"
 fi

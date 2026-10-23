@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -56,7 +57,9 @@ def test_run_limited_keeps_at_most_two_open_in_order():
       console.log(JSON.stringify({{ peak: peak, started: started, finished: finished.length, open: open.length }}));
     }});
     """
-    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30, check=True)
+    out = subprocess.run(
+        ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
+    )
     result = json.loads(out.stdout)
     assert result["peak"] == 2
     assert result["started"] == [0, 1, 2, 3, 4, 5, 6]
@@ -72,7 +75,9 @@ def test_run_limited_resolves_on_empty_list():
       console.log(JSON.stringify({{ ok: true }}));
     }});
     """
-    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30, check=True)
+    out = subprocess.run(
+        ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
+    )
     assert json.loads(out.stdout) == {"ok": True}
 
 
@@ -98,7 +103,9 @@ def test_upload_over_limit_reads_at_most_limit_plus_one(client, monkeypatch, ext
     monkeypatch.setattr(tempfile.SpooledTemporaryFile, "read", counting_read)
     called = []
     monkeypatch.setattr(images, "process_upload", lambda *a: called.append(a))
-    r = client.post("/api/photos", files=[("files", ("big.jpg", b"x" * (limit + extra), "image/jpeg"))])
+    r = client.post(
+        "/api/photos", files=[("files", ("big.jpg", b"x" * (limit + extra), "image/jpeg"))]
+    )
     assert r.status_code == 400
     assert r.json()["errors"] == [{"name": "big.jpg", "error": "too large"}]
     assert sum(read_bytes) <= limit + 1
@@ -129,20 +136,10 @@ def test_process_upload_runs_one_decode_at_a_time(tmp_path, monkeypatch):
 
     monkeypatch.setattr(images, "_cover", slow_cover)
     data = _jpeg((64, 48))
-    errors = []
-
-    def work():
-        try:
-            images.process_upload(data, tmp_path, tmp_path)
-        except Exception as e:
-            errors.append(e)
-
-    threads = [threading.Thread(target=work) for _ in range(6)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    assert errors == []
+    with ThreadPoolExecutor(6) as pool:
+        jobs = [pool.submit(images.process_upload, data, tmp_path, tmp_path) for _ in range(6)]
+    for job in jobs:
+        job.result()
     assert state["peak"] == images.MAX_CONCURRENT
     assert images.MAX_CONCURRENT <= 2
     assert len(list(tmp_path.glob("*_t.jpg"))) == 6

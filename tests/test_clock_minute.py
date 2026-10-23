@@ -16,9 +16,7 @@ const base = new RealDate(2026, 9, 23, 10, 15, 0, 0).getTime();
 
 
 def _run(body):
-    script = (
-        f"{HARNESS}\n{FAKE_DATE}\n(async () => {{\n{body}\n}})();"
-    )
+    script = f"{HARNESS}\n{FAKE_DATE}\n(async () => {{\n{body}\n}})();"
     out = subprocess.run(
         ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
     )

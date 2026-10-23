@@ -63,7 +63,7 @@ def test_sheet_is_gone():
 
 
 def test_photo_window_markup(page):
-    dialog = page[page.index('id="photo-dialog"'):page.index('id="upload-dialog"')]
+    dialog = page[page.index('id="photo-dialog"') : page.index('id="upload-dialog"')]
     assert 'role="dialog"' in dialog
     assert '<span id="photo-title" class="w95-title-text">Photo</span>' in dialog
     assert 'id="photo-close"' in dialog
@@ -87,7 +87,7 @@ def test_photo_window_wiring():
 
 
 def test_upload_progress_window(page):
-    dialog = page[page.index('id="upload-dialog"'):]
+    dialog = page[page.index('id="upload-dialog"') :]
     assert '<span id="upload-title" class="w95-title-text">Uploading</span>' in dialog
     assert 'id="upload-list"' in dialog
     assert 'id="upload-close" class="w95-btn default" disabled' in dialog

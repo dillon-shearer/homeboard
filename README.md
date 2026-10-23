@@ -31,5 +31,3 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Open http://localhost:8000/healthz. Data goes to `./data` unless `HOMEBOARD_DATA` is set.
-
-Board smoke test passed.
