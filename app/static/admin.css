@@ -404,3 +404,34 @@ button, input {
     width: 64px;
   }
 }
+
+.w95-statusbar {
+  flex-wrap: wrap;
+}
+
+.display-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.display-cell #display-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-thumb {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  object-fit: cover;
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+}
+
+.w95-statusbar > .disk-warning {
+  flex-basis: 100%;
+  color: #800000;
+  font-weight: bold;
+}
