@@ -31,3 +31,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Open http://localhost:8000/healthz. Data goes to `./data` unless `HOMEBOARD_DATA` is set.
+
+## Weather
+
+The weather widget needs the internet. `GET /api/weather` looks up the place in `weather_location` (a zip or a town name, set in settings) and fetches a 3 day forecast from Open-Meteo (no account or key), with api.zippopotam.us as a fallback for zip lookup. It refreshes at most every 30 minutes and keeps the last good forecast in `weather.json` in the data dir, next to `homeboard.db` (`/var/lib/homeboard/weather.json` on the Pi). When the internet is down it serves that file, with `stale` true once it is older than 90 minutes.
