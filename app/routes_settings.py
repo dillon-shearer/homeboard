@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app import __version__, db, events
+from app.auth import is_tunnel
 from app.routes_photos import Conn
 
 router = APIRouter(prefix="/api")
@@ -85,7 +86,7 @@ async def stream_events(request: Request):
         hello = json.dumps(settings_dict(db.get_settings(conn)))
     finally:
         conn.close()
-    host = request.client.host if request.client else None
+    host = request.client.host if request.client and not is_tunnel(request.scope) else None
     limit = request.app.state.sse_limit
 
     async def gen():

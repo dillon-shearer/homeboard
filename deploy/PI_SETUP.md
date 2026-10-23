@@ -194,6 +194,88 @@ If you ever need a new token (you deleted the old one, or think someone saw it),
 sudo bash /opt/homeboard/deploy/install.sh --new-token
 ```
 
+## Part 7: Use the board away from home (tunnel and password)
+
+This lets you and anyone you give the password to open the board from anywhere, on mobile data too, at `https://board.datawithdillon.com/admin`. No VPN and no app on the phone. Nothing is opened on your router: the Pi calls out to Cloudflare, and Cloudflare passes visits back down that line. This line is called a **tunnel**.
+
+Everything that comes through the tunnel needs one shared password first. A phone types it once and then stays signed in for a year, even after closing Chrome. At home, `https://homeboard.datawithdillon.com/admin` keeps working with no password, and the monitor keeps showing the slideshow with no internet at all.
+
+Words used here:
+
+- **Tunnel**: the line from the Pi out to Cloudflare. It is made in Cloudflare's **Zero Trust** dashboard, which is free.
+- **Tunnel token**: a long secret that lets the Pi open the tunnel. Anyone with it could connect a computer as your board, so keep it secret like the DNS token.
+- **Board password**: the one password you and your girlfriend type on the phone. Pick something long that you both can remember. The Pi keeps only a scrambled copy (a hash), never the password itself.
+
+27. Make the tunnel in Cloudflare.
+    1. Open https://one.dash.cloudflare.com/ and log in with your Cloudflare account. If it asks you to pick an account, pick the one that has `datawithdillon.com`.
+    2. The first time, Cloudflare asks for a **team name**. Type anything, for example `datawithdillon`. Then pick the **Free** plan. It may ask for a card; the Free plan costs $0.
+    3. In the menu on the left, click **Networks**, then **Tunnels** (some accounts show **Networks** > **Connectors** > **Cloudflare Tunnels**). Click **Create a tunnel**.
+    4. Pick **Cloudflared** and click **Next**. Name it `homeboard` and click **Save tunnel**.
+    5. Cloudflare shows install commands. Click **Debian**, then click the copy button next to the box that starts with `sudo cloudflared service install`. That box holds the tunnel token. Paste it into a new Notepad file for a moment (press the Windows key, type `Notepad`, press Enter, then Ctrl+V). Do not run that command on the Pi; the installer below sets it up the Home Board way. Click **Next**.
+    6. On the **Route traffic** page (or the **Public Hostnames** tab), fill in:
+       - **Subdomain**: `board`
+       - **Domain**: `datawithdillon.com`
+       - **Path**: leave empty
+       - **Service Type**: `HTTP`
+       - **URL**: `127.0.0.1:8081`
+
+       Click **Complete setup** (or **Save hostname**). Cloudflare adds the `board` DNS record by itself. Do not touch the `homeboard` record from step 22.
+
+    The whole Service must read `http://127.0.0.1:8081`. That is a door on the Pi that only the tunnel uses, and every visit through it asks for the password.
+
+28. Put the tunnel and the password on the Pi. Connect with `ssh dillon@homeboard.local` and run:
+
+    ```
+    sudo bash /opt/homeboard/deploy/install.sh --tunnel
+    ```
+
+    It asks two things. Nothing shows while you paste or type; that is normal.
+    - `Paste the tunnel token`: copy the whole line from your Notepad file and paste it with a right-click in the SSH window, then press Enter. The installer keeps only the token part.
+    - `Type the board password`, then `Type it again`: type the board password both times.
+
+    The installer saves the token in `/etc/homeboard/tunnel.env` and the scrambled password in `/etc/homeboard/tunnel-password.hash`. Only the administrator (root) can read them, and neither is in the Home Board code. Now close Notepad and click **Don't save**, so the token is not left on your PC.
+
+    It is done when the last line says `Install finished. reboot now: sudo reboot`. Run `sudo reboot`.
+
+29. Check it from the phone. Turn Wi-Fi off so the phone uses mobile data. In Chrome open `https://board.datawithdillon.com/admin`. You should see the lock icon and a page that asks for the password. Type it and tap **Open**. The admin page opens. Close Chrome fully (swipe it away), open it again and go to the same address: it opens with no password.
+
+    Type the address with `https://`. Uploading photos works the same as at home.
+
+    Back in Cloudflare (https://one.dash.cloudflare.com/ > **Networks** > **Tunnels**), the `homeboard` tunnel should say **Healthy**.
+
+Later runs of the installer, for example after an update, remember the tunnel and the password. You do not need to type them again.
+
+### Change the board password
+
+Do this if you want a new password or think someone else knows it. Everyone, including you, has to type the new password once on each phone afterwards.
+
+Connect with `ssh dillon@homeboard.local` and run:
+
+```
+sudo bash /opt/homeboard/deploy/install.sh --new-password
+```
+
+Type the new password twice, then run `sudo reboot`.
+
+### Get a new tunnel token
+
+Do this if you think someone saw the token. Open https://one.dash.cloudflare.com/ > **Networks** > **Tunnels**, click `homeboard`, then **Edit** (or **Configure**) and click **Refresh token** if it is offered; otherwise copy the install command again as in step 27. Then run:
+
+```
+sudo bash /opt/homeboard/deploy/install.sh --new-tunnel-token
+```
+
+and paste the new command when asked.
+
+### Turn the tunnel off
+
+In Cloudflare, open https://one.dash.cloudflare.com/ > **Networks** > **Tunnels**, click the three dots next to `homeboard` and click **Delete**. On the Pi run:
+
+```
+sudo systemctl disable --now homeboard-tunnel
+sudo rm /etc/homeboard/tunnel.env
+```
+
 ## Check the logs
 
 Logs are messages the programs write about what they are doing. They are kept in memory and cleared at each restart, to save the SD card.
@@ -291,6 +373,14 @@ Chrome on the phone may refuse plain `http` addresses (for example with **Always
 4. Check the Pi's number has not changed: run `hostname -I` on the Pi and compare with the DNS record. If it changed, fix the record and set up the reservation in step 20.
 5. Check Chrome has the **Nearby devices** permission (step 25).
 6. Check the web server: `systemctl status nginx` should say `active (running)`. If not, `journalctl -u nginx -n 50` shows why.
+
+### The tunnel address does not open away from home
+
+1. In Cloudflare, open https://one.dash.cloudflare.com/ > **Networks** > **Tunnels**. If `homeboard` is not **Healthy**, check the Pi has internet and run `systemctl status homeboard-tunnel`. `journalctl -u homeboard-tunnel -n 50` shows why it stopped.
+2. Click `homeboard` > **Public Hostname** (or **Published application routes**). The `board.datawithdillon.com` line must point to `http://127.0.0.1:8081`.
+3. If the password page says `No password is set on the board yet`, run `sudo bash /opt/homeboard/deploy/install.sh --new-password`.
+4. If it says `Too many wrong tries`, wait 15 minutes and try again.
+5. If the phone keeps going back to the password page after the right password, check the address starts with `https://`.
 
 ### The certificate expired or the phone shows a certificate warning
 
