@@ -216,12 +216,14 @@ The board is served over plain `http`, not `https`. If Chrome on the phone refus
 
 ### A mouse pointer shows in the middle of the screen
 
-The Pi's HDMI ports report a TV-remote input that the system mistakes for a mouse. Connect with SSH and run:
+The Pi's HDMI ports report a TV-remote input that the system mistakes for a mouse. The installer adds a rule that fixes this. Check it is there, then reboot:
 
 ```
-echo 'SUBSYSTEM=="input", ATTRS{name}=="vc4-hdmi*", ENV{ID_INPUT_POINTINGSTICK}="", ENV{ID_INPUT_MOUSE}=""' | sudo tee /etc/udev/rules.d/90-homeboard-ignore-cec-input.rules
+cat /etc/udev/rules.d/90-homeboard-ignore-cec-input.rules
 sudo reboot
 ```
+
+If the file is missing, run the installer again (`sudo bash /opt/homeboard/deploy/install.sh`).
 
 Do not tell the system to ignore these inputs completely. With no input devices at all, the browser never starts and the screen stays on boot text.
 
