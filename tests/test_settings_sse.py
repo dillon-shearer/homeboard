@@ -64,11 +64,12 @@ def test_events_stream_starts_with_hello(client):
     assert events.subscribers == set()
 
 
-def test_status_has_six_keys(client):
+def test_status_has_seven_keys(client):
     body = client.get("/api/status").json()
     assert set(body) == {
         "display_connected",
         "photo_count",
+        "current_photo_id",
         "hostname",
         "ip",
         "disk_free_bytes",
@@ -76,5 +77,6 @@ def test_status_has_six_keys(client):
     }
     assert body["photo_count"] == 0
     assert body["display_connected"] is False
+    assert body["current_photo_id"] is None
     assert body["version"] == __version__ == "0.1.0"
     assert isinstance(body["disk_free_bytes"], int) and body["disk_free_bytes"] > 0

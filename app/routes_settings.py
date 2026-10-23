@@ -112,6 +112,7 @@ def status(request: Request, conn: Conn):
     return {
         "display_connected": events.display_connected(),
         "photo_count": len(db.list_photos(conn)),
+        "current_photo_id": db.get_current_photo_id(conn),
         "hostname": hostname,
         "ip": _ip(),
         "disk_free_bytes": shutil.disk_usage(request.app.state.photos_dir).free,

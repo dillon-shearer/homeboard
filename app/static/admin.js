@@ -136,7 +136,15 @@
     });
   }
 
-  var Admin = { moveId: moveId, runLimited: runLimited, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState };
+  var LOW_DISK_BYTES = 1e9;
+  var MAX_BACKOFF_S = 30;
+
+  function diskWarning(freeBytes) {
+    if (typeof freeBytes !== "number" || freeBytes >= LOW_DISK_BYTES) return "";
+    return "Card almost full: " + (Math.max(0, freeBytes) / 1e9).toFixed(1) + " GB left";
+  }
+
+  var Admin = { moveId: moveId, runLimited: runLimited, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState, diskWarning: diskWarning };
   root.Admin = Admin;
   if (typeof module !== "undefined" && module.exports) module.exports = Admin;
   if (typeof document === "undefined") return;
@@ -190,13 +198,33 @@
     $("photo-count").textContent = n + (n === 1 ? " photo" : " photos");
   }
 
+  var nowShowingId = null;
+
   function loadStatus() {
     return getJSON("/api/status").then(function (s) {
       setDisplayState(s.display_connected ? "Display online" : "Display offline");
       setCount(s.photo_count);
+      nowShowingId = s.current_photo_id == null ? null : s.current_photo_id;
+      renderNowShowing();
+      var warn = diskWarning(s.disk_free_bytes);
+      $("disk-warning").textContent = warn;
+      $("disk-warning").hidden = !warn;
     }).catch(function () {
       setDisplayState("Server not reachable");
     });
+  }
+
+  function renderNowShowing() {
+    var img = $("now-thumb");
+    var p = nowShowingId == null ? null : findPhoto(nowShowingId);
+    if (!p) {
+      img.hidden = true;
+      return;
+    }
+    if (img.getAttribute("src") !== p.thumb_url) img.src = p.thumb_url;
+    img.alt = "On the TV now" + (p.caption ? ": " + p.caption : "");
+    img.title = "On the TV now";
+    img.hidden = false;
   }
 
   function setDisplayState(text) {
@@ -216,10 +244,14 @@
       photos = list;
       $("grid-error").hidden = true;
       renderGrid();
+      renderNowShowing();
     });
   }
 
+  var gridStale = false;
+
   function refreshGrid() {
+    gridStale = false;
     var retry = $("grid-retry");
     retry.disabled = true;
     return loadGrid().catch(function () {
@@ -341,10 +373,15 @@
     drag = null;
     d.tile.classList.remove("dragging");
     var ids = fullOrder(gridIds());
-    if (ids.join(",") === fullOrder(d.start).join(",")) return;
+    if (ids.join(",") === fullOrder(d.start).join(",")) {
+      if (gridStale) refreshGrid();
+      return;
+    }
     send("PUT", "/api/photos/order", { ids: ids }).catch(function () {
       applyOrder(d.start);
       showError("Could not save the new order. Try again.");
+    }).then(function () {
+      if (gridStale) refreshGrid();
     });
   }
 
@@ -729,6 +766,51 @@
     putSettings(patch);
   }
 
+  function onPhotosChanged() {
+    if (drag) {
+      gridStale = true;
+      return;
+    }
+    refreshGrid();
+  }
+
+  function onSettingsChanged() {
+    loadSettings().catch(function () {});
+  }
+
+  var backoff = 1;
+  var everConnected = false;
+
+  function retryEvents() {
+    setTimeout(connectEvents, backoff * 1000);
+    backoff = Math.min(backoff * 2, MAX_BACKOFF_S);
+  }
+
+  function connectEvents() {
+    if (typeof EventSource === "undefined") return;
+    var es;
+    try {
+      es = new EventSource("/api/events");
+    } catch (e) {
+      retryEvents();
+      return;
+    }
+    es.onopen = function () { backoff = 1; };
+    es.addEventListener("hello", function () {
+      if (everConnected) {
+        onSettingsChanged();
+        onPhotosChanged();
+      }
+      everConnected = true;
+    });
+    es.addEventListener("photos_changed", onPhotosChanged);
+    es.addEventListener("settings_changed", onSettingsChanged);
+    es.onerror = function () {
+      es.close();
+      retryEvents();
+    };
+  }
+
   function init() {
     $("file-input").addEventListener("change", onFiles);
     $("upload-close").addEventListener("click", closeUpload);
@@ -751,6 +833,7 @@
     refreshGrid();
     loadStatus();
     setInterval(loadStatus, STATUS_MS);
+    connectEvents();
   }
 
   init();
