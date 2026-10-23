@@ -85,6 +85,9 @@ def test_install_sets_up_the_boot_screen():
 def test_plymouth_quit_keeps_the_last_frame():
     lines = (DEPLOY / "plymouth" / "plymouth-quit.conf").read_text(encoding="utf-8").splitlines()
     assert lines == [
+        "[Unit]",
+        "After=homeboard-api.service nginx.service",
+        "",
         "[Service]",
         "ExecStart=",
         "ExecStart=-/usr/bin/plymouth quit --retain-splash",
