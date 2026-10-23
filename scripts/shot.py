@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -95,29 +96,6 @@ def seed(base: str) -> None:
     r.raise_for_status()
 
 
-def shoot(chrome: str, url: str, width: int, height: int, out: Path, profile: Path) -> None:
-    args = [
-        chrome,
-        "--headless=new",
-        "--disable-gpu",
-        "--hide-scrollbars",
-        "--no-first-run",
-        "--no-default-browser-check",
-        f"--user-data-dir={profile}",
-        f"--window-size={width},{height}",
-        "--virtual-time-budget=5000",
-        f"--screenshot={out}",
-        url,
-    ]
-    subprocess.run(args, check=True, capture_output=True, timeout=60)
-    if not out.is_file() or out.stat().st_size == 0:
-        sys.exit(f"no screenshot written to {out}")
-    with Image.open(out) as img:
-        if img.width != width:
-            sys.exit(f"{out.name} is {img.width}px wide, expected {width}")
-    print(f"wrote {out.relative_to(ROOT)}")
-
-
 class Cdp:
     def __init__(self, ws):
         self.ws = ws
@@ -167,8 +145,8 @@ def wait_api(check, what: str) -> None:
     sys.exit(f"timed out waiting for {what}")
 
 
-def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
-    width, height = 390, 844
+@contextmanager
+def open_page(chrome: str, profile: Path, width: int, height: int):
     port = free_port()
     proc = subprocess.Popen(
         [
@@ -207,64 +185,97 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
                 deviceScaleFactor=1,
                 mobile=True,
             )
-            cdp.call("Page.navigate", url=f"{base}/admin/photos")
-            cdp.wait(
-                "document.querySelectorAll('#grid .tile img').length === 2 && "
-                "[...document.querySelectorAll('#grid .tile img')].every(i => i.complete)",
-                "the photo grid",
-            )
-
-            tile = "document.querySelector('#grid .tile.disabled')"
-            off_id = cdp.eval(f"{tile}.getAttribute('data-id')")
-            if off_id is None:
-                sys.exit("no disabled tile to toggle")
-            cdp.eval(f"{tile}.querySelector('button.tile-open').click()")
-            cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
-            cdp.eval("document.getElementById('caption-input').value = 'Forest'")
-            cdp.eval("document.getElementById('photo-enabled').click()")
-            cdp.eval("document.getElementById('photo-save').click()")
-            wait_api(lambda: api_photos(base)[int(off_id)]["enabled"], "the save PATCH")
-            if api_photos(base)[int(off_id)]["caption"] != "Forest":
-                sys.exit("save did not send the caption")
-            cdp.wait(
-                f"!!document.querySelector('.tile[data-id=\"{off_id}\"]:not(.disabled) .badge-cc')",
-                "the CC badge",
-            )
-            print(f"showed photo {off_id} and captioned it")
-
-            first = "document.querySelector('#grid .tile')"
-            del_id = cdp.eval(f"{first}.getAttribute('data-id')")
-            cdp.eval(f"{first}.querySelector('button.tile-open').click()")
-            cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
-            labels = cdp.eval(
-                "[...document.querySelectorAll('#photo-edit button')].map(b => b.textContent)"
-            )
-            if labels != ["Save", "Cancel", "Delete"]:
-                sys.exit(f"photo window buttons are {labels}")
-            time.sleep(0.3)
-            shot = cdp.call("Page.captureScreenshot", format="png")
-            out.write_bytes(base64.b64decode(shot["data"]))
-            with Image.open(out) as img:
-                if img.width != width:
-                    sys.exit(f"{out.name} is {img.width}px wide, expected {width}")
-            print(f"wrote {out.relative_to(ROOT)}")
-
-            cdp.eval("document.getElementById('photo-delete').click()")
-            cdp.wait("!document.getElementById('photo-confirm').hidden", "the delete confirm")
-            cdp.eval("document.getElementById('confirm-delete').click()")
-            wait_api(lambda: int(del_id) not in api_photos(base), "the DELETE")
-            cdp.wait(
-                f"!document.querySelector('.tile[data-id=\"{del_id}\"]') && "
-                "document.querySelectorAll('#grid .tile').length === 1",
-                "the tile removal",
-            )
-            print(f"deleted photo {del_id}")
+            yield cdp
             cdp.send("Browser.close")
         proc.wait(timeout=15)
     finally:
         if proc.poll() is None:
             proc.kill()
             proc.wait(timeout=10)
+
+
+def capture(cdp: Cdp, out: Path, width: int, full: bool = False) -> None:
+    params = {"format": "png"}
+    if full:
+        h = cdp.eval("document.documentElement.scrollHeight")
+        params.update(
+            captureBeyondViewport=True,
+            clip={"x": 0, "y": 0, "width": width, "height": h, "scale": 1},
+        )
+    shot = cdp.call("Page.captureScreenshot", **params)
+    out.write_bytes(base64.b64decode(shot["data"]))
+    with Image.open(out) as img:
+        if img.width != width:
+            sys.exit(f"{out.name} is {img.width}px wide, expected {width}")
+    print(f"wrote {out.relative_to(ROOT)}")
+
+
+def wait_grid(cdp: Cdp, base: str) -> None:
+    cdp.call("Page.navigate", url=f"{base}/admin/photos")
+    cdp.wait(
+        "document.querySelectorAll('#grid .tile img').length === 2 && "
+        "[...document.querySelectorAll('#grid .tile img')].every(i => i.complete)",
+        "the photo grid",
+    )
+
+
+def shoot(chrome: str, base: str, width: int, height: int, out: Path, profile: Path) -> None:
+    with open_page(chrome, profile, width, height) as cdp:
+        wait_grid(cdp, base)
+        cdp.wait(
+            "document.getElementById('clock-size').value !== '' && "
+            "!!document.querySelector('input[name=\"clock_pos\"]:checked')",
+            "the clock and caption settings",
+        )
+        time.sleep(0.3)
+        capture(cdp, out, width, full=True)
+
+
+def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
+    width, height = 390, 844
+    with open_page(chrome, profile, width, height) as cdp:
+        wait_grid(cdp, base)
+
+        tile = "document.querySelector('#grid .tile.disabled')"
+        off_id = cdp.eval(f"{tile}.getAttribute('data-id')")
+        if off_id is None:
+            sys.exit("no disabled tile to toggle")
+        cdp.eval(f"{tile}.querySelector('button.tile-open').click()")
+        cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
+        cdp.eval("document.getElementById('caption-input').value = 'Forest'")
+        cdp.eval("document.getElementById('photo-enabled').click()")
+        cdp.eval("document.getElementById('photo-save').click()")
+        wait_api(lambda: api_photos(base)[int(off_id)]["enabled"], "the save PATCH")
+        if api_photos(base)[int(off_id)]["caption"] != "Forest":
+            sys.exit("save did not send the caption")
+        cdp.wait(
+            f"!!document.querySelector('.tile[data-id=\"{off_id}\"]:not(.disabled) .badge-cc')",
+            "the CC badge",
+        )
+        print(f"showed photo {off_id} and captioned it")
+
+        first = "document.querySelector('#grid .tile')"
+        del_id = cdp.eval(f"{first}.getAttribute('data-id')")
+        cdp.eval(f"{first}.querySelector('button.tile-open').click()")
+        cdp.wait("!document.getElementById('photo-dialog').hidden", "the photo window")
+        labels = cdp.eval(
+            "[...document.querySelectorAll('#photo-edit button')].map(b => b.textContent)"
+        )
+        if labels != ["Save", "Cancel", "Delete"]:
+            sys.exit(f"photo window buttons are {labels}")
+        time.sleep(0.3)
+        capture(cdp, out, width)
+
+        cdp.eval("document.getElementById('photo-delete').click()")
+        cdp.wait("!document.getElementById('photo-confirm').hidden", "the delete confirm")
+        cdp.eval("document.getElementById('confirm-delete').click()")
+        wait_api(lambda: int(del_id) not in api_photos(base), "the DELETE")
+        cdp.wait(
+            f"!document.querySelector('.tile[data-id=\"{del_id}\"]') && "
+            "document.querySelectorAll('#grid .tile').length === 1",
+            "the tile removal",
+        )
+        print(f"deleted photo {del_id}")
 
 
 def main() -> None:
@@ -296,7 +307,7 @@ def main() -> None:
         for width, height in SIZES:
             shoot(
                 chrome,
-                f"{base}/admin/photos",
+                base,
                 width,
                 height,
                 SHOTS / f"admin-{width}.png",

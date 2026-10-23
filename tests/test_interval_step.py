@@ -13,5 +13,6 @@ def test_interval_input_steps_by_one():
 def test_no_round_to_five():
     assert "/ 5) * 5" not in JS
     assert "stepInterval(-5)" not in JS and "stepInterval(5)" not in JS
-    assert 'holdStep($("interval-minus"), -1)' in JS
-    assert 'holdStep($("interval-plus"), 1)' in JS
+    assert 'makeStepper("interval", "interval_s", 5, 600)' in JS
+    assert 'holdStep($(id + "-minus"), function () { step(-1); })' in JS
+    assert 'holdStep($(id + "-plus"), function () { step(1); })' in JS

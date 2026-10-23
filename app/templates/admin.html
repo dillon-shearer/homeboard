@@ -64,6 +64,45 @@
 <div class="checks">
 <label class="w95-check"><input type="checkbox" data-key="transition"><span>Fade between photos<small class="hint">Off = hard cut</small></span></label>
 <label class="w95-check"><input type="checkbox" data-key="shuffle"><span>Random order<small class="hint">Off = the order on this page</small></span></label>
+</div>
+</div>
+</section>
+{% set spots = [("top-left", "Top left"), ("top-center", "Top center"), ("top-right", "Top right"), ("middle-left", "Middle left"), ("middle-center", "Middle center"), ("middle-right", "Middle right"), ("bottom-left", "Bottom left"), ("bottom-center", "Bottom center"), ("bottom-right", "Bottom right")] %}
+<section class="w95-group settings" aria-labelledby="group-overlay">
+<h2 id="group-overlay" class="w95-legend">Clock and caption</h2>
+<div class="form">
+<label for="clock-size">Clock size</label>
+<div class="stepper">
+<button type="button" id="clock-size-minus" class="w95-btn step" aria-label="Smaller clock">&minus;</button>
+<input id="clock-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Clock size">
+<button type="button" id="clock-size-plus" class="w95-btn step" aria-label="Bigger clock">+</button>
+</div>
+<label for="caption-size">Caption size</label>
+<div class="stepper">
+<button type="button" id="caption-size-minus" class="w95-btn step" aria-label="Smaller caption">&minus;</button>
+<input id="caption-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Caption size">
+<button type="button" id="caption-size-plus" class="w95-btn step" aria-label="Bigger caption">+</button>
+</div>
+<div class="spot-pair">
+{% for key, title in [("clock_pos", "Clock spot"), ("caption_pos", "Caption spot")] %}
+<div class="spot-field">
+<span id="{{ key }}-label">{{ title }}</span>
+<div class="spots" role="radiogroup" aria-labelledby="{{ key }}-label">
+{% for value, name in spots %}
+<input type="radio" class="spot" name="{{ key }}" value="{{ value }}" aria-label="{{ name }}">
+{% endfor %}
+</div>
+</div>
+{% endfor %}
+</div>
+<div id="stack-row" class="stack-row" hidden>
+<span id="stack-label">When they share a spot:</span>
+<div class="choices" role="radiogroup" aria-labelledby="stack-label">
+<label class="w95-check w95-radio"><input type="radio" name="clock_on_top" value="true"> Clock on top</label>
+<label class="w95-check w95-radio"><input type="radio" name="clock_on_top" value="false"> Caption on top</label>
+</div>
+</div>
+<div class="checks">
 <label class="w95-check"><input type="checkbox" data-key="captions"><span>Show captions on the TV</span></label>
 </div>
 </div>

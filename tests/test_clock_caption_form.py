@@ -1,0 +1,163 @@
+import re
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.db import POSITIONS
+from app.main import create_app
+from tests.test_upload_batches import _node, needs_node
+
+
+@pytest.fixture
+def page(tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        r = c.get("/admin/photos")
+        assert r.status_code == 200
+        yield r.text
+
+
+def _group(page, legend_id):
+    start = page.index(f'aria-labelledby="{legend_id}"')
+    return page[start : page.index("</section>", start)]
+
+
+def test_group_follows_slideshow(page):
+    assert page.index('id="group-overlay"') > page.index('id="group-slideshow"')
+    assert '<h2 id="group-overlay" class="w95-legend">Clock and caption</h2>' in page
+
+
+def test_group_has_steppers_spots_stack_and_captions(page):
+    group = _group(page, "group-overlay")
+    for sid in ("clock-size", "caption-size"):
+        assert f'id="{sid}" type="number" min="2" max="12" step="1" inputmode="numeric"' in group
+        assert f'id="{sid}-minus"' in group and f'id="{sid}-plus"' in group
+    for key in ("clock_pos", "caption_pos"):
+        values = re.findall(rf'name="{key}" value="([a-z-]+)"', group)
+        assert values == list(POSITIONS)
+    assert 'aria-label="Top left"' in group and 'aria-label="Middle center"' in group
+    assert len(re.findall(r'role="radiogroup"', group)) == 3
+    assert re.findall(r'name="clock_on_top" value="(\w+)"', group) == ["true", "false"]
+    assert '<div id="stack-row" class="stack-row" hidden>' in group
+    assert '<input type="checkbox" data-key="captions">' in group
+    assert 'data-key="captions"' not in _group(page, "group-slideshow")
+
+
+FORM_SETUP = """
+var puts = [];
+var settings = {
+  interval_s: 20, transition: true, fit: "contain", shuffle: false, captions: true,
+  clock_size: 5, caption_size: 4, clock_pos: "bottom-right", caption_pos: "bottom-left", clock_on_top: true,
+};
+var radios = {};
+["fit", "clock_pos", "caption_pos", "clock_on_top"].forEach(function (key) {
+  radios[key] = [];
+  var values = key === "fit" ? ["contain", "cover"] : key === "clock_on_top" ? ["true", "false"] : [
+    "top-left", "top-center", "top-right", "middle-left", "middle-center", "middle-right",
+    "bottom-left", "bottom-center", "bottom-right",
+  ];
+  values.forEach(function (v) {
+    var el = new El("input");
+    el.setAttribute("name", key);
+    el.value = v;
+    el.checked = false;
+    radios[key].push(el);
+  });
+});
+document.querySelectorAll = function (sel) {
+  var m = /name="(\\w+)"/.exec(sel);
+  return m ? radios[m[1]] : [];
+};
+function radio(key, value) { return radios[key].filter(function (r) { return r.value === value; })[0]; }
+function checkedValue(key) {
+  var on = radios[key].filter(function (r) { return r.checked; });
+  return on.length ? on[0].value : null;
+}
+globalThis.fetch = function (url, opts) {
+  var body = {};
+  if (url.indexOf("/api/photos") === 0) body = [];
+  if (url === "/api/status") body = { display_connected: true, photo_count: 0 };
+  if (url === "/api/settings") {
+    if (opts && opts.method === "PUT") {
+      var patch = JSON.parse(opts.body);
+      puts.push(patch);
+      settings = Object.assign({}, settings, patch);
+    }
+    body = settings;
+  }
+  return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); } });
+};
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function tap(id) { $(id).fire("click", { detail: 0 }); }
+"""
+
+
+@needs_node
+def test_stack_row_shows_only_when_spots_match():
+    r = _node(
+        """
+        await flush();
+        const apart = { hidden: $("stack-row").hidden, clock: checkedValue("clock_pos"), top: checkedValue("clock_on_top") };
+        const cell = radio("caption_pos", "bottom-right");
+        cell.checked = true;
+        cell.fire("change");
+        const sameNow = $("stack-row").hidden;
+        await flush();
+        const sameAfter = $("stack-row").hidden;
+        const moved = radio("clock_pos", "top-center");
+        moved.checked = true;
+        moved.fire("change");
+        await flush();
+        const stackBtn = radio("clock_on_top", "false");
+        stackBtn.checked = true;
+        stackBtn.fire("change");
+        await flush();
+        console.log(JSON.stringify({
+          apart: apart, sameNow: sameNow, sameAfter: sameAfter, movedHidden: $("stack-row").hidden,
+          puts: puts, sizes: [$("clock-size").value, $("caption-size").value],
+        }));
+        """,
+        FORM_SETUP,
+    )
+    assert r["apart"] == {"hidden": True, "clock": "bottom-right", "top": "true"}
+    assert r["sameNow"] is False and r["sameAfter"] is False
+    assert r["movedHidden"] is True
+    assert r["puts"] == [
+        {"caption_pos": "bottom-right"},
+        {"clock_pos": "top-center"},
+        {"clock_on_top": False},
+    ]
+    assert r["sizes"] == [5, 4]
+
+
+@needs_node
+def test_clock_size_steps_clamp_and_put_only_that_field():
+    r = _node(
+        """
+        await flush();
+        $("clock-size").value = 12;
+        tap("clock-size-plus");
+        const atTop = $("clock-size").value;
+        await wait(450);
+        $("clock-size").value = 2;
+        tap("clock-size-minus");
+        tap("clock-size-minus");
+        const atBottom = $("clock-size").value;
+        await wait(450);
+        tap("clock-size-plus");
+        tap("clock-size-plus");
+        await wait(450);
+        tap("caption-size-plus");
+        await wait(450);
+        console.log(JSON.stringify({ atTop: atTop, atBottom: atBottom, puts: puts, shown: $("clock-size").value }));
+        """,
+        FORM_SETUP,
+    )
+    assert r["atTop"] == 12
+    assert r["atBottom"] == 2
+    assert r["puts"] == [
+        {"clock_size": 12},
+        {"clock_size": 2},
+        {"clock_size": 4},
+        {"caption_size": 5},
+    ]
+    assert r["shown"] == 4

@@ -658,7 +658,7 @@
   }
 
   var current = {};
-  var intervalTimer = null;
+  var RADIO_KEYS = ["fit", "clock_pos", "caption_pos", "clock_on_top"];
 
   function showSettingsError(msg) {
     var el = $("settings-error");
@@ -669,8 +669,13 @@
   function renderSettings(s) {
     current = s;
     $("interval").value = s.interval_s;
-    var radios = document.querySelectorAll('input[name="fit"]');
-    for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s.fit);
+    $("clock-size").value = s.clock_size;
+    $("caption-size").value = s.caption_size;
+    RADIO_KEYS.forEach(function (key) {
+      var radios = document.querySelectorAll('input[name="' + key + '"]');
+      for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s[key]);
+    });
+    $("stack-row").hidden = s.clock_pos !== s.caption_pos;
     var checks = document.querySelectorAll(".checks input[data-key]");
     for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
   }
@@ -696,25 +701,47 @@
     });
   }
 
-  function clampInterval(v) {
-    v = Math.round(Number(v));
-    if (!isFinite(v)) v = current.interval_s || 20;
-    return Math.min(600, Math.max(5, v));
+  function makeStepper(id, key, min, max) {
+    var input = $(id);
+    var timer = null;
+
+    function clamp(v) {
+      v = Math.round(Number(v));
+      if (!isFinite(v)) v = current[key] || min;
+      return Math.min(max, Math.max(min, v));
+    }
+
+    function put(v) {
+      var patch = {};
+      patch[key] = v;
+      putSettings(patch);
+    }
+
+    function step(delta) {
+      var v = clamp(Number(input.value) + delta);
+      input.value = v;
+      clearTimeout(timer);
+      timer = setTimeout(function () { put(v); }, INTERVAL_DEBOUNCE_MS);
+    }
+
+    holdStep($(id + "-minus"), function () { step(-1); });
+    holdStep($(id + "-plus"), function () { step(1); });
+    input.addEventListener("input", function () {
+      var raw = input.value;
+      if (raw === "") return;
+      var v = clamp(raw);
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        input.value = v;
+        put(v);
+      }, INTERVAL_DEBOUNCE_MS);
+    });
+    input.addEventListener("change", function () {
+      if (input.value === "") input.value = current[key];
+    });
   }
 
-  function queueInterval(v) {
-    $("interval").value = v;
-    clearTimeout(intervalTimer);
-    intervalTimer = setTimeout(function () {
-      putSettings({ interval_s: v });
-    }, INTERVAL_DEBOUNCE_MS);
-  }
-
-  function stepInterval(delta) {
-    queueInterval(clampInterval(Number($("interval").value) + delta));
-  }
-
-  function holdStep(btn, delta) {
+  function holdStep(btn, step) {
     var delay = null;
     var repeat = null;
     function stop() {
@@ -725,36 +752,28 @@
     btn.addEventListener("pointerdown", function (e) {
       if (e.button !== 0) return;
       stop();
-      stepInterval(delta);
+      step();
       delay = setTimeout(function () {
-        repeat = setInterval(function () { stepInterval(delta); }, 80);
+        repeat = setInterval(step, 80);
       }, 400);
     });
     btn.addEventListener("pointerup", stop);
     btn.addEventListener("pointerleave", stop);
     btn.addEventListener("pointercancel", stop);
     btn.addEventListener("click", function (e) {
-      if (e.detail === 0) stepInterval(delta);
+      if (e.detail === 0) step();
     });
-  }
-
-  function onIntervalInput() {
-    var raw = $("interval").value;
-    if (raw === "") return;
-    var v = clampInterval(raw);
-    clearTimeout(intervalTimer);
-    intervalTimer = setTimeout(function () {
-      $("interval").value = v;
-      putSettings({ interval_s: v });
-    }, INTERVAL_DEBOUNCE_MS);
   }
 
   function onCheckChange(e) {
     setSetting(e.currentTarget.getAttribute("data-key"), e.currentTarget.checked);
   }
 
-  function onFitChange(e) {
-    if (e.currentTarget.checked) setSetting("fit", e.currentTarget.value);
+  function onRadioChange(e) {
+    var el = e.currentTarget;
+    if (!el.checked) return;
+    var name = el.getAttribute("name");
+    setSetting(name, name === "clock_on_top" ? el.value === "true" : el.value);
   }
 
   function setSetting(key, value) {
@@ -815,14 +834,13 @@
   function init() {
     $("file-input").addEventListener("change", onFiles);
     $("upload-close").addEventListener("click", closeUpload);
-    holdStep($("interval-minus"), -1);
-    holdStep($("interval-plus"), 1);
-    $("interval").addEventListener("input", onIntervalInput);
-    $("interval").addEventListener("change", function () {
-      if ($("interval").value === "") $("interval").value = current.interval_s;
+    makeStepper("interval", "interval_s", 5, 600);
+    makeStepper("clock-size", "clock_size", 2, 12);
+    makeStepper("caption-size", "caption_size", 2, 12);
+    RADIO_KEYS.forEach(function (key) {
+      var radios = document.querySelectorAll('input[name="' + key + '"]');
+      for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onRadioChange);
     });
-    var radios = document.querySelectorAll('input[name="fit"]');
-    for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onFitChange);
     var checks = document.querySelectorAll(".checks input[data-key]");
     for (var j = 0; j < checks.length; j++) checks[j].addEventListener("change", onCheckChange);
     initTiles();

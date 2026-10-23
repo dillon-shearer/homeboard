@@ -216,6 +216,67 @@ button, input {
   gap: 0 16px;
 }
 
+.spot-pair {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 6px 28px;
+}
+
+.spot-field {
+  display: grid;
+  gap: 6px;
+}
+
+.spots {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 3px;
+}
+
+.spots .spot {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  background: var(--w95-light);
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-dark), inset -1px -1px 0 #dfdfdf;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.spots .spot::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  clip-path: circle(50%);
+  background: var(--w95-light);
+  transform: scale(0);
+}
+
+.spots .spot:checked {
+  background: var(--w95-select);
+}
+
+.spots .spot:checked::before {
+  transform: scale(1);
+}
+
+.spots .spot:focus-visible {
+  outline: 1px dotted var(--w95-dark);
+  outline-offset: 1px;
+}
+
+.stack-row {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+}
+
 .checks {
   grid-column: 1 / -1;
   display: grid;
