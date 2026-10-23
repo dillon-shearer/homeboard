@@ -482,3 +482,93 @@ button, input {
   color: #800000;
   font-weight: bold;
 }
+
+#screen-name {
+  display: block;
+  width: 100%;
+}
+
+.layout-label {
+  margin-top: 12px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 3px;
+  width: 160px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 3px;
+  background: var(--w95-shadow);
+}
+
+.layout .cell {
+  min-width: 0;
+  margin: 0;
+  padding: 0 2px;
+  overflow: hidden;
+  font-family: var(--w95-font);
+  font-size: 12px;
+  color: var(--w95-dark);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--w95-light);
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-dark);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.layout .cell.on {
+  color: var(--w95-light);
+  background: var(--w95-select);
+}
+
+.layout .cell.empty {
+  font-size: 16px;
+  font-weight: bold;
+  background: var(--w95-face);
+  border-style: dotted;
+  border-color: var(--w95-dark);
+  box-shadow: none;
+}
+
+.widget-row, .widget-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.widget-row {
+  margin-top: 10px;
+}
+
+.widget-add {
+  margin-top: 10px;
+}
+
+.widget-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.widget-row .move {
+  min-width: 36px;
+  width: 36px;
+  padding: 0;
+}
+
+#screen-error {
+  margin: 8px 0 0;
+  color: #800000;
+}
+
+.buttons .del {
+  margin-right: auto;
+}
