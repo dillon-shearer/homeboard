@@ -12,7 +12,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from tests.test_tv_lists import _Chrome, _free_port, needs_chrome
+from tests.chrome import _Chrome, _free_port, needs_chrome
 
 STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
 LISTS_JS = STATIC / "lists.js"

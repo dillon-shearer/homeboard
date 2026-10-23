@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from tests.test_tv_lists import _Chrome, needs_chrome, server  # noqa: F401
+from tests.chrome import _Chrome, needs_chrome, server  # noqa: F401
 
 IDS = ["month-prev", "month-select", "year-select", "month-next", "month-today"]
 

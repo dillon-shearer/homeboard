@@ -7,8 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from tests.chrome import _Chrome, needs_chrome, server  # noqa: F401
 from tests.test_caption_lifetime import DISPLAY_JS, HARNESS, needs_node
-from tests.test_tv_lists import _Chrome, needs_chrome, server  # noqa: F401
 
 DEFAULTS = {
     "clock_size": 5,

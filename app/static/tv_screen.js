@@ -7,8 +7,15 @@
   var MAX_UPCOMING = 10;
   var SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  var NEEDS = { calendar: ["events"] };
+  var NEEDS = { calendar: ["events"], lists: ["lists"], weather: ["weather"] };
   var EMPTY_TEXT = "Nothing on this screen yet. Add widgets from your phone.";
+  var NO_OPEN_TEXT = "No lists open. Open one from your phone or the Notes screen.";
+  var NO_LISTS_TEXT = "No lists yet. Add one from your phone.";
+  var TAP_TEXT = "Tap a list above to open it.";
+  var PICK_TEXT = "Pick a list from your phone.";
+  var NO_WEATHER_TEXT = "No forecast yet";
+  var TAP_SLOP_PX = 10;
+  var SWIPE_CLICK_MS = 600;
 
   function placement(widget) {
     return {
@@ -140,6 +147,116 @@
     return "";
   }
 
+  function sizeOf(widget) {
+    return widget.w + "x" + widget.h;
+  }
+
+  function rank(item) {
+    if (item.done) return 2;
+    return item.pinned ? 0 : 1;
+  }
+
+  function sortItems(items) {
+    return (items || []).map(function (item, i) {
+      return { item: item, i: i };
+    }).sort(function (a, b) {
+      return rank(a.item) - rank(b.item) || (a.item.sort_order || 0) - (b.item.sort_order || 0) || a.i - b.i;
+    }).map(function (x) {
+      return x.item;
+    });
+  }
+
+  function shownLists(lists, widget) {
+    if (sizeOf(widget) === "1x1") {
+      return (lists || []).filter(function (l) { return l.id === widget.list_id; }).slice(0, 1);
+    }
+    return (lists || []).filter(function (l) { return l.tv_open; });
+  }
+
+  function tabLists(lists, widget) {
+    if (!isFull(widget)) return [];
+    return (lists || []).filter(function (l) { return !l.tv_open; });
+  }
+
+  function openCount(list) {
+    return (list.items || []).filter(function (i) { return !i.done; }).length;
+  }
+
+  function tabLabel(list) {
+    return list.name + " " + openCount(list);
+  }
+
+  function splitTracks(n) {
+    return "repeat(" + Math.max(1, n) + ", minmax(0, 1fr))";
+  }
+
+  function moreLabel(hidden, done) {
+    return "+" + hidden + " more" + (done ? ", " + done + " done" : "");
+  }
+
+  function num(v) {
+    return v === null || v === undefined ? "--" : String(v);
+  }
+
+  function weatherToday(weather, today) {
+    var days = (weather && weather.days) || [];
+    for (var i = 0; i < days.length; i++) if (days[i].date === today) return i;
+    return days.length ? 0 : -1;
+  }
+
+  function hiLo(day) {
+    return "H " + num(day.high) + " L " + num(day.low);
+  }
+
+  function rainText(day) {
+    return "Rain " + num(day.rain) + "%";
+  }
+
+  function nextDays(weather, today) {
+    var i = weatherToday(weather, today);
+    if (i < 0) return [];
+    return weather.days.slice(i + 1, i + 3).map(function (d) {
+      return { name: SHORT_DAYS[C.parseIso(d.date).getUTCDay()], icon: d.icon, hiLo: hiLo(d) };
+    });
+  }
+
+  function clockAt(iso) {
+    return iso && iso.length >= 16 ? C.formatTime(iso.slice(11, 16)) : "--";
+  }
+
+  function asOf(fetchedAt) {
+    var d = new Date(fetchedAt);
+    return isNaN(d.getTime()) ? "" : "as of " + formatClock(d);
+  }
+
+  var CLOUD = '<path d="M18 52h30a10 10 0 0 0 0-20a13 13 0 0 0-25-4a10 10 0 0 0-5 24z" ' +
+    'fill="#ffffff" stroke="#000000" stroke-width="2"/>';
+  var CLOUD_UP = '<g transform="translate(0,-10)">' + CLOUD + "</g>";
+  var SUN = '<path d="M48 32h8M8 32h8M32 8v8M32 48v8M43 43l6 6M15 15l6 6M43 21l6-6M15 49l6-6" ' +
+    'stroke="#000000" stroke-width="3"/><circle cx="32" cy="32" r="12" fill="#ffff00" stroke="#000000" stroke-width="2"/>';
+  var MOON = '<path d="M40 10a22 22 0 1 0 14 34a18 18 0 1 1-14-34z" fill="#ffff00" stroke="#000000" stroke-width="2"/>';
+  var RAIN = '<path d="M26 46l-4 10M36 46l-4 10M46 46l-4 10" stroke="#0000ff" stroke-width="3"/>';
+  var DRIZZLE = '<path d="M26 48l-2 4M36 48l-2 4M46 48l-2 4M30 56l-2 4M40 56l-2 4" stroke="#0000ff" stroke-width="3"/>';
+  var SNOW = '<path d="M24 46v10M19 51h10M40 46v10M35 51h10M32 54v8M28 58h8" stroke="#000080" stroke-width="2"/>';
+  var ICONS = {
+    sun: SUN,
+    moon: MOON,
+    cloud: CLOUD,
+    "cloud-sun": '<g transform="translate(-4,-6) scale(0.75)">' + SUN + "</g>" + CLOUD,
+    "cloud-moon": '<g transform="translate(-6,-6) scale(0.7)">' + MOON + "</g>" + CLOUD,
+    fog: '<path d="M10 22h44M6 32h52M10 42h44M14 52h36" stroke="#808080" stroke-width="5"/>',
+    drizzle: CLOUD_UP + DRIZZLE,
+    rain: CLOUD_UP + RAIN,
+    sleet: CLOUD_UP + '<path d="M26 46l-4 10M46 46l-4 10" stroke="#0000ff" stroke-width="3"/>' +
+      '<path d="M35 48v8M31 52h8" stroke="#000080" stroke-width="2"/>',
+    snow: CLOUD_UP + SNOW,
+    thunder: CLOUD_UP + '<path d="M36 40l-10 13h7l-4 11 13-15h-7l5-9z" fill="#ffff00" stroke="#000000" stroke-width="1.5"/>',
+  };
+
+  function iconSvg(name) {
+    return '<svg viewBox="0 0 64 64" aria-hidden="true">' + (ICONS[name] || CLOUD) + "</svg>";
+  }
+
   function el(tag, cls, text) {
     var node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -151,14 +268,6 @@
     var old = card.querySelector(".tv-msg");
     if (old) old.textContent = text;
     else card.appendChild(el("p", "tv-msg", text));
-  }
-
-  function placeholder(name) {
-    return {
-      mount: function (card) { message(card, "Coming soon."); },
-      update: function () {},
-      title: function () { return name; },
-    };
   }
 
   function fitChips(grid) {
@@ -263,6 +372,147 @@
     fitDay(box);
   }
 
+  function itemList(list) {
+    var notes = list.kind === "notes";
+    var ul = el("ul");
+    var items = sortItems(list.items);
+    if (!items.length) ul.appendChild(el("li", "none", "Nothing here"));
+    items.forEach(function (item) {
+      var li = el("li", item.done ? "done" : item.pinned ? "pin" : "");
+      if (!notes && (item.done || !item.pinned)) li.appendChild(el("span", item.done ? "box tick" : "box"));
+      li.appendChild(document.createTextNode(item.text));
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
+  function fitList(box) {
+    var ul = box.querySelector("ul");
+    if (!ul) return;
+    var rows = Array.prototype.slice.call(ul.children);
+    var more = null;
+    var hidden = 0;
+    var done = 0;
+    for (var i = rows.length - 1; i >= 0 && ul.scrollHeight > ul.clientHeight; i--) {
+      if (rows[i].classList.contains("pin")) continue;
+      rows[i].hidden = true;
+      hidden++;
+      if (rows[i].classList.contains("done")) done++;
+      if (!more) more = box.appendChild(el("div", "more"));
+      more.textContent = moreLabel(hidden, done);
+    }
+  }
+
+  function listCard(list, closable) {
+    var card = el("section", "tv-card tv-list" + (list.kind === "notes" ? " notes" : ""));
+    var h2 = el("h2", "", list.name);
+    if (closable) h2.setAttribute("data-close", list.id);
+    card.appendChild(h2);
+    card.appendChild(itemList(list));
+    return card;
+  }
+
+  function renderLists(card, widget, ctx) {
+    var old = card.querySelector(".tv-lists-body");
+    var sig = JSON.stringify([sizeOf(widget), widget.list_id, ctx.lists || [], innerWidth, innerHeight]);
+    if (old && old.getAttribute("data-sig") === sig) return;
+    if (old) card.removeChild(old);
+    var body = el("div", "tv-lists-body");
+    body.setAttribute("data-sig", sig);
+    card.appendChild(body);
+    var lists = ctx.lists || [];
+    var full = isFull(widget);
+    if (sizeOf(widget) === "1x1") {
+      var one = shownLists(lists, widget)[0];
+      card.classList.toggle("notes", !!one && one.kind === "notes");
+      if (!one) {
+        body.appendChild(el("p", "tv-msg", PICK_TEXT));
+        return;
+      }
+      body.appendChild(itemList(one));
+      fitList(body);
+      return;
+    }
+    var tabs = tabLists(lists, widget);
+    if (tabs.length) {
+      var row = el("div", "tv-tabs");
+      tabs.forEach(function (l) {
+        var tab = el("button", "tv-tab", tabLabel(l));
+        tab.type = "button";
+        tab.setAttribute("data-open", l.id);
+        row.appendChild(tab);
+      });
+      body.appendChild(row);
+    }
+    var open = shownLists(lists, widget);
+    if (!open.length) {
+      var text = NO_OPEN_TEXT;
+      if (full) text = lists.length ? TAP_TEXT : NO_LISTS_TEXT;
+      body.appendChild(el("p", "tv-msg", text));
+      return;
+    }
+    var grid = el("div", "tv-lists" + (full ? "" : " condensed"));
+    if (sizeOf(widget) === "1x2") grid.style.gridTemplateRows = splitTracks(open.length);
+    else grid.style.gridTemplateColumns = splitTracks(open.length);
+    open.forEach(function (l) { grid.appendChild(listCard(l, full)); });
+    body.appendChild(grid);
+    Array.prototype.forEach.call(grid.children, fitList);
+  }
+
+  function weatherIcon(name) {
+    var span = el("span", "wx-icon");
+    span.innerHTML = iconSvg(name);
+    return span;
+  }
+
+  function renderWeather(card, widget, ctx) {
+    var old = card.querySelector(".tv-wx");
+    if (old) card.removeChild(old);
+    var w = ctx.weather;
+    var wx = el("div", "tv-wx");
+    card.appendChild(wx);
+    if (!w || !w.ok) {
+      wx.classList.add("none");
+      wx.appendChild(el("p", "wx-label", NO_WEATHER_TEXT));
+      if (w && w.location) wx.appendChild(el("p", "wx-where", w.location));
+      return;
+    }
+    var cur = w.current || {};
+    var main = el("div", "wx-main");
+    var now = el("div", "wx-now");
+    now.appendChild(weatherIcon(cur.icon));
+    now.appendChild(el("span", "wx-temp", num(cur.temp) + "°"));
+    main.appendChild(now);
+    main.appendChild(el("div", "wx-label", cur.label || ""));
+    var i = weatherToday(w, ctx.today);
+    var today = i < 0 ? null : w.days[i];
+    if (today) {
+      main.appendChild(el("div", "wx-hilo", hiLo(today)));
+      main.appendChild(el("div", "wx-rain", rainText(today)));
+    }
+    if (w.stale) main.appendChild(el("div", "wx-asof", asOf(w.fetched_at)));
+    wx.appendChild(main);
+    if (sizeOf(widget) === "1x1") return;
+    var next = nextDays(w, ctx.today);
+    if (next.length) {
+      var days = el("div", "wx-days");
+      next.forEach(function (d) {
+        var box = el("div", "wx-day");
+        box.appendChild(el("b", "", d.name));
+        box.appendChild(weatherIcon(d.icon));
+        box.appendChild(el("span", "", d.hiLo));
+        days.appendChild(box);
+      });
+      wx.appendChild(days);
+    }
+    if (isFull(widget) && today) {
+      var sun = el("div", "wx-sun");
+      sun.appendChild(el("span", "", "Sunrise " + clockAt(today.sunrise)));
+      sun.appendChild(el("span", "", "Sunset " + clockAt(today.sunset)));
+      wx.appendChild(sun);
+    }
+  }
+
   var WIDGETS = {
     clock: {
       mount: function (card, widget, ctx) {
@@ -295,8 +545,27 @@
         return C.MONTHS[Number(ctx.today.slice(5, 7)) - 1] + " " + ctx.today.slice(0, 4);
       },
     },
-    lists: placeholder("Lists"),
-    weather: placeholder("Weather"),
+    lists: {
+      mount: function (card, widget, ctx) {
+        WIDGETS.lists.update(card, widget, ctx);
+      },
+      update: renderLists,
+      title: function (widget, ctx) {
+        if (sizeOf(widget) !== "1x1") return "Lists";
+        var one = shownLists(ctx.lists, widget)[0];
+        return one ? one.name : "Lists";
+      },
+    },
+    weather: {
+      mount: function (card, widget, ctx) {
+        WIDGETS.weather.update(card, widget, ctx);
+      },
+      update: renderWeather,
+      title: function (widget, ctx) {
+        var w = ctx.weather;
+        return w && w.ok && w.location ? w.location : "Weather";
+      },
+    },
   };
 
   var TvScreen = {
@@ -312,11 +581,25 @@
     fullDate: fullDate,
     whenLabel: whenLabel,
     upcoming: upcoming,
+    chipText: chipText,
     todayEvents: todayEvents,
     comingUp: comingUp,
     eventRange: eventRange,
     msToMidnight: msToMidnight,
     screenLabel: screenLabel,
+    sortItems: sortItems,
+    shownLists: shownLists,
+    tabLists: tabLists,
+    tabLabel: tabLabel,
+    splitTracks: splitTracks,
+    moreLabel: moreLabel,
+    weatherToday: weatherToday,
+    hiLo: hiLo,
+    rainText: rainText,
+    nextDays: nextDays,
+    clockAt: clockAt,
+    asOf: asOf,
+    iconSvg: iconSvg,
   };
 
   root.TvScreen = TvScreen;
@@ -332,6 +615,8 @@
   var builtKey = null;
   var loadSeq = 0;
   var backoff = 1;
+  var touchFrom = null;
+  var lastSwipe = 0;
 
   function context() {
     var now = new Date();
@@ -470,6 +755,44 @@
     setTimeout(atMidnight, msToMidnight(new Date()));
   }
 
+  function setOpen(id, open) {
+    (state.data.lists || []).forEach(function (l) {
+      if (l.id === id) l.tv_open = open;
+    });
+    render();
+    fetch("/api/lists/" + id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tv_open: open }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+    }).catch(load);
+  }
+
+  function onTouchStart(e) {
+    var t = e.changedTouches[0];
+    touchFrom = t ? { x: t.clientX, y: t.clientY } : null;
+    lastSwipe = 0;
+  }
+
+  function onTouchEnd(e) {
+    var t = e.changedTouches[0];
+    if (touchFrom && t && (Math.abs(t.clientX - touchFrom.x) > TAP_SLOP_PX ||
+      Math.abs(t.clientY - touchFrom.y) > TAP_SLOP_PX)) lastSwipe = Date.now();
+    touchFrom = null;
+  }
+
+  function onClick(e) {
+    if (Date.now() - lastSwipe < SWIPE_CLICK_MS) return;
+    var target = e.target.closest ? e.target.closest("[data-open], [data-close]") : null;
+    if (!target) return;
+    var open = target.hasAttribute("data-open");
+    setOpen(Number(target.getAttribute(open ? "data-open" : "data-close")), open);
+  }
+
+  document.addEventListener("touchstart", onTouchStart, { passive: true });
+  document.addEventListener("touchend", onTouchEnd, { passive: true });
+  screenEl.addEventListener("click", onClick);
   window.addEventListener("resize", render);
   updateClock();
   setTimeout(atMidnight, msToMidnight(new Date()));

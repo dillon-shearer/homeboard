@@ -326,6 +326,9 @@
     markActivity();
     const t = e.changedTouches[0];
     touchStart = t ? { x: t.clientX, y: t.clientY } : null;
+    if (e.target && e.target.addEventListener) {
+      e.target.addEventListener("touchend", onTouchEnd, { passive: true, once: true });
+    }
   }
 
   function onTouchEnd(e) {
@@ -338,6 +341,18 @@
     if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) {
       setChannel(nextStop(state.stops, state.settings, dx < 0 ? 1 : -1));
     }
+  }
+
+  function hookFrame() {
+    let doc = null;
+    try {
+      doc = channelEl.contentDocument;
+    } catch (e) {
+      doc = null;
+    }
+    if (!doc) return;
+    doc.addEventListener("touchstart", onTouchStart, { passive: true });
+    doc.addEventListener("touchend", onTouchEnd, { passive: true });
   }
 
   function checkIdle() {
@@ -651,6 +666,7 @@
     updateClock();
     document.addEventListener("touchstart", onTouchStart, { passive: true });
     document.addEventListener("touchend", onTouchEnd, { passive: true });
+    channelEl.onload = hookFrame;
     setInterval(checkIdle, IDLE_CHECK_MS);
     Promise.all([loadResume(), loadSettings(), loadScreens()]).then(loadPhotos).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);

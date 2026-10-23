@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.main import create_app
-from tests.test_tv_lists import _Chrome, needs_chrome, needs_node, server  # noqa: F401
+from tests.chrome import _Chrome, needs_chrome, needs_node, server  # noqa: F401
 
 STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
 SCREEN_JS = STATIC / "tv_screen.js"
@@ -95,7 +95,7 @@ def test_current_screen_and_needs():
     assert result["seven"] == "B"
     assert result["gone"] == "A"
     assert result["none"] is None
-    assert result["needsA"] == ["events"]
+    assert result["needsA"] == ["events", "lists"]
     assert result["needsB"] == []
     assert result["needsNull"] == []
     assert result["kinds"] == ["calendar", "clock", "lists", "weather"]
@@ -229,7 +229,8 @@ def test_daily_brief_renders_four_cards_in_grid(server, tmp_path):  # noqa: F811
     assert cal["h2"] == "Today" and cal["grid"] is False
     assert "Dentist" in cal["text"] and "9:00 am" in cal["text"]
     assert "Coming up" in cal["text"] and "Bins out" in cal["text"]
-    assert "Coming soon" in weather["text"] and "Coming soon" in lists["text"]
+    assert weather["h2"] == "Weather" and "No forecast yet" in weather["text"]
+    assert lists["h2"] == "Publix"
     assert clock["top"] == weather["top"] and clock["left"] < weather["left"]
     assert cal["top"] > clock["bottom"] and cal["left"] == clock["left"]
     assert max(c["bottom"] for c in cards) < 1080

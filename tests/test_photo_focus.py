@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.main import create_app
+from tests.chrome import _Chrome, needs_chrome, server  # noqa: F401
 from tests.test_admin_logic import ADMIN_JS, needs_node
-from tests.test_tv_lists import _Chrome, needs_chrome, server  # noqa: F401
 
 
 def _jpeg(size, color=(200, 50, 50)):
