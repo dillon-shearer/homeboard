@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#008080">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Home Board">
+<title>TV - Home Board</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-512.png">
+<link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
+<link rel="stylesheet" href="{{ static_url('admin.css') }}">
+</head>
+<body class="w95-desktop">
+<main class="w95-window">
+<div class="w95-titlebar">
+<a class="w95-back" href="/admin">Start</a>
+<span class="w95-title-text">TV</span>
+<span class="w95-close" aria-hidden="true"></span>
+</div>
+<div class="w95-body">
+<section class="w95-group" aria-labelledby="group-showing">
+<h2 id="group-showing" class="w95-legend">Showing on the TV</h2>
+<div class="w95-row">
+<span id="tv-stops" class="w95-seg">
+<button class="w95-btn" type="button" data-channel="photos" aria-pressed="false">Photos</button>
+<button id="screens-new" class="w95-btn" type="button" hidden>New screen</button>
+<button id="screens-edit" class="w95-btn" type="button" aria-pressed="false">Edit</button>
+</span>
+</div>
+</section>
+<section class="w95-group settings" aria-labelledby="group-timeout">
+<h2 id="group-timeout" class="w95-legend">Back to Photos after</h2>
+<div class="w95-row">
+<select id="channel-timeout" class="w95-input" aria-label="Back to Photos after">
+<option value="0">Never</option>
+<option value="2">2 minutes</option>
+<option value="5" selected>5 minutes</option>
+<option value="10">10 minutes</option>
+<option value="30">30 minutes</option>
+</select>
+<span class="w95-note">of no touches on the TV and no edits from a phone</span>
+</div>
+</section>
+<section class="w95-group settings" aria-labelledby="group-weather">
+<h2 id="group-weather" class="w95-legend">Weather</h2>
+<div class="form">
+<label for="weather-location">Location (zip or town)</label>
+<div class="weather-field">
+<input id="weather-location" class="w95-input" type="text" maxlength="40" enterkeyhint="done" autocomplete="off">
+<span id="weather-name" class="w95-note"></span>
+</div>
+</div>
+</section>
+{% set spots = [("top-left", "Top left"), ("top-center", "Top center"), ("top-right", "Top right"), ("middle-left", "Middle left"), ("middle-center", "Middle center"), ("middle-right", "Middle right"), ("bottom-left", "Bottom left"), ("bottom-center", "Bottom center"), ("bottom-right", "Bottom right")] %}
+<section class="w95-group settings" aria-labelledby="group-overlay">
+<h2 id="group-overlay" class="w95-legend">Clock and caption</h2>
+<div class="form">
+<label for="clock-size">Clock size</label>
+<div class="stepper">
+<button type="button" id="clock-size-minus" class="w95-btn step" aria-label="Smaller clock">&minus;</button>
+<input id="clock-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Clock size">
+<button type="button" id="clock-size-plus" class="w95-btn step" aria-label="Bigger clock">+</button>
+</div>
+<label for="caption-size">Caption size</label>
+<div class="stepper">
+<button type="button" id="caption-size-minus" class="w95-btn step" aria-label="Smaller caption">&minus;</button>
+<input id="caption-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Caption size">
+<button type="button" id="caption-size-plus" class="w95-btn step" aria-label="Bigger caption">+</button>
+</div>
+<div class="spot-pair">
+{% for key, title in [("clock_pos", "Clock spot"), ("caption_pos", "Caption spot")] %}
+<div class="spot-field">
+<span id="{{ key }}-label">{{ title }}</span>
+<div class="spots" role="radiogroup" aria-labelledby="{{ key }}-label">
+{% for value, name in spots %}
+<input type="radio" class="spot" name="{{ key }}" value="{{ value }}" aria-label="{{ name }}">
+{% endfor %}
+</div>
+</div>
+{% endfor %}
+</div>
+<div id="stack-row" class="stack-row" hidden>
+<span id="stack-label">When they share a spot:</span>
+<div class="choices" role="radiogroup" aria-labelledby="stack-label">
+<label class="w95-check w95-radio"><input type="radio" name="clock_on_top" value="true"> Clock on top</label>
+<label class="w95-check w95-radio"><input type="radio" name="clock_on_top" value="false"> Caption on top</label>
+</div>
+</div>
+<div class="checks">
+<label class="w95-check"><input type="checkbox" data-key="captions"><span>Show captions on the TV</span></label>
+</div>
+</div>
+</section>
+<p id="settings-error" class="error" hidden></p>
+</div>
+<div class="w95-statusbar" role="status">
+<span id="display-state">Display ...</span>
+</div>
+</main>
+
+<div id="name-dialog" class="modal" hidden>
+<div id="name-backdrop" class="modal-backdrop"></div>
+<form id="name-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="name-title">
+<div class="w95-titlebar">
+<span id="name-title" class="w95-title-text">Rename</span>
+<button type="button" id="name-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<label class="field-label" for="name-input">Name:</label>
+<input id="name-input" class="w95-input" type="text" maxlength="60" enterkeyhint="done" autocomplete="off">
+<p id="name-error" class="w95-note" role="alert" hidden>Could not save the name. Try again.</p>
+<div class="buttons">
+<button type="submit" id="name-save" class="w95-btn default">OK</button>
+<button type="button" id="name-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</form>
+</div>
+<script src="{{ static_url('tv_admin.js') }}"></script>
+</body>
+</html>

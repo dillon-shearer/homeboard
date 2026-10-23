@@ -1,19 +1,29 @@
+import json
 import re
+import subprocess
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.db import POSITIONS
 from app.main import create_app
-from tests.test_upload_batches import _node, needs_node
+from tests.test_upload_batches import PAGE_STUB, needs_node
+
+TV_JS = Path(__file__).resolve().parent.parent / "app" / "static" / "tv_admin.js"
 
 
 @pytest.fixture
-def page(tmp_path):
+def client(tmp_path):
     with TestClient(create_app(tmp_path)) as c:
-        r = c.get("/admin/photos")
-        assert r.status_code == 200
-        yield r.text
+        yield c
+
+
+@pytest.fixture
+def page(client):
+    r = client.get("/admin/tv")
+    assert r.status_code == 200
+    return r.text
 
 
 def _group(page, legend_id):
@@ -21,9 +31,13 @@ def _group(page, legend_id):
     return page[start : page.index("</section>", start)]
 
 
-def test_group_follows_slideshow(page):
-    assert page.index('id="group-overlay"') > page.index('id="group-slideshow"')
+def test_group_lives_on_tv_page_after_weather(client, page):
+    assert page.index('id="group-overlay"') > page.index('id="group-weather"')
     assert '<h2 id="group-overlay" class="w95-legend">Clock and caption</h2>' in page
+    photos = client.get("/admin/photos").text
+    assert 'id="group-slideshow"' in photos
+    for gone in ('id="group-overlay"', 'id="clock-size"', 'id="caption-size"', 'name="clock_pos"'):
+        assert gone not in photos
 
 
 def test_group_has_steppers_spots_stack_and_captions(page):
@@ -39,7 +53,7 @@ def test_group_has_steppers_spots_stack_and_captions(page):
     assert re.findall(r'name="clock_on_top" value="(\w+)"', group) == ["true", "false"]
     assert '<div id="stack-row" class="stack-row" hidden>' in group
     assert '<input type="checkbox" data-key="captions">' in group
-    assert 'data-key="captions"' not in _group(page, "group-slideshow")
+    assert "group-slideshow" not in page
 
 
 FORM_SETUP = """
@@ -74,7 +88,6 @@ function checkedValue(key) {
 }
 globalThis.fetch = function (url, opts) {
   var body = {};
-  if (url.indexOf("/api/photos") === 0) body = [];
   if (url === "/api/status") body = { display_connected: true, photo_count: 0 };
   if (url === "/api/settings") {
     if (opts && opts.method === "PUT") {
@@ -89,6 +102,17 @@ globalThis.fetch = function (url, opts) {
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function tap(id) { $(id).fire("click", { detail: 0 }); }
 """
+
+
+def _node(body, setup=""):
+    script = (
+        f"{PAGE_STUB}\n{setup}\nrequire({json.dumps(str(TV_JS))});\n"
+        f"(async function () {{\n{body}\n}})().catch(function (e) {{ console.error(e); process.exit(1); }});"
+    )
+    out = subprocess.run(
+        ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
+    )
+    return json.loads(out.stdout)
 
 
 @needs_node

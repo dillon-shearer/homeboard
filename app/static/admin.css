@@ -271,6 +271,18 @@ button, input {
   outline-offset: 1px;
 }
 
+.weather-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.weather-field input {
+  width: 100%;
+  max-width: 20em;
+  box-sizing: border-box;
+}
+
 .stack-row {
   grid-column: 1 / -1;
   display: grid;
