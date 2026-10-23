@@ -1,0 +1,144 @@
+html, body {
+  height: 100vh;
+  overflow: hidden;
+  cursor: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+* {
+  cursor: none;
+}
+
+body.tv {
+  padding: 2vh;
+  font-size: 2.4vh;
+}
+
+.tv .w95-window {
+  max-width: none;
+  height: 96vh;
+  min-height: 0;
+  font-size: 2.4vh;
+}
+
+.tv .w95-titlebar {
+  min-height: 6vh;
+  padding: 0.5vh 1.5vh;
+  font-size: 3vh;
+}
+
+.tv-clock {
+  flex: none;
+  font-weight: normal;
+  font-size: 2.6vh;
+}
+
+.tv .w95-statusbar > * {
+  min-height: 3.6vh;
+  padding: 0.5vh 1vh;
+}
+
+.tv-cards {
+  min-height: 0;
+  display: grid;
+  gap: 4vh 2vh;
+  grid-template-columns: repeat(auto-fit, minmax(28vw, 1fr));
+  align-content: start;
+  overflow: hidden;
+  padding: 3vh 1.5vh 1.5vh;
+}
+
+.tv-card {
+  position: relative;
+  min-width: 0;
+  padding: 2vh 1.5vh 1.5vh;
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-light), inset -1px -1px 0 var(--w95-shadow);
+}
+
+.tv-card h2 {
+  position: absolute;
+  top: -2vh;
+  left: 1vh;
+  margin: 0;
+  padding: 0 0.5vh;
+  max-width: calc(100% - 2vh);
+  background: var(--w95-face);
+  font-size: 2.8vh;
+  font-weight: bold;
+  line-height: 4vh;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tv-card li {
+  display: flex;
+  gap: 1.2vh;
+  align-items: center;
+  padding: 0.6vh 0;
+  font-size: 2.6vh;
+  overflow-wrap: anywhere;
+}
+
+.tv-card .box {
+  flex: none;
+  width: 2.4vh;
+  height: 2.4vh;
+  background: var(--w95-light);
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-dark);
+}
+
+.tv-card li.pin {
+  margin: 0 -1vh 0.6vh;
+  padding: 0.8vh 1vh;
+  font-size: 3.4vh;
+  font-weight: bold;
+  background: #ffffc0;
+}
+
+.tv-card li.pin::before {
+  content: "!";
+  color: #800000;
+  font-weight: bold;
+}
+
+.tv-card.notes li {
+  display: block;
+  padding: 0.8vh 0;
+  border-bottom: 1px dotted var(--w95-shadow);
+}
+
+.tv-card.notes li.pin {
+  border-bottom: 0;
+}
+
+.tv-card.notes li.pin::before {
+  margin-right: 1.2vh;
+}
+
+.tv-card .more {
+  margin-top: 0.6vh;
+  color: #404040;
+  font-size: 2.2vh;
+}
+
+.tv-card.empty {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: 28vw;
+  margin-top: 25vh;
+  padding: 4vh 2vh;
+  text-align: center;
+  font-size: 3vh;
+}
