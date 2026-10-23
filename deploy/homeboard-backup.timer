@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Home Board data every night
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=homeboard-backup.service
+
+[Install]
+WantedBy=timers.target
