@@ -39,6 +39,7 @@ A few words used below:
 4. Open **Raspberry Pi Imager** from the Start menu. If Windows asks whether to allow changes, click **Yes**.
 
 5. Click **Choose Device** and pick **Raspberry Pi 4**.
+   Imager 2 and newer looks different: a list of **Setup steps** on the left (Device, OS, Storage, Customisation, Writing) and a **NEXT** button at the bottom right. Pick the same things on each page and click **NEXT**. In Imager 2, the Lite and Legacy entries in step 6 are under **Raspberry Pi OS (other)**.
 
 6. Click **Choose OS**. Pick the **Lite 64-bit** system based on **Bookworm**:
    - If **Raspberry Pi OS (other)** lists **Raspberry Pi OS Lite (64-bit)** and its description says Bookworm, pick that.
@@ -49,7 +50,7 @@ A few words used below:
 7. Click **Choose Storage** and pick your SD card. Check the size so you do not pick another drive. Everything on the chosen card is erased.
 
 8. Click **Next**. Imager asks "Would you like to apply OS customisation settings?". Click **Edit Settings**. A window with tabs opens.
-   Newer Imager versions show the same settings as separate pages, one after the other, instead of tabs. The names are the same. Fill them in the same way.
+   Imager 2 and newer has no question and no tabs. After **Storage** it goes straight to the **Customisation** pages: **Hostname**, **Localisation**, **User**, **Wi-Fi**, **Remote access** and **Raspberry Pi Connect**. Fill them in with the values from steps 9 and 10, click **NEXT** after each, and leave Raspberry Pi Connect off.
 
 9. On the **General** tab:
    - Tick **Set hostname** and type `homeboard`. This is the Pi's name on your network.
@@ -61,15 +62,17 @@ A few words used below:
     - Tick **Enable SSH**.
     - Choose **Allow public-key authentication only**.
     - The box below should already hold a long line starting with `ssh-ed25519`. That is the key from step 1. If the box is empty, click **Run SSH-KEYGEN**, or open `C:\Users\<your name>\.ssh\id_ed25519.pub` in Notepad and paste its one line into the box.
+    - The line ends with something like `yourname@DESKTOP-ABC123`. Paste that part too. It is only a label, not a secret.
 
 11. Click **Save**. Back at the question, click **Yes** to apply the settings. Click **Yes** again to confirm erasing the card.
+    In Imager 2 and newer, click **WRITE** on the last page and confirm erasing the card.
     Imager writes and then checks the card. This takes about 5 to 15 minutes. When it says **Write Successful**, click **Continue** and take the card out.
 
 ## Part 3: First boot
 
 12. Put the SD card in the Pi. The slot is on the bottom, under the board. Connect the monitor to the HDMI port next to the USB-C port (HDMI 0). Turn the monitor on. Plug in the Pi's power last.
 
-13. Wait about 2 minutes. The monitor shows lines of text scrolling by. The first boot may restart once by itself. It ends at a text line like `homeboard login:`. That is correct. You do not type anything on the Pi itself.
+13. Wait about 2 minutes. The monitor shows lines of text scrolling by. The first boot may restart once by itself. It ends at a text line like `homeboard login:`. That is correct. You do not type anything on the Pi itself. The Pi needs no keyboard or mouse at any point; everything is done from your PC.
 
 14. On your PC, open PowerShell and type:
 
@@ -206,6 +209,21 @@ sudo reboot
 ### The phone cannot open homeboard.local
 
 Some phones do not understand `.local` names. Use the Pi's number instead. On the Pi, run `hostname -I` and open `http://<that number>/` on the phone.
+
+### Android Chrome shows ERR_TOO_MANY_RETRIES or cannot reach the site
+
+The board is served over plain `http`, not `https`. If Chrome on the phone refuses plain `http` addresses (for example with **Always use secure connections** turned on in Settings > Privacy and security), it does not open `http://homeboard.local/` or the Pi's number, and the Pi never sees the request. Use the PC, or a phone browser that allows `http`, until the board serves `https`.
+
+### A mouse pointer shows in the middle of the screen
+
+The Pi's HDMI ports report a TV-remote input that the system mistakes for a mouse. Connect with SSH and run:
+
+```
+echo 'SUBSYSTEM=="input", ATTRS{name}=="vc4-hdmi*", ENV{ID_INPUT_POINTINGSTICK}="", ENV{ID_INPUT_MOUSE}=""' | sudo tee /etc/udev/rules.d/90-homeboard-ignore-cec-input.rules
+sudo reboot
+```
+
+Do not tell the system to ignore these inputs completely. With no input devices at all, the browser never starts and the screen stays on boot text.
 
 ### Photos stop changing or the page looks stuck
 
