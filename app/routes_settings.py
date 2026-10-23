@@ -79,7 +79,6 @@ def put_display_current(body: DisplayCurrent, conn: Conn):
     return {"id": body.id}
 
 
-@router.get("/events")
 async def stream_events(request: Request):
     conn = db.connect(request.app.state.db_path)
     try:

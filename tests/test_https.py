@@ -118,7 +118,7 @@ def test_loopback_client_still_counts_as_display(tmp_path, monkeypatch, host, lo
     app = create_app(tmp_path)
     app.state.sse_limit = 0
     with TestClient(app, client=(host, 50000)) as client:
-        assert client.get("/api/events").status_code == 200
+        assert client.get("/api/events", headers={"Accept": "text/event-stream"}).status_code == 200
     assert marked == [local]
 
 

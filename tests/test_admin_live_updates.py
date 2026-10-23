@@ -151,7 +151,7 @@ def _connected_while_streaming(tmp_path, host):
     seen = {}
     with TestClient(create_app(tmp_path), client=(host, 50000)) as client:
         client.app.state.sse_limit = 1
-        with client.stream("GET", "/api/events") as r:
+        with client.stream("GET", "/api/events", headers={"Accept": "text/event-stream"}) as r:
             chunks = r.iter_text()
             assert next(chunks).startswith("event: hello")
             seen["subs"] = len(events.subscribers)
