@@ -107,12 +107,42 @@
     return tile;
   }
 
-  var Admin = { moveId: moveId, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState };
+  function runLimited(items, limit, worker) {
+    return new Promise(function (resolve) {
+      var next = 0;
+      var active = 0;
+      function finish() {
+        active--;
+        pump();
+      }
+      function pump() {
+        if (next >= items.length && active === 0) {
+          resolve();
+          return;
+        }
+        while (active < limit && next < items.length) {
+          var item = items[next++];
+          active++;
+          var job;
+          try {
+            job = Promise.resolve(worker(item));
+          } catch (err) {
+            job = Promise.resolve();
+          }
+          job.then(finish, finish);
+        }
+      }
+      pump();
+    });
+  }
+
+  var Admin = { moveId: moveId, runLimited: runLimited, isSupported: isSupported, photoPatch: photoPatch, buildTile: buildTile, setTileState: setTileState };
   root.Admin = Admin;
   if (typeof module !== "undefined" && module.exports) module.exports = Admin;
   if (typeof document === "undefined") return;
 
   var TYPE_ERROR = "Only JPEG, PNG, HEIC and WebP photos";
+  var UPLOAD_LIMIT = 2;
   var SERVER_ERRORS = {
     "too large": "This photo is too large",
     "cannot open": "This file could not be opened as a photo",
@@ -541,15 +571,15 @@
     $("upload-list").textContent = "";
     $("upload-close").disabled = true;
     $("upload-dialog").hidden = false;
-    var jobs = files.map(function (file) {
+    var jobs = [];
+    files.forEach(function (file) {
       var row = addRow(file);
-      if (!isSupported(file)) {
-        row.fail(TYPE_ERROR);
-        return Promise.resolve();
-      }
-      return uploadOne(file, row);
+      if (!isSupported(file)) row.fail(TYPE_ERROR);
+      else jobs.push({ file: file, row: row });
     });
-    Promise.all(jobs).then(function () {
+    runLimited(jobs, UPLOAD_LIMIT, function (job) {
+      return uploadOne(job.file, job.row);
+    }).then(function () {
       $("upload-close").disabled = false;
       $("upload-close").focus();
       loadGrid().catch(function () {});

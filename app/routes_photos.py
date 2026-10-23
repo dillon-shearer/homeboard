@@ -60,7 +60,10 @@ def upload_photos(
     created, errors = [], []
     for f in files:
         try:
-            p = images.process_upload(f.file.read(), state.photos_dir, state.thumbs_dir)
+            data = f.file.read(images.MAX_UPLOAD_BYTES + 1)
+            if len(data) > images.MAX_UPLOAD_BYTES:
+                raise images.ImageError("too large")
+            p = images.process_upload(data, state.photos_dir, state.thumbs_dir)
         except images.ImageError as e:
             errors.append({"name": f.filename, "error": str(e)})
             continue
