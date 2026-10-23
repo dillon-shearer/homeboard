@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#008080">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Home Board">
+<title>Calendar - Home Board</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-512.png">
+<link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
+<link rel="stylesheet" href="{{ static_url('admin.css') }}">
+<link rel="stylesheet" href="{{ static_url('calendar.css') }}">
+</head>
+<body class="w95-desktop">
+<div id="toast" class="toast w95-window" role="alert" hidden>
+<div class="w95-titlebar"><span class="w95-title-text">Home Board</span></div>
+<div class="toast-body">
+<svg class="toast-icon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="#000"/><circle cx="15" cy="15" r="13" fill="#ff0000"/><path d="M10 10l10 10M20 10L10 20" stroke="#fff" stroke-width="3"/></svg>
+<span id="toast-text"></span>
+</div>
+</div>
+<main class="w95-window">
+<div class="w95-titlebar">
+<a class="w95-back" href="/admin">Start</a>
+<span class="w95-title-text">Calendar</span>
+<span class="w95-close" aria-hidden="true"></span>
+</div>
+<div class="w95-body">
+<section class="w95-group" aria-labelledby="month-legend">
+<h2 id="month-legend" class="w95-legend">Month</h2>
+<div class="month">
+<button type="button" id="month-prev" class="w95-btn nav" aria-label="Previous month">&lt;</button>
+<select id="month-select" class="w95-select" aria-label="Month">
+<option value="1">January</option>
+<option value="2">February</option>
+<option value="3">March</option>
+<option value="4">April</option>
+<option value="5">May</option>
+<option value="6">June</option>
+<option value="7">July</option>
+<option value="8">August</option>
+<option value="9">September</option>
+<option value="10">October</option>
+<option value="11">November</option>
+<option value="12">December</option>
+</select>
+<select id="year-select" class="w95-select" aria-label="Year"></select>
+<button type="button" id="month-next" class="w95-btn nav" aria-label="Next month">&gt;</button>
+<button type="button" id="month-today" class="w95-btn today">Today</button>
+</div>
+<div class="cal-head" aria-hidden="true"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+<div id="cal-grid" class="cal-grid"></div>
+<p id="cal-error" class="error" role="alert" hidden>Could not load the events.</p>
+</section>
+<section class="w95-group day" aria-labelledby="day-title">
+<h2 id="day-title" class="w95-legend">Today</h2>
+<div class="day-head">
+<span id="day-count">0 events</span>
+<button type="button" id="add-event" class="w95-btn default">Add Event</button>
+</div>
+<ul id="day-events" class="day-events"></ul>
+<p id="day-empty" class="day-empty" hidden>Nothing on this day.</p>
+</section>
+</div>
+<div class="w95-statusbar" role="status">
+<span id="month-count">0 events this month</span>
+<span id="display-state">Display ...</span>
+</div>
+</main>
+
+<div id="event-dialog" class="modal" hidden>
+<div id="event-backdrop" class="modal-backdrop"></div>
+<form id="event-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="event-heading" novalidate>
+<div class="w95-titlebar">
+<span id="event-heading" class="w95-title-text">Event</span>
+<button type="button" id="event-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="event-form">
+<label class="full" for="event-title">What</label>
+<input id="event-title" class="w95-input full" type="text" maxlength="120" enterkeyhint="done" autocomplete="off">
+<label for="event-date">Date</label>
+<input id="event-date" class="w95-input" type="date">
+<label for="event-time">Time</label>
+<input id="event-time" class="w95-input" type="time">
+<label class="w95-check full"><input id="event-allday" type="checkbox"><span>All day</span></label>
+<label for="event-repeat">Repeats</label>
+<select id="event-repeat" class="w95-select">
+<option value="never">Never</option>
+<option value="weekly">Every week</option>
+<option value="monthly">Every month</option>
+<option value="yearly">Every year</option>
+</select>
+</div>
+<div class="buttons">
+<button type="button" id="event-delete" class="w95-btn del">Delete</button>
+<button type="submit" id="event-save" class="w95-btn default">Save</button>
+<button type="button" id="event-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</form>
+</div>
+
+<div id="delete-dialog" class="modal" hidden>
+<div id="delete-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+<div class="w95-titlebar">
+<span id="delete-title" class="w95-title-text">Delete event</span>
+<button type="button" id="delete-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="confirm">
+<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
+<p id="delete-text">Delete this event?</p>
+</div>
+<div class="buttons">
+<button type="button" id="confirm-delete" class="w95-btn default">Delete</button>
+<button type="button" id="confirm-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
+<script src="{{ static_url('calendar.js') }}"></script>
+</body>
+</html>

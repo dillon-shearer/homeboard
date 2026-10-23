@@ -9,7 +9,7 @@ from app.main import create_app
 
 ROOT = Path(__file__).resolve().parent.parent / "app"
 WIN95 = (ROOT / "static" / "win95.css").read_text()
-PAGES = ["/admin", "/admin/photos", "/admin/lists", "/admin/about"]
+PAGES = ["/admin", "/admin/photos", "/admin/lists", "/admin/calendar", "/admin/about"]
 TUNNEL = {"X-Homeboard-Tunnel": "1", "CF-Connecting-IP": "203.0.113.7"}
 
 
@@ -39,18 +39,8 @@ def test_admin_pages_return_200(client, path):
 def test_start_links_to_photos_and_about(client):
     page = client.get("/admin").text
     assert 'href="/admin/photos"' in page
-    for name in ("Calendar",):
-        item = re.search(
-            r'<span class="w95-icon disabled" aria-disabled="true">(?:(?!</li>).)*?'
-            + re.escape(name)
-            + r"(?:(?!</li>).)*?</span></li>",
-            page,
-            re.DOTALL,
-        )
-        assert item, name
-        assert "Coming soon" in item.group(0)
-        assert "href" not in item.group(0)
-    assert page.count("Coming soon") == 1
+    assert 'href="/admin/calendar"' in page
+    assert "Coming soon" not in page
     assert ">Notes<" not in page and "Grocery List" not in page
     assert 'id="photo-count"' in page and 'id="display-state"' in page
 
