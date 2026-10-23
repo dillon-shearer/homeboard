@@ -611,7 +611,7 @@
   }
 
   function clampInterval(v) {
-    v = Math.round(Number(v) / 5) * 5;
+    v = Math.round(Number(v));
     if (!isFinite(v)) v = current.interval_s || 20;
     return Math.min(600, Math.max(5, v));
   }
@@ -626,6 +626,30 @@
 
   function stepInterval(delta) {
     queueInterval(clampInterval(Number($("interval").value) + delta));
+  }
+
+  function holdStep(btn, delta) {
+    var delay = null;
+    var repeat = null;
+    function stop() {
+      clearTimeout(delay);
+      clearInterval(repeat);
+      delay = repeat = null;
+    }
+    btn.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      stop();
+      stepInterval(delta);
+      delay = setTimeout(function () {
+        repeat = setInterval(function () { stepInterval(delta); }, 80);
+      }, 400);
+    });
+    btn.addEventListener("pointerup", stop);
+    btn.addEventListener("pointerleave", stop);
+    btn.addEventListener("pointercancel", stop);
+    btn.addEventListener("click", function (e) {
+      if (e.detail === 0) stepInterval(delta);
+    });
   }
 
   function onIntervalInput() {
@@ -664,8 +688,8 @@
 
   function init() {
     $("file-input").addEventListener("change", onFiles);
-    $("interval-minus").addEventListener("click", function () { stepInterval(-5); });
-    $("interval-plus").addEventListener("click", function () { stepInterval(5); });
+    holdStep($("interval-minus"), -1);
+    holdStep($("interval-plus"), 1);
     $("interval").addEventListener("input", onIntervalInput);
     $("interval").addEventListener("change", function () {
       if ($("interval").value === "") $("interval").value = current.interval_s;
