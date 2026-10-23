@@ -32,6 +32,8 @@ class ProcessedImage:
 
 
 def _to_rgb(img: Image.Image) -> Image.Image:
+    if img.mode == "I" or img.mode.startswith("I;16"):
+        img = img.convert("I").point(lambda v: v / 256).convert("L")
     if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
         rgba = img.convert("RGBA")
         bg = Image.new("RGB", rgba.size, (0, 0, 0))
@@ -58,8 +60,9 @@ def _cover(img: Image.Image, width: int, height: int) -> Image.Image:
     return img.resize(size, Image.Resampling.LANCZOS)
 
 
-def _save(img: Image.Image, path: Path, quality: int = JPEG_QUALITY) -> None:
-    img.save(path, "JPEG", quality=quality, progressive=True, optimize=True)
+def _save(img: Image.Image, path: Path, quality: int = JPEG_QUALITY, icc_profile: bytes | None = None) -> None:
+    extra = {"icc_profile": icc_profile} if icc_profile else {}
+    img.save(path, "JPEG", quality=quality, progressive=True, optimize=True, **extra)
 
 
 def process_upload(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
@@ -72,14 +75,15 @@ def process_upload(data: bytes, photos_dir, thumbs_dir) -> ProcessedImage:
         raise ImageError("cannot open") from e
     if img.format not in ALLOWED_FORMATS:
         raise ImageError("unsupported format")
+    icc = img.info.get("icc_profile") if img.mode in ("RGB", "RGBA", "RGBX") else None
     img = _to_rgb(ImageOps.exif_transpose(img))
     full = _cover(img, SCREEN_WIDTH, SCREEN_HEIGHT)
     thumb = _fit(full, THUMB_EDGE)
     stem = uuid.uuid4().hex
     filename = f"{stem}.jpg"
     thumb_name = f"{stem}_t.jpg"
-    _save(full, Path(photos_dir) / filename, FULL_JPEG_QUALITY)
-    _save(thumb, Path(thumbs_dir) / thumb_name)
+    _save(full, Path(photos_dir) / filename, FULL_JPEG_QUALITY, icc)
+    _save(thumb, Path(thumbs_dir) / thumb_name, icc_profile=icc)
     return ProcessedImage(filename, thumb_name, full.width, full.height)
 
 
