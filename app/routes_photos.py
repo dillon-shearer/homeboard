@@ -4,17 +4,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import db, events, images
 
 router = APIRouter(prefix="/api/photos")
+CAPTION_MAX = 120
 log = logging.getLogger(__name__)
 
 
 class PhotoPatch(BaseModel):
     enabled: bool | None = None
-    caption: str | None = None
+    caption: Annotated[str | None, Field(max_length=CAPTION_MAX)] = None
 
 
 class PhotoOrder(BaseModel):
