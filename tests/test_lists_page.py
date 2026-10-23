@@ -2,15 +2,21 @@ import json
 import re
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 
+import httpx
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from tests.test_tv_lists import _Chrome, _free_port, needs_chrome
 
 STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
 LISTS_JS = STATIC / "lists.js"
+LISTS_CSS = STATIC / "lists.css"
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
@@ -117,3 +123,199 @@ def test_pick_tab_uses_saved_id_or_falls_back_to_first():
         " L.pickTab(lists, null), L.pickTab([], '9')]))"
     )
     assert result == [9, 4, 4, None]
+
+
+def test_item_dialog_markup(client):
+    page = client.get("/admin/lists").text
+    start = page.index('<div id="item-dialog" class="modal" hidden>')
+    html = page[start : page.index("<script", start)]
+    assert '<span id="item-title" class="w95-title-text">Item</span>' in html
+    assert re.search(r'<input id="item-text"[^>]*maxlength="200"[^>]*enterkeyhint="done"', html)
+    assert '<input id="item-done" type="checkbox"><span>Done</span>' in html
+    assert '<input id="item-pinned" type="checkbox"><span>Pinned</span>' in html
+    edit = re.search(r'<form id="item-edit".*?</form>', html, re.DOTALL).group(0)
+    for label in ("Save", "Cancel", "Delete"):
+        assert f">{label}</button>" in edit
+    assert 'type="submit" id="item-save" class="w95-btn default">Save<' in edit
+    confirm = html[html.index('<div id="item-confirm" class="w95-body" hidden>') :]
+    assert "Delete this item?" in confirm
+    assert 'class="confirm-icon"' in confirm
+    assert 'id="item-confirm-delete" class="w95-btn default">Delete</button>' in confirm
+    assert 'id="item-confirm-cancel" class="w95-btn">Cancel</button>' in confirm
+
+
+def test_inline_edit_is_gone_and_text_opens_the_item_window():
+    js = LISTS_JS.read_text()
+    assert "startEdit" not in js and "finishEdit" not in js
+    assert "text-edit" not in js
+    click = re.search(r"function onItemsClick\(e\) \{.*?\n  \}\n", js, re.DOTALL).group(0)
+    assert 'closest(".text")) {\n      openItem(item, false);' in click
+
+
+def test_swipe_delete_button_is_red():
+    css = LISTS_CSS.read_text()
+    rule = re.search(r"\.swipe-delete \{[^}]*\}", css).group(0)
+    assert "background: #c00000" in rule
+    assert "color: #fff" in rule
+    assert "font-weight: bold" in rule
+    assert re.search(r"\.item \{[^}]*touch-action: pan-y", css)
+
+
+@needs_node
+def test_item_patch_sends_only_changed_fields():
+    result = _node(
+        "const it = {id: 1, text: 'old', done: false, pinned: false};"
+        "console.log(JSON.stringify(["
+        "L.itemPatch(it, 'old', false, false),"
+        "L.itemPatch(it, '  old ', false, false),"
+        "L.itemPatch(it, 'new', false, false),"
+        "L.itemPatch(it, 'old', true, true),"
+        "L.itemPatch(it, '', false, false),"
+        "L.itemPatch(it, 'old', undefined, false)]))"
+    )
+    assert result == [{}, {}, {"text": "new"}, {"done": True, "pinned": True}, {}, {}]
+
+
+@needs_node
+def test_swipe_action_from_dx_dy():
+    result = _node(
+        "console.log(JSON.stringify(["
+        "L.swipeAction(-60, 5, false),"
+        "L.swipeAction(-120, -40, false),"
+        "L.swipeAction(-59, 0, false),"
+        "L.swipeAction(-70, 90, false),"
+        "L.swipeAction(-70, -70, false),"
+        "L.swipeAction(-100, 0, true),"
+        "L.swipeAction(40, 5, false), L.SWIPE_PX]))"
+    )
+    assert result == ["delete", "delete", "none", "none", "none", "none", "close", 60]
+
+
+@pytest.fixture
+def server(tmp_path):
+    port = _free_port()
+    config = uvicorn.Config(
+        create_app(tmp_path / "data"), host="127.0.0.1", port=port, log_level="error"
+    )
+    srv = uvicorn.Server(config)
+    thread = threading.Thread(target=srv.run, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{port}"
+    for _ in range(100):
+        if srv.started:
+            break
+        time.sleep(0.05)
+    yield base
+    srv.should_exit = True
+    thread.join(timeout=10)
+
+
+def _wait(chrome, expr):
+    for _ in range(100):
+        value = chrome.eval(expr)
+        if value:
+            return value
+        time.sleep(0.05)
+    raise AssertionError(expr)
+
+
+def _row(item_id):
+    return f"document.querySelector('#items .item[data-id=\"{item_id}\"]')"
+
+
+def _touch(item_id, dx, dy):
+    return f"""(() => {{
+  const t = {_row(item_id)}.querySelector('.text');
+  const r = t.getBoundingClientRect();
+  const x = r.left + 100, y = r.top + 5;
+  const fire = (type, px, py) => t.dispatchEvent(new PointerEvent(type, {{
+    bubbles: true, pointerId: 7, pointerType: 'touch', clientX: px, clientY: py}}));
+  fire('pointerdown', x, y);
+  fire('pointermove', x + {dx} / 2, y + {dy} / 2);
+  fire('pointermove', x + {dx}, y + {dy});
+  fire('pointerup', x + {dx}, y + {dy});
+  return true;
+}})()"""
+
+
+def _items(server, list_id, done):
+    with httpx.Client(base_url=server) as c:
+        for _ in range(100):
+            lists = c.get("/api/lists").json()
+            items = next(x for x in lists if x["id"] == list_id)["items"]
+            if done(items):
+                return items
+            time.sleep(0.05)
+    return items
+
+
+def _shown(dialog_id):
+    return f"!document.getElementById('{dialog_id}').hidden"
+
+
+@needs_chrome
+def test_item_window_and_swipe_in_headless_chrome(server, tmp_path):
+    with httpx.Client(base_url=server) as c:
+        shop = c.post("/api/lists", json={"name": "Shop"}).json()
+        ids = [
+            c.post(f"/api/lists/{shop['id']}/items", json={"text": t}).json()["id"]
+            for t in ("milk", "eggs", "bread")
+        ]
+    chrome = _Chrome(tmp_path / "chrome", 400, 800)
+    try:
+        chrome.send("Page.navigate", {"url": f"{server}/admin/lists"})
+        tab = f"document.querySelector('.tab[data-id=\"{shop['id']}\"]')"
+        _wait(chrome, f"!!{tab}")
+        chrome.eval(f"{tab}.click()")
+        _wait(chrome, "document.querySelectorAll('#items .item').length === 3")
+
+        chrome.eval(f"{_row(ids[0])}.querySelector('.text').click()")
+        assert chrome.eval(_shown("item-dialog"))
+        assert chrome.eval("document.getElementById('item-text').value") == "milk"
+        chrome.eval(
+            "document.getElementById('item-text').value = 'oat milk';"
+            "document.getElementById('item-pinned').click();"
+            "document.getElementById('item-save').click()"
+        )
+        assert not chrome.eval(_shown("item-dialog"))
+        items = _items(
+            server, shop["id"], lambda items: any(i["text"] == "oat milk" for i in items)
+        )
+        first = next(i for i in items if i["id"] == ids[0])
+        assert (first["text"], first["pinned"], first["done"]) == ("oat milk", True, False)
+        _wait(chrome, "document.querySelector('.item.pinned .text').textContent === 'oat milk'")
+
+        chrome.eval(f"{_row(ids[1])}.querySelector('.text').click()")
+        chrome.eval("document.getElementById('item-delete').click()")
+        assert chrome.eval(_shown("item-confirm"))
+        assert not chrome.eval(_shown("item-edit"))
+        chrome.eval("document.getElementById('item-confirm-cancel').click()")
+        assert chrome.eval(_shown("item-edit"))
+        chrome.eval("document.getElementById('item-delete').click()")
+        chrome.eval("document.getElementById('item-confirm-delete').click()")
+        _wait(chrome, f"!{_row(ids[1])}")
+
+        chrome.eval(_touch(ids[2], 10, 80))
+        assert not chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
+        chrome.eval(_touch(ids[2], -90, 4))
+        assert chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
+        chrome.eval(
+            "document.getElementById('item-input').dispatchEvent(new PointerEvent('pointerdown',"
+            " {bubbles: true, pointerId: 8, pointerType: 'touch'}))"
+        )
+        assert not chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
+
+        chrome.eval(_touch(ids[2], -90, 4))
+        chrome.eval(
+            f"const b = {_row(ids[2])}.querySelector('.swipe-delete');"
+            "b.dispatchEvent(new PointerEvent('pointerdown',"
+            " {bubbles: true, pointerId: 9, pointerType: 'touch'}));"
+            "b.click()"
+        )
+        assert chrome.eval(_shown("item-dialog") + " && " + _shown("item-confirm"))
+        chrome.eval("document.getElementById('item-confirm-delete').click()")
+        _wait(chrome, f"!{_row(ids[2])}")
+        items = _items(server, shop["id"], lambda items: len(items) == 1)
+        assert [i["id"] for i in items] == [ids[0]]
+    finally:
+        chrome.close()
