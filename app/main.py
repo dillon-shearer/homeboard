@@ -1,3 +1,4 @@
+import mimetypes
 import os
 import socket
 import sqlite3
@@ -16,6 +17,8 @@ from app.routes_settings import _ip
 from app.routes_settings import router as settings_router
 
 APP_DIR = Path(__file__).resolve().parent
+
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 class ImmutableStaticFiles(StaticFiles):
@@ -91,6 +94,10 @@ def create_app(data_dir=None) -> FastAPI:
                 ),
             )
         return templates.TemplateResponse(request, "display.html", context)
+
+    @app.get("/admin", response_class=HTMLResponse)
+    def admin(request: Request):
+        return templates.TemplateResponse(request, "admin.html")
 
     return app
 

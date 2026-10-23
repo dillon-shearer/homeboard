@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Home Board">
+<title>Home Board</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-512.png">
+<link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<main>
+<header class="top">
+<h1>Home Board</h1>
+<span class="meta"><span id="photo-count">0 photos</span><span id="status-dot" class="dot" title="Display not connected"></span></span>
+</header>
+
+<section class="upload">
+<label class="upload-btn">
+<input id="file-input" type="file" accept="image/jpeg,image/png,image/heic,image/heif,image/webp" multiple>
+<span>Add photos</span>
+</label>
+<ul id="upload-list" class="upload-list"></ul>
+</section>
+
+<section class="settings">
+<h2>Settings</h2>
+<div class="row">
+<span class="label">Seconds per photo</span>
+<div class="stepper">
+<button type="button" id="interval-minus" aria-label="Less time">&minus;</button>
+<input id="interval" type="number" min="5" max="600" step="5" inputmode="numeric" aria-label="Seconds per photo">
+<button type="button" id="interval-plus" aria-label="More time">+</button>
+</div>
+</div>
+<div class="row">
+<span class="label">Transition</span>
+<div class="seg" data-key="transition"><button type="button" data-value="true">On</button><button type="button" data-value="false">Off</button></div>
+</div>
+<div class="row">
+<span class="label">Fit</span>
+<div class="seg" data-key="fit"><button type="button" data-value="contain">Contain</button><button type="button" data-value="cover">Cover</button></div>
+</div>
+<div class="row">
+<span class="label">Shuffle</span>
+<div class="seg" data-key="shuffle"><button type="button" data-value="true">On</button><button type="button" data-value="false">Off</button></div>
+</div>
+<div class="row">
+<span class="label">Captions</span>
+<div class="seg" data-key="captions"><button type="button" data-value="true">On</button><button type="button" data-value="false">Off</button></div>
+</div>
+<p id="settings-error" class="error" hidden></p>
+</section>
+
+<section class="photos">
+<h2>Photos</h2>
+<div id="grid" class="grid"></div>
+<p id="grid-empty" class="empty" hidden>No photos yet.</p>
+</section>
+
+<footer class="foot">
+<span id="host"></span>
+<span id="ip"></span>
+<span id="disk"></span>
+<span id="version"></span>
+<a href="/docs">API docs</a>
+</footer>
+</main>
+<script src="/static/admin.js"></script>
+</body>
+</html>
