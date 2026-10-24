@@ -78,19 +78,27 @@ def migrate(conn: sqlite3.Connection) -> int:
     conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)")
     conn.commit()
     current = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_version").fetchone()[0]
-    for version, f in _migration_files():
-        if version <= current:
-            continue
-        sql = f.read_text(encoding="utf-8")
-        try:
-            conn.executescript(
-                f"BEGIN;\n{sql}\nINSERT INTO schema_version (version) VALUES ({version});\nCOMMIT;"
-            )
-        except Exception:
-            if conn.in_transaction:
-                conn.rollback()
-            raise
-        current = version
+    foreign_keys = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        for version, f in _migration_files():
+            if version <= current:
+                continue
+            sql = f.read_text(encoding="utf-8")
+            try:
+                conn.executescript(
+                    f"BEGIN;\n{sql}\nINSERT INTO schema_version (version) VALUES ({version});"
+                )
+                if foreign_keys and conn.execute("PRAGMA foreign_key_check").fetchone():
+                    raise sqlite3.IntegrityError(f"migration {version} broke a foreign key")
+                conn.commit()
+            except Exception:
+                if conn.in_transaction:
+                    conn.rollback()
+                raise
+            current = version
+    finally:
+        conn.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys else 'OFF'}")
     return current
 
 
