@@ -140,6 +140,10 @@
     });
   }
 
+  function longDate(iso) {
+    return C.dayTitle(iso) + ", " + iso.slice(0, 4);
+  }
+
   function comingUp(occurrences, today) {
     return between(occurrences, C.addDays(today, 1), C.addDays(today, UPCOMING_DAYS)).map(function (o) {
       return { title: o.title, when: whenLabel(o, today) };
@@ -608,6 +612,8 @@
     upcoming: upcoming,
     chipText: chipText,
     todayEvents: todayEvents,
+    dayEvents: todayEvents,
+    longDate: longDate,
     comingUp: comingUp,
     eventRange: eventRange,
     msToMidnight: msToMidnight,
@@ -637,6 +643,10 @@
   var clockEl = document.getElementById("clock");
   var countEl = document.getElementById("screen-count");
   var todayEl = document.getElementById("today");
+  var dayDialog = document.getElementById("day-dialog");
+  var dayTitle = document.getElementById("day-title");
+  var dayList = document.getElementById("day-list");
+  var dayChannel = null;
   var state = { screens: [], settings: null, data: {}, failed: {} };
   var builtKey = null;
   var loadSeq = 0;
@@ -700,8 +710,10 @@
     titleEl.textContent = screen ? screen.name : "Home Board";
     countEl.textContent = screenLabel(state.screens, screen);
     var widgets = screen ? screen.widgets : [];
+    if (state.settings.channel !== dayChannel) closeDay();
     if (key !== builtKey) {
       builtKey = key;
+      closeDay();
       screenEl.textContent = "";
       if (!widgets.length) screenEl.appendChild(el("section", "tv-card empty", EMPTY_TEXT));
       widgets.forEach(function (w) { buildCard(w, ctx); });
@@ -821,6 +833,25 @@
     }).catch(load);
   }
 
+  function openDay(date) {
+    dayTitle.textContent = longDate(date);
+    dayList.textContent = "";
+    var events = todayEvents(state.data.events, date);
+    if (!events.length) dayList.appendChild(el("li", "none", "Nothing on this day"));
+    events.forEach(function (e) {
+      var li = el("li");
+      li.appendChild(el("b", "t", e.time));
+      li.appendChild(document.createTextNode(e.title));
+      dayList.appendChild(li);
+    });
+    dayChannel = state.settings.channel;
+    dayDialog.hidden = false;
+  }
+
+  function closeDay() {
+    dayDialog.hidden = true;
+  }
+
   function onTouchStart(e) {
     var t = e.changedTouches[0];
     touchFrom = t ? { x: t.clientX, y: t.clientY } : null;
@@ -841,6 +872,11 @@
       setDone(Number(row.getAttribute("data-item")), !row.classList.contains("done"));
       return;
     }
+    var day = e.target.closest ? e.target.closest(".tv-cal-grid .d") : null;
+    if (day) {
+      openDay(day.getAttribute("data-date"));
+      return;
+    }
     var target = e.target.closest ? e.target.closest("[data-open], [data-close]") : null;
     if (!target) return;
     var open = target.hasAttribute("data-open");
@@ -850,6 +886,8 @@
   document.addEventListener("touchstart", onTouchStart, { passive: true });
   document.addEventListener("touchend", onTouchEnd, { passive: true });
   screenEl.addEventListener("click", onClick);
+  document.getElementById("day-close").addEventListener("click", closeDay);
+  document.getElementById("day-backdrop").addEventListener("click", closeDay);
   window.addEventListener("resize", render);
   updateClock();
   setTimeout(atMidnight, msToMidnight(new Date()));
