@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
 set -u
 
-exec cage -- chromium \
+STILL=/var/cache/homeboard/boot.png
+
+if [ "${1:-}" != session ]; then
+    exec cage -- /bin/bash "$0" session
+fi
+
+if [ -r "$STILL" ]; then
+    swayimg --fullscreen --scale=fit --no-sway "$STILL" &
+    sleep 0.5
+fi
+
+exec chromium \
     --kiosk \
     --noerrdialogs \
     --disable-infobars \

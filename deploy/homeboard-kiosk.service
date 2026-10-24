@@ -17,6 +17,7 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStartPre=-+/bin/systemctl stop homeboard-preload.service
 ExecStart=/bin/bash /opt/homeboard/deploy/kiosk.sh
 Restart=always
 RestartSec=3

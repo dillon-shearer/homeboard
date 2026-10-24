@@ -1,0 +1,10 @@
+[Unit]
+Description=Read the kiosk programs into memory while the network comes up
+
+[Service]
+Type=exec
+ExecStart=/bin/bash /opt/homeboard/deploy/preload.sh
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
