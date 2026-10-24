@@ -363,6 +363,7 @@
     wrap.appendChild(up);
     card.appendChild(wrap);
     fitChips(grid);
+    fitList(up);
   }
 
   function renderDay(card, ctx) {

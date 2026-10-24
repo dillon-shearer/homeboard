@@ -13,26 +13,26 @@ html, body {
 
 body.tv {
   padding: 2vh;
-  font-size: 2.4vh;
+  font-size: 3vh;
 }
 
 .tv .w95-window {
   max-width: none;
   height: 96vh;
   min-height: 0;
-  font-size: 2.4vh;
+  font-size: 3vh;
 }
 
 .tv .w95-titlebar {
-  min-height: 6vh;
+  min-height: 7vh;
   padding: 0.5vh 1.5vh;
-  font-size: 3vh;
+  font-size: 3.6vh;
 }
 
 .tv-clock {
   flex: none;
   font-weight: normal;
-  font-size: 2.6vh;
+  font-size: 3.2vh;
 }
 
 .tv .w95-statusbar > * {
@@ -57,15 +57,15 @@ body.tv {
 .tv-card h2,
 .tv-up h3 {
   position: absolute;
-  top: -2vh;
+  top: -2.5vh;
   left: 1vh;
   margin: 0;
   padding: 0 0.5vh;
   max-width: calc(100% - 2vh);
   background: var(--w95-face);
-  font-size: 2.8vh;
+  font-size: 3.8vh;
   font-weight: bold;
-  line-height: 4vh;
+  line-height: 5vh;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -83,22 +83,23 @@ body.tv {
   display: flex;
   gap: 1.2vh;
   align-items: center;
-  padding: 0.6vh 0;
-  font-size: 2.6vh;
+  padding: 0.8vh 0;
+  font-size: 3.2vh;
   overflow-wrap: anywhere;
 }
 
 .tv-card .box {
   flex: none;
-  width: 2.4vh;
-  height: 2.4vh;
+  width: 3vh;
+  height: 3vh;
   background: var(--w95-light);
   border: 1px solid;
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
   box-shadow: inset 1px 1px 0 var(--w95-dark);
 }
 
-.tv-card li[hidden] {
+.tv-card li[hidden],
+.tv-card.notes li[hidden] {
   display: none;
 }
 
@@ -114,19 +115,19 @@ body.tv {
 .tv-card .box.tick::after {
   content: "";
   position: absolute;
-  left: 0.7vh;
-  top: 0.2vh;
-  width: 0.6vh;
-  height: 1.3vh;
+  left: 0.9vh;
+  top: 0.3vh;
+  width: 0.8vh;
+  height: 1.6vh;
   border: solid var(--w95-dark);
-  border-width: 0 0.35vh 0.35vh 0;
+  border-width: 0 0.45vh 0.45vh 0;
   transform: rotate(45deg);
 }
 
 .tv-card li.pin {
   margin: 0 -1vh 0.6vh;
   padding: 0.8vh 1vh;
-  font-size: 3.4vh;
+  font-size: 4vh;
   font-weight: bold;
   background: #ffffc0;
 }
@@ -155,7 +156,7 @@ body.tv {
   flex: none;
   margin-top: 0.6vh;
   color: #404040;
-  font-size: 2.2vh;
+  font-size: 2.8vh;
 }
 
 .tv-card.empty {
@@ -165,7 +166,7 @@ body.tv {
   margin-top: 25vh;
   padding: 4vh 2vh;
   text-align: center;
-  font-size: 3vh;
+  font-size: 3.4vh;
 }
 
 .tv-cal {
@@ -174,7 +175,7 @@ body.tv {
   grid-template-columns: 2fr 1fr;
   gap: 2vh;
   overflow: hidden;
-  padding: 3vh 1.5vh 1.5vh;
+  padding: 3.6vh 1.5vh 1.5vh;
 }
 
 .tv-cal-grid {
@@ -206,12 +207,12 @@ body.tv {
   flex-direction: column;
   padding: 0.4vh 0.6vh;
   border: 1px solid #dfdfdf;
-  font-size: 2vh;
+  font-size: 2.6vh;
   overflow: hidden;
 }
 
 .tv-cal-grid .d b {
-  font-size: 2.2vh;
+  font-size: 3vh;
 }
 
 .tv-cal-grid .d.other {
@@ -236,7 +237,7 @@ body.tv {
   background: var(--w95-select);
   color: var(--w95-light);
   font-style: normal;
-  font-size: 1.8vh;
+  font-size: 2.4vh;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -252,7 +253,7 @@ body.tv {
 }
 
 .tv-up ul {
-  height: 100%;
+  flex: 1;
   overflow: hidden;
 }
 
@@ -260,13 +261,13 @@ body.tv {
   display: block;
   padding: 0.8vh 0;
   border-bottom: 1px dotted var(--w95-shadow);
-  font-size: 2.4vh;
+  font-size: 3.2vh;
 }
 
 .tv-up li small {
   display: block;
   color: #404040;
-  font-size: 2vh;
+  font-size: 2.6vh;
 }
 
 .tv-up li.none {
@@ -277,16 +278,16 @@ body.tv {
 .tv-screen {
   min-height: 0;
   display: grid;
-  gap: 2vh;
+  gap: 2.6vh;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(2, minmax(0, 1fr));
   overflow: hidden;
-  padding: 3vh 1.5vh 1.5vh;
+  padding: 3.6vh 1.5vh 1.5vh;
 }
 
 .tv-screen .tv-card {
   max-height: none;
-  padding-top: 3vh;
+  padding-top: 3.6vh;
 }
 
 .tv-screen .tv-card.empty {
@@ -304,7 +305,7 @@ body.tv {
 .tv-msg {
   margin: auto;
   color: #404040;
-  font-size: 2.6vh;
+  font-size: 3.2vh;
   text-align: center;
 }
 
@@ -314,34 +315,34 @@ body.tv {
 }
 
 .tv-face .time {
-  font-size: 9vh;
+  font-size: 11vh;
   font-weight: bold;
   line-height: 1.1;
 }
 
 .tv-card[data-size="2x1"] .tv-face .time {
-  font-size: 12vh;
+  font-size: 14vh;
 }
 
 .tv-card[data-size="2x2"] .tv-face .time {
-  font-size: 18vh;
+  font-size: 22vh;
 }
 
 .tv-face .day {
-  font-size: 3.4vh;
+  font-size: 4vh;
   font-weight: bold;
 }
 
 .tv-face .date {
-  font-size: 2.8vh;
+  font-size: 3.4vh;
 }
 
 .tv-card[data-size="2x2"] .tv-face .day {
-  font-size: 5vh;
+  font-size: 6vh;
 }
 
 .tv-card[data-size="2x2"] .tv-face .date {
-  font-size: 4vh;
+  font-size: 4.8vh;
 }
 
 .tv-card .tv-cal {
@@ -351,11 +352,11 @@ body.tv {
 
 .tv-card .tv-up {
   max-height: none;
-  padding-top: 3vh;
+  padding-top: 3.6vh;
 }
 
 .tv-up h3 {
-  font-size: 2.8vh;
+  font-size: 3.8vh;
 }
 
 .tv-cal-day {
@@ -373,8 +374,8 @@ body.tv {
 
 .tv-cal-day li {
   display: block;
-  padding: 0.6vh 0;
-  font-size: 2.4vh;
+  padding: 0.8vh 0;
+  font-size: 3.2vh;
 }
 
 .tv-cal-day li .t {
@@ -384,7 +385,7 @@ body.tv {
 .tv-cal-day li small {
   display: block;
   color: #404040;
-  font-size: 2vh;
+  font-size: 2.6vh;
 }
 
 .tv-cal-day li.none,
@@ -393,7 +394,7 @@ body.tv {
 }
 
 .tv-cal-day li.more {
-  font-size: 2.2vh;
+  font-size: 3vh;
 }
 
 .tv-cal-day hr {
@@ -407,7 +408,7 @@ body.tv {
 
 .tv-cal-day h3 {
   margin: 0 0 0.4vh;
-  font-size: 2.6vh;
+  font-size: 3.2vh;
 }
 
 .tv-lists-body {
@@ -422,14 +423,16 @@ body.tv {
   flex: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 1vh;
+  gap: 1.5vh;
   margin-bottom: 1vh;
 }
 
 .tv-tab {
   padding: 1vh 2vh;
+  min-width: 8.4vh;
+  min-height: 8.4vh;
   font-family: inherit;
-  font-size: 2.4vh;
+  font-size: 3vh;
   color: var(--w95-dark);
   background: var(--w95-face);
   border: 1px solid;
@@ -447,55 +450,55 @@ body.tv {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 3vh 1.5vh;
-  padding-top: 2vh;
+  gap: 3.4vh 1.5vh;
+  padding-top: 2.6vh;
 }
 
 .tv-lists .tv-card {
-  padding-top: 3vh;
+  padding-top: 3.6vh;
 }
 
 .tv-lists.condensed {
-  gap: 2.6vh 1vh;
-  padding-top: 1.6vh;
+  gap: 3.4vh 1vh;
+  padding-top: 2.6vh;
 }
 
 .tv-lists.condensed .tv-card {
-  padding: 2.4vh 1vh 1vh;
+  padding: 3.4vh 1vh 1vh;
 }
 
 .tv-lists.condensed .tv-card h2 {
-  top: -1.6vh;
-  font-size: 2.2vh;
-  line-height: 3.2vh;
+  top: -2.5vh;
+  font-size: 3.8vh;
+  line-height: 5vh;
 }
 
 .tv-lists.condensed li {
   gap: 0.8vh;
-  padding: 0.2vh 0;
-  font-size: 2vh;
+  padding: 0.4vh 0;
+  font-size: 2.8vh;
 }
 
 .tv-lists.condensed li.pin {
   margin-bottom: 0.3vh;
   padding: 0.4vh 1vh;
-  font-size: 2.4vh;
+  font-size: 3.2vh;
 }
 
 .tv-lists.condensed .box {
-  width: 1.8vh;
-  height: 1.8vh;
+  width: 2.4vh;
+  height: 2.4vh;
 }
 
 .tv-lists.condensed .box.tick::after {
-  left: 0.5vh;
-  top: 0.1vh;
-  width: 0.5vh;
-  height: 1vh;
+  left: 0.7vh;
+  top: 0.2vh;
+  width: 0.6vh;
+  height: 1.3vh;
 }
 
 .tv-lists.condensed .more {
-  font-size: 1.8vh;
+  font-size: 2.4vh;
 }
 
 .tv-card li.none {
@@ -531,19 +534,19 @@ body.tv {
 
 .wx-icon svg {
   display: block;
-  width: 10vh;
-  height: 10vh;
+  width: 12vh;
+  height: 12vh;
 }
 
 .wx-temp {
-  font-size: 10vh;
+  font-size: 12vh;
   font-weight: bold;
   line-height: 1;
 }
 
 .wx-label {
   margin: 0;
-  font-size: 3.2vh;
+  font-size: 3.8vh;
   font-weight: bold;
 }
 
@@ -551,7 +554,7 @@ body.tv {
 .wx-rain,
 .wx-where {
   margin: 0;
-  font-size: 2.6vh;
+  font-size: 3.2vh;
 }
 
 .tv-card .tv-wx.none {
@@ -562,12 +565,12 @@ body.tv {
 .wx-hint {
   margin: 0;
   color: #404040;
-  font-size: 2.2vh;
+  font-size: 2.8vh;
 }
 
 .wx-asof {
   color: #404040;
-  font-size: 2vh;
+  font-size: 2.6vh;
 }
 
 .wx-days {
@@ -581,49 +584,49 @@ body.tv {
   align-items: center;
   gap: 0.4vh;
   padding: 0.8vh 1.6vh;
-  font-size: 2.2vh;
+  font-size: 2.8vh;
   border: 1px solid;
   border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
 }
 
 .wx-day .wx-icon svg {
-  width: 5vh;
-  height: 5vh;
+  width: 6vh;
+  height: 6vh;
 }
 
 .wx-sun {
   display: flex;
   gap: 4vh;
-  font-size: 3vh;
+  font-size: 3.4vh;
 }
 
 .tv-card[data-size="2x2"] .wx-icon svg {
-  width: 18vh;
-  height: 18vh;
+  width: 20vh;
+  height: 20vh;
 }
 
 .tv-card[data-size="2x2"] .wx-temp {
-  font-size: 18vh;
+  font-size: 20vh;
 }
 
 .tv-card[data-size="2x2"] .wx-label {
-  font-size: 5vh;
+  font-size: 5.6vh;
 }
 
 .tv-card[data-size="2x2"] .wx-hilo,
 .tv-card[data-size="2x2"] .wx-rain {
-  font-size: 4vh;
+  font-size: 4.4vh;
 }
 
 .tv-card[data-size="2x2"] .wx-asof {
-  font-size: 2.6vh;
+  font-size: 3vh;
 }
 
 .tv-card[data-size="2x2"] .wx-day {
-  font-size: 3.4vh;
+  font-size: 3.8vh;
 }
 
 .tv-card[data-size="2x2"] .wx-day .wx-icon svg {
-  width: 9vh;
-  height: 9vh;
+  width: 10vh;
+  height: 10vh;
 }
