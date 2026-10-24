@@ -53,10 +53,10 @@ def test_tv_css_hides_cursor_and_uses_vh_fonts():
         assert size.strip().endswith("vh"), size
 
 
-def test_kiosk_swipe_layer_lets_taps_through():
-    css = (STATIC / "display.css").read_text(encoding="utf-8")
-    block = re.search(r"#swipe \{([^}]*)\}", css).group(1)
-    assert "pointer-events: none" in block
+def test_kiosk_has_no_swipe_layer_and_hooks_the_frame():
+    page = (APP / "templates" / "display.html").read_text(encoding="utf-8")
+    assert 'id="swipe"' not in page
+    assert "#swipe" not in (STATIC / "display.css").read_text(encoding="utf-8")
     js = (STATIC / "display.js").read_text(encoding="utf-8")
     assert "channelEl.onload = hookFrame" in js
     assert "contentDocument" in js

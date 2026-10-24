@@ -132,8 +132,8 @@ def test_tv_js_puts_channel_and_timeout():
 def test_display_has_channel_frame(client):
     page = client.get("/").text
     assert '<iframe id="channel"' in page
-    assert re.search(r'<iframe id="channel"[^>]*hidden', page)
-    assert '<div id="swipe" hidden>' in page
+    assert not re.search(r'<iframe id="channel"[^>]*hidden', page)
+    assert 'id="swipe"' not in page
     assert 'const url = "/tv";' in JS
     assert "channelEl.src = url" in JS
 
@@ -261,7 +261,7 @@ def test_kiosk_shows_frame_and_returns_to_photos_after_idle():
         await advance(100);
         const es = sources[0];
         const frame = () => ({src: els.channel.src, hidden: els.channel.hidden,
-          swipe: els.swipe.hidden});
+          transform: els.channel.style.transform});
         const start = frame();
         server.settings = Object.assign({}, server.settings,
           {channel: "screen", screen_id: 4, channel_timeout_min: 2});
@@ -277,16 +277,20 @@ def test_kiosk_shows_frame_and_returns_to_photos_after_idle():
         await advance(25000);
         idle();
         await advance(10);
-        console.log(JSON.stringify({start, picked, early, puts, end: frame(),
+        const sliding = {puts: puts.slice(), slide: els.channel.classList.contains("slide")};
+        await advance(300);
+        console.log(JSON.stringify({start, picked, early, sliding, puts, end: frame(),
           channel: server.settings.channel}));
         """
     )
-    assert result["start"] == {"src": "about:blank", "hidden": True, "swipe": True}
-    assert result["picked"] == {"src": "/tv", "hidden": False, "swipe": False}
+    off = {"src": "/tv", "hidden": False, "transform": "translateX(100vw)"}
+    assert result["start"] == off
+    assert result["picked"] == {"src": "/tv", "hidden": False, "transform": "translateX(0px)"}
     assert result["early"]["puts"] == []
     assert result["early"]["frame"]["src"] == "/tv"
+    assert result["sliding"] == {"puts": [], "slide": True}
     assert result["puts"] == [{"channel": "photos"}]
-    assert result["end"] == {"src": "about:blank", "hidden": True, "swipe": True}
+    assert result["end"] == off
     assert result["channel"] == "photos"
 
 
@@ -299,22 +303,22 @@ def test_kiosk_swipe_walks_screens_and_puts_screen_id():
         sources[0].emit("lists_changed");
         await advance(10);
         swipe(-200);
-        await advance(10);
+        await advance(300);
         const first = {src: els.channel.src, sets: channelSets};
         swipe(-200);
-        await advance(10);
+        await advance(300);
         const second = {src: els.channel.src, sets: channelSets};
         swipe(-200);
-        await advance(10);
+        await advance(300);
         const back = els.channel.src;
         swipe(200);
-        await advance(10);
+        await advance(300);
         swipe(200);
-        await advance(10);
+        await advance(300);
         swipe(200);
-        await advance(10);
+        await advance(300);
         swipe(30);
-        await advance(10);
+        await advance(300);
         console.log(JSON.stringify({first, second, back, puts, src: els.channel.src}));
         """
     )
@@ -328,8 +332,8 @@ def test_kiosk_swipe_walks_screens_and_puts_screen_id():
     ]
     assert result["first"]["src"] == "/tv"
     assert result["second"] == result["first"]
-    assert result["back"] == "about:blank"
-    assert result["src"] == "about:blank"
+    assert result["back"] == "/tv"
+    assert result["src"] == "/tv"
 
 
 @needs_node
@@ -338,14 +342,14 @@ def test_kiosk_reloads_screens_on_lists_changed():
         """
         await advance(100);
         swipe(-200);
-        await advance(10);
+        await advance(300);
         server.screens = [{id: 9, name: "Kitchen"}];
         sources[0].emit("lists_changed");
         await advance(10);
         swipe(-200);
-        await advance(10);
+        await advance(300);
         swipe(-200);
-        await advance(10);
+        await advance(300);
         console.log(JSON.stringify(puts));
         """
     )

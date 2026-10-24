@@ -17,6 +17,9 @@
     clock_on_top: true,
   };
   const MAX_BACKOFF_S = 30;
+  const SWIPE_PX = 80;
+  const FLING_PX = 30;
+  const FLING_V = 0.5;
   const CHANNELS = ["photos", "screen"];
   const POSITIONS = [
     "top-left", "top-center", "top-right",
@@ -85,6 +88,33 @@
     let i = stopIndex(stops, settings);
     if (i === -1) i = d > 0 ? n - 1 : n;
     return stops[(((i + d) % n) + n) % n];
+  }
+
+  function dragStop(stops, settings, dx) {
+    return nextStop(stops, settings, dx < 0 ? 1 : -1);
+  }
+
+  function restOffset(channel, width) {
+    return channel === "photos" ? width : 0;
+  }
+
+  function dragOffset(stops, settings, dx, width) {
+    const s = settings || {};
+    if (!dx) return restOffset(s.channel, width);
+    const d = Math.max(-width, Math.min(width, dx));
+    const target = dragStop(stops, s, dx);
+    if (s.channel === "photos") {
+      if (target.channel === "photos") return null;
+      return d < 0 ? width + d : d - width;
+    }
+    return target.channel === "photos" ? d : null;
+  }
+
+  function swipeCommits(dx, dy, v) {
+    if (Math.abs(dx) <= Math.abs(dy || 0)) return false;
+    if (Math.abs(dx) > SWIPE_PX) return true;
+    const speed = v || 0;
+    return Math.abs(dx) > FLING_PX && Math.abs(speed) >= FLING_V && speed * dx > 0;
   }
 
   function shouldReturn(now, last, timeoutMin, channel) {
@@ -182,6 +212,11 @@
     CHANNELS: CHANNELS,
     buildStops: buildStops,
     nextStop: nextStop,
+    SWIPE_PX: SWIPE_PX,
+    dragStop: dragStop,
+    restOffset: restOffset,
+    dragOffset: dragOffset,
+    swipeCommits: swipeCommits,
     shouldReturn: shouldReturn,
     focusPosition: focusPosition,
   };
@@ -194,7 +229,8 @@
   const LOAD_TIMEOUT_MS = 15000;
   const CAPTION_FADE_MS = 500;
   const IDLE_CHECK_MS = 15000;
-  const SWIPE_PX = 80;
+  const SLIDE_MS = 250;
+  const VELOCITY_MS = 100;
   const SPLASH_FADE_MS = 500;
 
   const layerA = document.getElementById("layer-a");
@@ -202,7 +238,6 @@
   const captionEl = document.getElementById("caption");
   const clockEl = document.getElementById("clock");
   const channelEl = document.getElementById("channel");
-  const swipeEl = document.getElementById("swipe");
   const overlayEl = document.getElementById("overlay");
   const splashEl = document.getElementById("splash");
 
@@ -231,6 +266,9 @@
   let backoff = 1;
   let lastActivity = Date.now();
   let touchStart = null;
+  let lastMove = null;
+  let dragging = false;
+  let sliding = false;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -287,17 +325,31 @@
   }
 
   function applyChannel() {
-    const channel = state.settings.channel;
-    if (channel === "photos") {
-      channelEl.hidden = true;
-      swipeEl.hidden = true;
-      if (channelEl.getAttribute("src") !== "about:blank") channelEl.src = "about:blank";
-      return;
-    }
     const url = "/tv";
     if (channelEl.getAttribute("src") !== url) channelEl.src = url;
-    channelEl.hidden = false;
-    swipeEl.hidden = false;
+    if (dragging || sliding) return;
+    channelEl.style.transform = state.settings.channel === "photos" ? "translateX(100vw)" : "translateX(0px)";
+  }
+
+  function viewWidth() {
+    return root.innerWidth || 0;
+  }
+
+  function moveChannel(px) {
+    channelEl.style.transform = "translateX(" + px + "px)";
+  }
+
+  function slideChannel(px, done) {
+    sliding = true;
+    channelEl.classList.remove("drag");
+    channelEl.classList.add("slide");
+    moveChannel(px);
+    setTimeout(function () {
+      channelEl.classList.remove("slide");
+      sliding = false;
+      if (done) done();
+      applyChannel();
+    }, SLIDE_MS);
   }
 
   function setChannel(stop) {
@@ -324,25 +376,77 @@
     lastActivity = Date.now();
   }
 
+  function frameLeft(e) {
+    const node = e.target;
+    const doc = node && (node.ownerDocument || node);
+    if (!doc || doc === document || !channelEl.getBoundingClientRect) return 0;
+    return channelEl.getBoundingClientRect().left;
+  }
+
+  function touchPoint(e) {
+    const t = e.changedTouches[0];
+    return t ? { x: t.clientX + frameLeft(e), y: t.clientY, t: Date.now() } : null;
+  }
+
+  function releaseVelocity(start, p) {
+    for (let i = 0; i < start.samples.length; i++) {
+      const dt = p.t - start.samples[i].t;
+      if (dt <= VELOCITY_MS) return dt > 0 ? (p.x - start.samples[i].x) / dt : 0;
+    }
+    return 0;
+  }
+
   function onTouchStart(e) {
     markActivity();
-    const t = e.changedTouches[0];
-    touchStart = t ? { x: t.clientX, y: t.clientY } : null;
+    const p = sliding ? null : touchPoint(e);
+    touchStart = p ? { x: p.x, y: p.y, samples: [p] } : null;
+    lastMove = null;
     if (e.target && e.target.addEventListener) {
+      e.target.addEventListener("touchmove", onTouchMove, { passive: true });
       e.target.addEventListener("touchend", onTouchEnd, { passive: true, once: true });
     }
   }
 
+  function onTouchMove(e) {
+    if (!touchStart || sliding || e === lastMove) return;
+    lastMove = e;
+    const p = touchPoint(e);
+    if (!p) return;
+    touchStart.samples.push(p);
+    if (touchStart.samples.length > 20) touchStart.samples.shift();
+    const dx = p.x - touchStart.x;
+    const dy = p.y - touchStart.y;
+    const px = dragOffset(state.stops, state.settings, Math.abs(dx) > Math.abs(dy) ? dx : 0, viewWidth());
+    if (px === null) return;
+    dragging = true;
+    channelEl.classList.add("drag");
+    moveChannel(px);
+  }
+
   function onTouchEnd(e) {
     markActivity();
-    const t = e.changedTouches[0];
-    if (!touchStart || !t) return;
-    const dx = t.clientX - touchStart.x;
-    const dy = t.clientY - touchStart.y;
+    if (e.target && e.target.removeEventListener) e.target.removeEventListener("touchmove", onTouchMove);
+    const p = touchPoint(e);
+    const start = touchStart;
+    if (!start || !p) return;
     touchStart = null;
-    if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) {
-      setChannel(nextStop(state.stops, state.settings, dx < 0 ? 1 : -1));
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    const wasDragging = dragging;
+    dragging = false;
+    const width = viewWidth();
+    if (!swipeCommits(dx, dy, releaseVelocity(start, p))) {
+      if (wasDragging) slideChannel(restOffset(state.settings.channel, width));
+      return;
     }
+    const stop = dragStop(state.stops, state.settings, dx);
+    const px = dragOffset(state.stops, state.settings, dx < 0 ? -width : width, width);
+    if (px === null) {
+      channelEl.classList.remove("drag");
+      setChannel(stop);
+      return;
+    }
+    slideChannel(px, function () { setChannel(stop); });
   }
 
   function hookFrame() {
@@ -354,12 +458,14 @@
     }
     if (!doc) return;
     doc.addEventListener("touchstart", onTouchStart, { passive: true });
+    doc.addEventListener("touchmove", onTouchMove, { passive: true });
     doc.addEventListener("touchend", onTouchEnd, { passive: true });
   }
 
   function checkIdle() {
     const s = state.settings;
-    if (shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, s.channel)) setChannel({ channel: "photos" });
+    if (dragging || sliding || !shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, s.channel)) return;
+    slideChannel(viewWidth(), function () { setChannel({ channel: "photos" }); });
   }
 
   function setSettings(data) {
@@ -678,6 +784,7 @@
     applyDom();
     updateClock();
     document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: true });
     document.addEventListener("touchend", onTouchEnd, { passive: true });
     channelEl.onload = hookFrame;
     setInterval(checkIdle, IDLE_CHECK_MS);
