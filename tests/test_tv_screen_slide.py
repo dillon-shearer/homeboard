@@ -142,3 +142,36 @@ def test_screen_to_screen_swipe_slides_inside_tv(server, tmp_path):  # noqa: F81
     assert short["grids"] == 1
     assert short["title"] == second["name"]
     assert _tx(short["transform"]) == 0
+
+
+@needs_chrome
+def test_drag_from_photos_shows_the_target_screen_before_the_slide_ends(server, tmp_path):  # noqa: F811
+    ordered = sorted(httpx.get(f"{server}/api/screens").json(), key=lambda s: s["sort_order"])
+    first, last = ordered[0], ordered[-1]
+    httpx.put(f"{server}/api/settings", json={"channel": "photos", "screen_id": last["id"]})
+    chrome = _Chrome(tmp_path / "chrome", 1024, 600)
+    try:
+        chrome.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
+        chrome.send("Page.navigate", {"url": f"{server}/"})
+        ready = _until(
+            lambda: chrome.eval(FRAME), lambda o: o and o["title"] == last["name"] and o["cards"]
+        )
+        time.sleep(0.5)
+        _move(chrome, "touchStart", 800)
+        for i in range(1, 6):
+            _move(chrome, "touchMove", 800 - 30 * i)
+        mid = chrome.eval(FRAME)
+        kept = _settings(server)
+        for i in range(6, 11):
+            _move(chrome, "touchMove", 800 - 30 * i)
+        _move(chrome, "touchEnd", 500)
+        landed = _until(lambda: _settings(server), lambda s: s["channel"] == "screen")
+        after = _until(lambda: chrome.eval(FRAME), lambda o: o and o["title"] == first["name"])
+    finally:
+        chrome.close()
+    assert ready["title"] == last["name"]
+    assert kept["channel"] == "photos"
+    assert mid["title"] == first["name"]
+    assert mid["grids"] == 1
+    assert (landed["channel"], landed["screen_id"]) == ("screen", first["id"])
+    assert after["title"] == first["name"]
