@@ -66,6 +66,8 @@
   var occurrences = [];
   var loadSeq = 0;
   var editing = null;
+  var opener = null;
+  var stale = false;
 
   function loadStatus() {
     return getJSON("/api/status").then(function (s) {
@@ -160,6 +162,7 @@
     $("day-title").textContent = dayTitle(selected);
     $("day-count").textContent = countLabel(list.length);
     var ul = $("day-events");
+    var keep = ul.contains(document.activeElement) ? document.activeElement.getAttribute("data-index") : null;
     ul.textContent = "";
     list.forEach(function (o, i) {
       var li = document.createElement("li");
@@ -181,6 +184,9 @@
       ul.appendChild(li);
     });
     $("day-empty").hidden = list.length > 0;
+    if (keep === null) return;
+    var again = ul.querySelector('[data-index="' + keep + '"]');
+    (again || $("add-event")).focus();
   }
 
   function onGridClick(e) {
@@ -207,8 +213,9 @@
     $("event-time").disabled = allDay;
   }
 
-  function openEvent(occ) {
+  function openEvent(occ, from) {
     editing = occ;
+    opener = from || null;
     $("event-heading").textContent = occ ? "Edit Event" : "Add Event";
     $("event-title").value = occ ? occ.title : "";
     $("event-date").value = occ ? occ.date : selected;
@@ -224,13 +231,28 @@
   function closeEvent() {
     $("event-dialog").hidden = true;
     editing = null;
+    var back = opener && document.body.contains(opener) ? opener : $("add-event");
+    opener = null;
+    back.focus();
+    if (stale) {
+      stale = false;
+      load();
+    }
+  }
+
+  function onEventsChanged() {
+    if (!$("event-dialog").hidden) {
+      stale = true;
+      return;
+    }
+    load();
   }
 
   function onDayClick(e) {
     var b = e.target.closest(".edit");
     if (!b) return;
     var occ = onDay(selected)[Number(b.getAttribute("data-index"))];
-    if (occ) openEvent(occ);
+    if (occ) openEvent(occ, b);
   }
 
   function onAllDayChange() {
@@ -297,6 +319,7 @@
 
   function closeDelete() {
     $("delete-dialog").hidden = true;
+    if (!$("event-dialog").hidden) $("event-delete").focus();
   }
 
   function deleteEvent() {
@@ -330,10 +353,10 @@
     }
     es.onopen = function () { backoff = 1; };
     es.addEventListener("hello", function () {
-      if (everConnected) load();
+      if (everConnected) onEventsChanged();
       everConnected = true;
     });
-    es.addEventListener("events_changed", load);
+    es.addEventListener("events_changed", onEventsChanged);
     es.onerror = function () {
       es.close();
       retryEvents();
@@ -372,7 +395,7 @@
     shortMonths();
     $("cal-grid").addEventListener("click", onGridClick);
     $("day-events").addEventListener("click", onDayClick);
-    $("add-event").addEventListener("click", function () { openEvent(null); });
+    $("add-event").addEventListener("click", function () { openEvent(null, $("add-event")); });
     $("event-allday").addEventListener("change", onAllDayChange);
     $("event-form").addEventListener("submit", saveEvent);
     $("event-cancel").addEventListener("click", closeEvent);

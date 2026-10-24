@@ -211,7 +211,8 @@
   }
 
   function busy() {
-    return win !== null;
+    var named = $("name-dialog");
+    return win !== null || !!(named && !named.hidden);
   }
 
   function setScreens(list) {
@@ -249,6 +250,8 @@
 
   function closeName() {
     $("name-dialog").hidden = true;
+    $("screens-new").focus();
+    return loadScreens();
   }
 
   function saveName(e) {
@@ -259,8 +262,7 @@
       return;
     }
     send("POST", "/api/screens", { name: name }).then(function (created) {
-      closeName();
-      return loadScreens().then(function () { openScreen(created); });
+      return closeName().then(function () { openScreen(created); });
     }).catch(function () {
       $("name-error").hidden = false;
     });
@@ -426,8 +428,17 @@
   function closeScreen() {
     $("screen-dialog").hidden = true;
     $("screen-delete-dialog").hidden = true;
+    var id = win ? win.id : null;
     win = null;
-    return loadScreens();
+    return loadScreens().then(function () {
+      if (win) return;
+      var back = editing ? $("screens-new") : $("screens-edit");
+      var groups = $("tv-stops").querySelectorAll("[data-edit-screen]");
+      for (var i = 0; i < groups.length; i++) {
+        if (groups[i].getAttribute("data-edit-screen") === String(id)) back = groups[i].children[1];
+      }
+      back.focus();
+    });
   }
 
   function selectWidget(id) {
@@ -509,6 +520,7 @@
 
   function closeDeleteScreen() {
     $("screen-delete-dialog").hidden = true;
+    if (win) $("screen-delete").focus();
   }
 
   function deleteScreen() {

@@ -281,11 +281,19 @@
 
   function renderGrid() {
     var grid = $("grid");
+    var active = document.activeElement;
+    var had = active && active.closest ? active.closest("#grid .tile") : null;
+    var keep = had ? tileId(had) : null;
     grid.textContent = "";
     photos.slice(0, shown).forEach(function (p) {
       grid.appendChild(buildTile(p));
     });
     updateGridMeta();
+    if (keep === null) return;
+    var tiles = grid.querySelectorAll(".tile");
+    for (var i = 0; i < tiles.length; i++) {
+      if (tileId(tiles[i]) === keep) tiles[i].querySelector(".tile-open").focus();
+    }
   }
 
   function updateGridMeta() {
@@ -527,6 +535,7 @@
     var tile = dialogTile;
     dialogTile = null;
     if (tile && document.body.contains(tile)) tile.querySelector(".tile-open").focus();
+    if (gridStale) refreshGrid();
   }
 
   function savePhoto() {
@@ -843,7 +852,7 @@
   }
 
   function onPhotosChanged() {
-    if (drag) {
+    if (drag || dialogTile) {
       gridStale = true;
       return;
     }
