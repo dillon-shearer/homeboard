@@ -71,7 +71,7 @@ def test_screen_window_markup(client):
         ("lists", "Lists"),
     ]
     buttons = re.search(r'<div class="buttons">(.*?)</div>', html, re.DOTALL).group(1)
-    assert re.findall(r">([^<]+)</button>", buttons) == ["Delete screen", "Save", "Cancel"]
+    assert re.findall(r">([^<]+)</button>", buttons) == ["Delete screen", "Done"]
     assert 'id="screen-delete" class="w95-btn del"' in buttons
     confirm = page[page.index('<div id="screen-delete-dialog" class="modal" hidden>') :]
     assert ">Delete</button>" in confirm and ">Cancel</button>" in confirm

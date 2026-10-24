@@ -123,7 +123,7 @@ for (const id of ["display-state", "channel-timeout", "name-dialog", "name-form"
   "weather-location", "weather-name", "clock-size", "clock-size-minus", "clock-size-plus",
   "caption-size", "caption-size-minus", "caption-size-plus", "stack-row", "screen-dialog",
   "screen-form", "screen-name", "screen-error", "screen-layout", "screen-close", "screen-backdrop",
-  "screen-cancel", "screen-delete", "screen-delete-dialog", "screen-delete-text",
+  "screens-hint", "screen-delete", "screen-delete-dialog", "screen-delete-text",
   "screen-confirm-delete", "screen-confirm-cancel", "screen-delete-close",
   "screen-delete-backdrop", "widget-row", "widget-add", "widget-size", "widget-list-field",
   "widget-list", "widget-left", "widget-right", "widget-remove"]) {
