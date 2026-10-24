@@ -20,6 +20,16 @@
 <span id="today"></span>
 </div>
 </main>
+<div id="day-dialog" class="modal" hidden>
+<div id="day-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog tv-day" role="dialog" aria-modal="true" aria-labelledby="day-title">
+<div class="w95-titlebar">
+<span id="day-title" class="w95-title-text"></span>
+<button type="button" id="day-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<ul id="day-list" class="w95-body tv-day-list"></ul>
+</div>
+</div>
 <script src="{{ static_url('calendar_util.js') }}"></script>
 <script src="{{ static_url('tv_screen.js') }}"></script>
 </body>

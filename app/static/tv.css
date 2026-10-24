@@ -638,3 +638,42 @@ body.tv {
   width: 10vh;
   height: 10vh;
 }
+
+.tv .tv-day {
+  width: 60vw;
+  max-width: none;
+  height: auto;
+  font-size: 3.4vh;
+}
+
+.tv-day .w95-close {
+  width: 48px;
+  height: 48px;
+}
+
+.tv-day .w95-close::before,
+.tv-day .w95-close::after {
+  left: 12px;
+  top: 22px;
+  width: 22px;
+  height: 3px;
+}
+
+.tv-day-list {
+  margin: 0;
+  padding: 2vh;
+  list-style: none;
+  overflow: auto;
+}
+
+.tv-day-list li {
+  display: flex;
+  gap: 2vh;
+  padding: 1vh 0;
+  overflow-wrap: anywhere;
+}
+
+.tv-day-list .t {
+  flex: none;
+  min-width: 5em;
+}
