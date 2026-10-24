@@ -242,6 +242,14 @@
   min-height: 44px;
 }
 
+.w95-seg.editing .stop-edit {
+  flex: 0 0 100%;
+}
+
+.w95-seg.editing .stop-edit .w95-btn:not(.move) {
+  flex: 1 1 auto;
+}
+
 .w95-seg .stop-edit .move {
   min-width: 44px;
   width: 44px;

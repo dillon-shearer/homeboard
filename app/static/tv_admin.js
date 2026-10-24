@@ -57,6 +57,7 @@
   var screens = [];
   var shown = { channel: null, screen_id: null };
   var editing = false;
+  var loaded = false;
   var current = {};
   var win = null;
   var lists = [];
@@ -204,7 +205,9 @@
     screens.forEach(function (screen, n) {
       row.insertBefore(editing ? editGroup(screen, n) : screenButton(screen), add);
     });
-    add.hidden = !editing;
+    add.hidden = !(editing || (loaded && screens.length === 0));
+    row.classList.toggle("editing", editing);
+    $("screens-hint").hidden = editing;
     edit.textContent = editing ? "Done" : "Edit";
     edit.setAttribute("aria-pressed", editing ? "true" : "false");
     showChannel(shown.channel);
@@ -218,7 +221,8 @@
   function setScreens(list) {
     if (!Array.isArray(list) || busy()) return;
     var next = list.map(function (s) { return { id: s.id, name: s.name }; });
-    if (JSON.stringify(next) === JSON.stringify(screens)) return;
+    if (loaded && JSON.stringify(next) === JSON.stringify(screens)) return;
+    loaded = true;
     screens = next;
     render();
   }
@@ -665,7 +669,6 @@
     $("name-close").addEventListener("click", closeName);
     $("name-backdrop").addEventListener("click", closeName);
     $("screen-form").addEventListener("submit", saveScreen);
-    $("screen-cancel").addEventListener("click", closeScreen);
     $("screen-close").addEventListener("click", closeScreen);
     $("screen-backdrop").addEventListener("click", closeScreen);
     $("screen-delete").addEventListener("click", openDeleteScreen);
