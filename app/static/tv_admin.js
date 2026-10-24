@@ -458,10 +458,24 @@
     renderLayout();
   }
 
+  function freeCell() {
+    var taken = {};
+    win.widgets.forEach(function (wd) {
+      for (var dc = 0; dc < wd.w; dc++) {
+        for (var dr = 0; dr < wd.h; dr++) taken[(wd.col + dc) + "," + (wd.row + dr)] = true;
+      }
+    });
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) if (!taken[c + "," + r]) return [c, r];
+    }
+    return [0, 0];
+  }
+
   function addWidget(e) {
     if (!win) return;
     var kind = e.currentTarget.getAttribute("data-kind");
-    var body = { kind: kind };
+    var cell = freeCell();
+    var body = { kind: kind, col: cell[0], row: cell[1] };
     if (kind === "lists" && addSize(win.widgets) === "1x1" && lists.length) body.list_id = lists[0].id;
     win.adding = false;
     windowCall("POST", "/api/screens/" + win.id + "/widgets", body, "Could not add the widget. Try again.", true);
@@ -485,8 +499,8 @@
     if (!win) return;
     var i = selectedIndex();
     if (i === -1 || !canMove(i, step)) return;
-    var ids = swapped(i, i + step).map(function (wd) { return wd.id; });
-    windowCall("PUT", "/api/screens/" + win.id + "/widgets/order", { ids: ids }, "Could not move the widget. Try again.");
+    var other = win.widgets[i + step];
+    windowCall("PATCH", "/api/widgets/" + win.widgets[i].id, { col: other.col, row: other.row }, "Could not move the widget. Try again.");
   }
 
   function removeWidget() {

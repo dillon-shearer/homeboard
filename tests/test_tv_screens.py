@@ -118,7 +118,7 @@ def test_old_channel_settings_are_rejected(client, body):
 
 def test_deleting_showing_screen_returns_to_photos(client):
     sid = client.post("/api/screens", json={"name": "Spare"}).json()["id"]
-    client.post(f"/api/screens/{sid}/widgets", json={"kind": "clock"})
+    client.post(f"/api/screens/{sid}/widgets", json={"kind": "clock", "col": 0, "row": 0})
     client.put("/api/settings", json={"channel": "screen", "screen_id": sid})
     events.last_event = None
     seen = []
@@ -158,7 +158,7 @@ def test_db_screen_helpers(tmp_path):
         assert db.update_screen(conn, b["id"], name=" Spare 2 ")["name"] == "Spare 2"
         db.reorder_screens(conn, [b["id"]])
         assert db.list_screens(conn)[0]["id"] == b["id"]
-        db.add_widget(conn, b["id"], "clock")
+        db.add_widget(conn, b["id"], "clock", 0, 0)
         assert db.delete_screen(conn, b["id"])["id"] == b["id"]
         assert db.get_screen(conn, b["id"]) is None
         assert (

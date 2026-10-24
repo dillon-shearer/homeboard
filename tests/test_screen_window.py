@@ -125,7 +125,7 @@ def test_screen_window_in_headless_chrome(server, tmp_path):  # noqa: F811
         _wait(lambda: chrome.eval("document.querySelectorAll('#screen-layout .empty').length") == 4)
 
         chrome.eval(f"{q}('#screen-layout .empty').click(); {q}('[data-kind=clock]').click()")
-        _wait(lambda: _widgets(server, "Test") == [("clock", 0, 0, 2, 2)])
+        _wait(lambda: _widgets(server, "Test") == [("clock", 0, 0, 2, 1)])
         _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Clock")
         sizes = "[...document.getElementById('widget-size').options].map((o) => o.value)"
         assert chrome.eval(sizes) == ["2x2", "2x1", "1x2", "1x1"]

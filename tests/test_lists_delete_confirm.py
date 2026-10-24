@@ -35,7 +35,7 @@ def test_delete_confirm_names_screen_and_cancel_returns_to_options(server, tmp_p
         spare = c.post("/api/screens", json={"name": "Spare"}).json()
         c.post(
             f"/api/screens/{spare['id']}/widgets",
-            json={"kind": "lists", "w": 1, "h": 1, "list_id": shop["id"]},
+            json={"kind": "lists", "col": 0, "row": 0, "w": 1, "h": 1, "list_id": shop["id"]},
         ).raise_for_status()
     chrome = _Chrome(tmp_path / "chrome", 390, 844)
     try:

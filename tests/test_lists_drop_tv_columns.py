@@ -23,7 +23,7 @@ def _db_at_version_10(path):
 def test_fresh_database_has_no_old_tv_columns(tmp_path):
     conn = db.connect(tmp_path / "fresh.db")
     try:
-        assert db.migrate(conn) == 12
+        assert db.migrate(conn) == 13
         cols = _columns(conn)
         assert "show_on_tv" not in cols and "screen_id" not in cols
         assert cols == ["id", "name", "kind", "sort_order", "created_at", "tv_open"]
@@ -44,12 +44,17 @@ def test_upgrade_keeps_lists_items_and_widgets(tmp_path):
         milk = db.add_item(conn, bjs["id"], "milk")
         eggs = db.add_item(conn, notes["id"], "eggs")
         brief = db.list_screens(conn)[0]
-        widget = db.add_widget(conn, brief["id"], "lists", 1, 1, notes["id"])
+        with conn:
+            widget_id = conn.execute(
+                "INSERT INTO widgets (screen_id, kind, list_id, w, h, sort_order, created_at)"
+                " VALUES (?, 'lists', ?, 1, 1, 40, 'x')",
+                (brief["id"], notes["id"]),
+            ).lastrowid
         lists_before = [dict(r) for r in conn.execute("SELECT * FROM lists ORDER BY id")]
         items_before = [dict(r) for r in conn.execute("SELECT * FROM list_items ORDER BY id")]
         widgets_before = [dict(r) for r in conn.execute("SELECT * FROM widgets ORDER BY id")]
 
-        assert db.migrate(conn) == 12
+        assert db.migrate(conn) == 13
 
         cols = _columns(conn)
         assert "show_on_tv" not in cols and "screen_id" not in cols
@@ -59,9 +64,10 @@ def test_upgrade_keeps_lists_items_and_widgets(tmp_path):
         assert [dict(r) for r in conn.execute("SELECT * FROM list_items ORDER BY id")] == (
             items_before
         )
-        assert [dict(r) for r in conn.execute("SELECT * FROM widgets ORDER BY id")] == (
-            widgets_before
-        )
+        widgets_after = [dict(r) for r in conn.execute("SELECT * FROM widgets ORDER BY id")]
+        for row in widgets_after:
+            del row["col"], row["row"]
+        assert widgets_after == widgets_before
         assert {milk["id"], eggs["id"]} <= {i["id"] for i in items_before}
         assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -73,7 +79,7 @@ def test_upgrade_keeps_lists_items_and_widgets(tmp_path):
             ).fetchone()[0]
             == 0
         )
-        assert db.get_widget(conn, widget["id"]) is None
+        assert db.get_widget(conn, widget_id) is None
         db.delete_screen(conn, brief["id"])
         assert db.get_screen(conn, brief["id"]) is None
     finally:
