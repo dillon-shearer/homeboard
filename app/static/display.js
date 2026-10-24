@@ -293,6 +293,7 @@
   let lastMove = null;
   let dragging = false;
   let sliding = false;
+  let tvDrag = false;
   let edgeDrag = null;
   let readoutTimer = null;
 
@@ -438,6 +439,31 @@
     }, SLIDE_MS);
   }
 
+  function tvScreen() {
+    try {
+      const w = channelEl.contentWindow;
+      const tv = w && w.TvScreen;
+      return tv && typeof tv.dragTo === "function" ? tv : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function screenTarget(dx) {
+    if (!dx || state.settings.channel !== "screen") return null;
+    const stop = dragStop(state.stops, state.settings, dx);
+    return stop.channel === "screen" ? stop.screen_id : null;
+  }
+
+  function slideTv(pending, done) {
+    sliding = true;
+    Promise.resolve(pending).catch(function () {}).then(function () {
+      sliding = false;
+      if (done) done();
+      applyChannel();
+    });
+  }
+
   function setChannel(stop) {
     const body = { channel: stop.channel };
     if (stop.channel === "screen") body.screen_id = stop.screen_id;
@@ -502,7 +528,18 @@
     if (touchStart.samples.length > 20) touchStart.samples.shift();
     const dx = p.x - touchStart.x;
     const dy = p.y - touchStart.y;
-    const px = dragOffset(state.stops, state.settings, Math.abs(dx) > Math.abs(dy) ? dx : 0, viewWidth());
+    const lx = Math.abs(dx) > Math.abs(dy) ? dx : 0;
+    const target = screenTarget(lx);
+    const tv = tvScreen();
+    if (target !== null && tv) {
+      dragging = true;
+      tvDrag = true;
+      tv.dragTo(lx, target);
+      return;
+    }
+    if (tvDrag && tv) tv.dragTo(0, null);
+    tvDrag = false;
+    const px = dragOffset(state.stops, state.settings, lx, viewWidth());
     if (px === null) return;
     dragging = true;
     channelEl.classList.add("drag");
@@ -519,13 +556,23 @@
     const dx = p.x - start.x;
     const dy = p.y - start.y;
     const wasDragging = dragging;
+    const wasTv = tvDrag;
     dragging = false;
+    tvDrag = false;
     const width = viewWidth();
+    const tv = tvScreen();
     if (!swipeCommits(dx, dy, releaseVelocity(start, p))) {
-      if (wasDragging) slideChannel(restOffset(state.settings.channel, width));
+      if (wasTv && tv) slideTv(tv.cancel());
+      else if (wasDragging) slideChannel(restOffset(state.settings.channel, width));
       return;
     }
     const stop = dragStop(state.stops, state.settings, dx);
+    if (screenTarget(dx) !== null && tv) {
+      tv.dragTo(dx, stop.screen_id);
+      slideTv(tv.commit(), function () { setChannel(stop); });
+      return;
+    }
+    if (wasTv && tv) tv.dragTo(0, null);
     const px = dragOffset(state.stops, state.settings, dx < 0 ? -width : width, width);
     if (px === null) {
       channelEl.classList.remove("drag");
