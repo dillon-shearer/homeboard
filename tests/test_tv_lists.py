@@ -256,12 +256,12 @@ def test_smaller_lists_widgets_show_open_lists_or_one_list(server, tmp_path):  #
     assert [c["name"] for c in wide["cards"]] == ["Publix", "Message board"]
     assert wide["tabs"] == [] and "BJs" not in wide["text"]
     assert wide["cards"][0]["top"] == wide["cards"][1]["top"]
-    assert empty["msg"] == "No lists open. Open one from your phone or the Notes screen."
+    assert empty["msg"] == "No lists open. Tick Open on the TV in a list's options on your phone."
     assert empty["cards"] == [] and empty["tabs"] == []
     assert one["h2"] == "Publix" and "Dog food" in one["text"] and "Olive oil" in one["text"]
     assert one["tabs"] == []
     assert pick["h2"] == "Lists"
-    assert pick["msg"] == "Pick a list from your phone."
+    assert pick["msg"] == "Pick a list on your phone: TV, Edit, then this screen."
 
 
 TOUCH = """(() => {

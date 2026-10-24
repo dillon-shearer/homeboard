@@ -93,8 +93,10 @@ def test_lists_page_has_no_screen_word(client):
     text = re.sub(r"<[^>]*>", " ", body)
     assert "screen" not in text.lower()
     js = LISTS_JS.read_text()
-    assert "screen" not in js.lower()
-    assert "/api/screens" not in js
+    assert "screen_id" not in js
+    assert [ln.strip() for ln in js.splitlines() if "/api/screens" in ln] == [
+        'getJSON("/api/screens").then(function (screens) {'
+    ]
 
 
 def test_start_lists_icon_links(client):

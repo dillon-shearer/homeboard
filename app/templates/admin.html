@@ -109,9 +109,12 @@
 </div>
 
 <div id="upload-dialog" class="modal" hidden>
-<div class="modal-backdrop"></div>
+<div id="upload-backdrop" class="modal-backdrop"></div>
 <div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="upload-title">
-<div class="w95-titlebar"><span id="upload-title" class="w95-title-text">Uploading</span></div>
+<div class="w95-titlebar">
+<span id="upload-title" class="w95-title-text">Uploading</span>
+<button type="button" id="upload-x" class="title-close" aria-label="Close" hidden><span class="w95-close" aria-hidden="true"></span></button>
+</div>
 <div class="w95-body">
 <ul id="upload-list" class="upload-list"></ul>
 <div class="buttons">

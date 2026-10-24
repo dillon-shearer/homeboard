@@ -49,6 +49,7 @@
   if (typeof document === "undefined") return;
 
   var STATUS_MS = 10000;
+  var MAX_BACKOFF_S = 30;
   var STEP_DEBOUNCE_MS = 400;
   var UP = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="6,2 11,9 1,9" fill="#000"/></svg>';
   var DOWN = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="1,3 11,3 6,10" fill="#000"/></svg>';
@@ -646,6 +647,39 @@
     });
   }
 
+  function onSettingsChanged() {
+    loadSettings().catch(function () {});
+  }
+
+  var backoff = 1;
+  var everConnected = false;
+
+  function retryEvents() {
+    setTimeout(connectEvents, backoff * 1000);
+    backoff = Math.min(backoff * 2, MAX_BACKOFF_S);
+  }
+
+  function connectEvents() {
+    if (typeof EventSource === "undefined") return;
+    var es;
+    try {
+      es = new EventSource("/api/events");
+    } catch (e) {
+      retryEvents();
+      return;
+    }
+    es.onopen = function () { backoff = 1; };
+    es.addEventListener("hello", function () {
+      if (everConnected) onSettingsChanged();
+      everConnected = true;
+    });
+    es.addEventListener("settings_changed", onSettingsChanged);
+    es.onerror = function () {
+      es.close();
+      retryEvents();
+    };
+  }
+
   function init() {
     if ($("tv-stops")) initScreens();
     if ($("channel-timeout")) initSettings();
@@ -654,6 +688,7 @@
     });
     loadStatus();
     setInterval(loadStatus, STATUS_MS);
+    connectEvents();
   }
 
   function initScreens() {

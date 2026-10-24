@@ -64,7 +64,20 @@
     return "none";
   }
 
-  var Lists = { TAB_KEY: TAB_KEY, SWIPE_PX: SWIPE_PX, rank: rank, sortItems: sortItems, pickTab: pickTab, moveId: moveId, countLabel: countLabel, itemPatch: itemPatch, listPatch: listPatch, swipeAction: swipeAction };
+  function deleteText(list, screens) {
+    var text = "Delete \"" + list.name + "\" and everything on it?";
+    var names = [];
+    (screens || []).forEach(function (s) {
+      var shown = (s.widgets || []).some(function (w) { return w.list_id === list.id; });
+      if (shown) names.push("\"" + s.name + "\"");
+    });
+    if (!names.length) return text;
+    var last = names.pop();
+    var joined = names.length ? names.join(", ") + " and " + last : last;
+    return text + " It is also removed from the TV screen" + (names.length ? "s " : " ") + joined + ".";
+  }
+
+  var Lists = { TAB_KEY: TAB_KEY, SWIPE_PX: SWIPE_PX, rank: rank, sortItems: sortItems, pickTab: pickTab, moveId: moveId, countLabel: countLabel, itemPatch: itemPatch, listPatch: listPatch, swipeAction: swipeAction, deleteText: deleteText };
   root.Lists = Lists;
   if (typeof module !== "undefined" && module.exports) module.exports = Lists;
   if (typeof document === "undefined") return;
@@ -635,7 +648,8 @@
   }
 
   function deleteFromOptions() {
-    closeOptions();
+    if (!currentList()) return;
+    $("list-dialog").hidden = true;
     openDelete();
   }
 
@@ -680,20 +694,32 @@
   function openDelete() {
     var list = currentList();
     if (!list) return;
-    $("delete-text").textContent = "Delete \"" + list.name + "\" and everything on it?";
+    $("delete-text").textContent = deleteText(list, []);
     $("delete-dialog").hidden = false;
     $("confirm-delete").focus();
+    getJSON("/api/screens").then(function (screens) {
+      if ($("delete-dialog").hidden || currentList() !== list) return;
+      $("delete-text").textContent = deleteText(list, screens);
+    }, function () {});
   }
 
   function closeDelete() {
     $("delete-dialog").hidden = true;
+    if (editing && editing.list) {
+      $("list-dialog").hidden = false;
+      $("delete-list").focus();
+      return;
+    }
     $("list-options").focus();
     afterIdle();
   }
 
   function deleteList() {
     var list = currentList();
-    closeDelete();
+    $("delete-dialog").hidden = true;
+    editing = null;
+    $("list-options").focus();
+    afterIdle();
     if (!list) return;
     send("DELETE", "/api/lists/" + list.id).then(function () {
       selected = null;

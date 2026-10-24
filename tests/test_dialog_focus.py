@@ -140,6 +140,10 @@ def test_list_dialogs_return_focus_and_hold_reload(server, tmp_path):  # noqa: F
         time.sleep(0.5)
         assert chrome.eval(tabs) == before + 1
         chrome.eval(_escape())
+        assert chrome.eval(_shown("list-dialog"))
+        assert chrome.eval(_is("delete-list"))
+        assert chrome.eval(tabs) == before + 1
+        chrome.eval(_escape())
         _wait(chrome, f"{tabs} === {before + 2}")
         assert chrome.eval(_is("list-options"))
     finally:
