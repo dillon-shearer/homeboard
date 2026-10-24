@@ -12,11 +12,12 @@
   var SPOT_TEXT = "Empty spot. Add a widget on your phone: TV, Edit, then the screen name.";
   var GRID_COLS = 2;
   var GRID_ROWS = 2;
-  var NO_OPEN_TEXT = "No lists open. Open one from your phone or the Notes screen.";
+  var NO_OPEN_TEXT = "No lists open. Tick Open on the TV in a list's options on your phone.";
   var NO_LISTS_TEXT = "No lists yet. Add one from your phone.";
   var TAP_TEXT = "Tap a list above to open it.";
-  var PICK_TEXT = "Pick a list from your phone.";
+  var PICK_TEXT = "Pick a list on your phone: TV, Edit, then this screen.";
   var NO_WEATHER_TEXT = "No forecast yet";
+  var NO_WEATHER_HINT = "Check the weather location on your phone: TV page, Weather.";
   var TAP_SLOP_PX = 10;
   var SWIPE_CLICK_MS = 600;
 
@@ -494,6 +495,7 @@
       wx.classList.add("none");
       wx.appendChild(el("p", "wx-label", NO_WEATHER_TEXT));
       if (w && w.location) wx.appendChild(el("p", "wx-where", w.location));
+      wx.appendChild(el("p", "wx-hint", NO_WEATHER_HINT));
       return;
     }
     var cur = w.current || {};

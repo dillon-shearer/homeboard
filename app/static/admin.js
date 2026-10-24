@@ -683,6 +683,7 @@
   }
 
   function closeUpload() {
+    if ($("upload-close").disabled) return;
     $("upload-dialog").hidden = true;
     $("file-input").focus();
   }
@@ -704,6 +705,7 @@
     activeBatches++;
     var batch = { running: true };
     $("upload-close").disabled = true;
+    $("upload-x").hidden = true;
     $("upload-dialog").hidden = false;
     var jobs = [];
     files.forEach(function (file) {
@@ -719,6 +721,7 @@
       activeBatches--;
       if (activeBatches === 0) {
         $("upload-close").disabled = false;
+        $("upload-x").hidden = false;
         $("upload-close").focus();
       }
       refreshGrid();
@@ -899,6 +902,8 @@
   function init() {
     $("file-input").addEventListener("change", onFiles);
     $("upload-close").addEventListener("click", closeUpload);
+    $("upload-x").addEventListener("click", closeUpload);
+    $("upload-backdrop").addEventListener("click", closeUpload);
     makeStepper("interval", "interval_s", 5, 600);
     RADIO_KEYS.forEach(function (key) {
       var radios = document.querySelectorAll('input[name="' + key + '"]');

@@ -17,6 +17,16 @@ ROW = """JSON.stringify({
     return {id, top: r.top, right: r.right, width: r.width};
   }),
   months: [...document.getElementById('month-select').options].map(o => [o.value, o.text]),
+  fit: ['month-select', 'year-select'].map(id => {
+    const s = document.getElementById(id);
+    const c = s.cloneNode(true);
+    c.removeAttribute('id');
+    c.style.cssText = 'position:absolute;flex:none;width:auto;min-width:0;max-width:none';
+    s.parentNode.appendChild(c);
+    const need = c.getBoundingClientRect().width;
+    c.remove();
+    return {id, need, width: s.getBoundingClientRect().width};
+  }),
 })""".replace("IDS", json.dumps(IDS))
 
 FULL = [
@@ -66,4 +76,6 @@ def test_month_row_stays_on_one_line(server, tmp_path, width, height, touch):  #
     assert year["width"] >= 50, year
     assert [v for v, _ in row["months"]] == [str(n) for n in range(1, 13)]
     labels = [t for _, t in row["months"]]
-    assert labels == ([m[:3] for m in FULL] if width < 360 else FULL)
+    assert labels == ([m[:3] for m in FULL] if width < 390 else FULL)
+    for f in row["fit"]:
+        assert f["width"] >= f["need"] - 0.5, f

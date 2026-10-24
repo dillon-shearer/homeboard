@@ -365,7 +365,7 @@
 
   function shortMonths() {
     if (!window.matchMedia) return;
-    var mq = window.matchMedia("(max-width: 359px)");
+    var mq = window.matchMedia("(max-width: 389px)");
     var opts = $("month-select").options;
     var full = [];
     for (var i = 0; i < opts.length; i++) full.push(opts[i].textContent);

@@ -38,7 +38,7 @@
 }
 
 #month-select, #year-select {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 10em;
 }
@@ -47,12 +47,7 @@
   min-width: 4.5em;
 }
 
-@media (max-width: 359px) {
-  .w95-body {
-    padding-left: 2px;
-    padding-right: 2px;
-  }
-
+@media (max-width: 419px) {
   .w95-group:has(> .month) {
     padding-left: 4px;
     padding-right: 4px;
@@ -60,6 +55,17 @@
 
   .month {
     gap: 2px;
+  }
+
+  .month .today {
+    padding: 4px;
+  }
+}
+
+@media (max-width: 359px) {
+  .w95-body {
+    padding-left: 2px;
+    padding-right: 2px;
   }
 
   .month .today {

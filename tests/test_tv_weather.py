@@ -107,7 +107,7 @@ CARD = """JSON.stringify((() => {
   const inner = c.querySelector('.tv-wx').getBoundingClientRect();
   return {title: document.getElementById('title').textContent, h2: q('h2'), temp: q('.wx-temp'),
     label: q('.wx-label'), hilo: q('.wx-hilo'), rain: q('.wx-rain'), asof: q('.wx-asof'),
-    where: q('.wx-where'), sun: q('.wx-sun'), svg: c.querySelectorAll('svg').length,
+    where: q('.wx-where'), hint: q('.wx-hint'), sun: q('.wx-sun'), svg: c.querySelectorAll('svg').length,
     days: [...c.querySelectorAll('.wx-day')].map(d => d.innerText.replace(/\\s+/g, ' ').trim()),
     fits: inner.bottom <= r.bottom && inner.right <= r.right, text: c.innerText};
 })())"""
@@ -167,6 +167,7 @@ def test_weather_card_without_forecast_says_so(server, tmp_path):  # noqa: F811
     assert out["h2"] == "Weather"
     assert out["label"] == "No forecast yet"
     assert out["where"] == "30263"
+    assert out["hint"] == "Check the weather location on your phone: TV page, Weather."
     assert out["temp"] is None
 
 
