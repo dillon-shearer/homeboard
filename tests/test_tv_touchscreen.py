@@ -29,6 +29,13 @@ MEASURE = """JSON.stringify((() => {
     msg: px(shown('.tv-msg')),
     num: px(shown('.tv-cal-grid .d b')),
     chips: px(shown('.tv-cal-grid .ev:not(.more)')),
+    wxCell: px(shown('.wx-day > span')),
+    wxText: px(shown('.wx-label, .wx-hilo, .wx-rain')),
+    wxDays: shown('.wx-day').length,
+    wxOut: shown('.wx-day').filter(n => {
+      const r = n.getBoundingClientRect(), c = n.closest('.tv-card').getBoundingClientRect();
+      return r.left < c.left || r.right > c.right || r.top < c.top || r.bottom > c.bottom;
+    }).map(name),
     more: shown('.more').map(n => n.textContent),
     tabs: shown('.tv-tab').map(t => { const r = t.getBoundingClientRect(); return {h: r.height, w: r.width}; }),
     clipped: cards.filter(c => c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1).map(name),
@@ -89,6 +96,9 @@ def _seed(base):
             ),
             ("Wide clock", [{"kind": "clock", "col": 0, "row": 0, "w": 2, "h": 1}]),
             ("Big weather", [{"kind": "weather", "col": 0, "row": 0, "w": 2, "h": 2}]),
+            ("Wide weather", [{"kind": "weather", "col": 0, "row": 0, "w": 2, "h": 1}]),
+            ("Tall weather", [{"kind": "weather", "col": 0, "row": 0, "w": 1, "h": 2}]),
+            ("Small weather", [{"kind": "weather", "col": 0, "row": 0, "w": 1, "h": 1}]),
         ):
             screen = c.post("/api/screens", json={"name": name}).json()
             for body in widgets:
@@ -136,6 +146,9 @@ def test_tv_is_readable_and_tappable_at_1024x600(server, tmp_path):  # noqa: F81
             assert all(size >= 22 for size in out["h2"]), (screen["name"], out["h2"])
             assert all(size >= 16 for size in out["num"]), screen["name"]
             assert all(size >= 14 for size in out["chips"]), screen["name"]
+            assert all(size >= 0.024 * HEIGHT for size in out["wxCell"]), screen["name"]
+            assert all(size >= 0.03 * HEIGHT for size in out["wxText"]), screen["name"]
+            assert out["wxOut"] == [], (screen["name"], out["wxOut"])
             for tab in out["tabs"]:
                 assert tab["h"] >= 48 and tab["w"] >= 48, (screen["name"], tab)
     finally:
@@ -148,3 +161,26 @@ def test_tv_is_readable_and_tappable_at_1024x600(server, tmp_path):  # noqa: F81
     assert any("more" in m for m in seen["Wide lists"]["more"])
     assert any(m.startswith("+") for m in cal["more"])
     assert any("more" in m for m in brief["more"] + notes["more"])
+    for name in ("Big weather", "Wide weather", "Tall weather"):
+        assert seen[name]["wxDays"] == 7 and seen[name]["wxCell"], name
+    assert seen["Small weather"]["wxDays"] == 0 and seen["Small weather"]["wxText"]
+
+
+@needs_chrome
+def test_stale_weather_fits_at_1024x600(server, tmp_path):  # noqa: F811
+    weather._last_fail.clear()
+    _seed_cache(server, tmp_path / "data", datetime.now(UTC) - timedelta(hours=3))
+    chrome = _Chrome(tmp_path / "chrome", WIDTH, HEIGHT)
+    try:
+        for name, w, h in (("Big", 2, 2), ("Wide", 2, 1), ("Tall", 1, 2), ("Small", 1, 1)):
+            screen = httpx.post(f"{server}/api/screens", json={"name": f"Stale {name}"}).json()
+            r = httpx.post(
+                f"{server}/api/screens/{screen['id']}/widgets",
+                json={"kind": "weather", "col": 0, "row": 0, "w": w, "h": h},
+            )
+            assert r.status_code == 201, r.text
+            out = _show(server, chrome, screen)
+            assert chrome.eval("document.querySelectorAll('.wx-asof').length") == 1, name
+            assert out["clipped"] == [] and out["wxOut"] == [], (name, out["clipped"])
+    finally:
+        chrome.close()
