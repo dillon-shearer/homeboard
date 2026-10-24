@@ -76,7 +76,11 @@ def test_free_cells_lists_only_uncovered_cells():
 @needs_chrome
 def test_wide_clock_screen_fills_bottom_row_with_spots(server, tmp_path):  # noqa: F811
     out = _show(
-        server, tmp_path, "Wide", [{"kind": "clock", "w": 2, "h": 1}], lambda c: len(c) == 3
+        server,
+        tmp_path,
+        "Wide",
+        [{"kind": "clock", "col": 0, "row": 0, "w": 2, "h": 1}],
+        lambda c: len(c) == 3,
     )
     cards = out["cards"]
     clock = [c for c in cards if c["kind"] == "clock"]
@@ -99,7 +103,10 @@ def test_tall_calendar_and_one_small_widget_fill_last_quarter(server, tmp_path):
         server,
         tmp_path,
         "Tall",
-        [{"kind": "calendar", "w": 1, "h": 2}, {"kind": "clock", "w": 1, "h": 1}],
+        [
+            {"kind": "calendar", "col": 0, "row": 0, "w": 1, "h": 2},
+            {"kind": "clock", "col": 1, "row": 0, "w": 1, "h": 1},
+        ],
         lambda c: len(c) == 3,
     )
     spots = [c for c in out["cards"] if c["spot"]]
@@ -114,7 +121,10 @@ def test_full_screen_has_no_spots(server, tmp_path):  # noqa: F811
         server,
         tmp_path,
         "Full",
-        [{"kind": "clock", "w": 2, "h": 1}, {"kind": "clock", "w": 2, "h": 1}],
+        [
+            {"kind": "clock", "col": 0, "row": 0, "w": 2, "h": 1},
+            {"kind": "clock", "col": 0, "row": 1, "w": 2, "h": 1},
+        ],
         lambda c: len(c) >= 2,
     )
     assert [c["kind"] for c in out["cards"]] == ["clock", "clock"]

@@ -176,7 +176,9 @@ def test_full_size_weather_adds_next_days_and_sun_times(server, tmp_path):  # no
     weather._last_fail.clear()
     _seed_cache(server, _data_dir(tmp_path), datetime.now(UTC))
     screen = httpx.post(f"{server}/api/screens", json={"name": "Sky"}).json()
-    r = httpx.post(f"{server}/api/screens/{screen['id']}/widgets", json={"kind": "weather"})
+    r = httpx.post(
+        f"{server}/api/screens/{screen['id']}/widgets", json={"kind": "weather", "col": 0, "row": 0}
+    )
     assert r.status_code == 201, r.text
     out = _show(server, tmp_path, "Sky", lambda o: o["temp"])
     today = date.today()

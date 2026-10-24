@@ -30,6 +30,8 @@ class ScreenPatch(BaseModel):
 
 class WidgetCreate(BaseModel):
     kind: str
+    col: int
+    row: int
     w: int | None = None
     h: int | None = None
     list_id: int | None = None
@@ -38,6 +40,8 @@ class WidgetCreate(BaseModel):
 class WidgetPatch(BaseModel):
     w: int | None = None
     h: int | None = None
+    col: int | None = None
+    row: int | None = None
     list_id: int | None = None
 
 
@@ -84,8 +88,6 @@ def all_lists(conn: sqlite3.Connection) -> list[dict]:
 
 
 def screen_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
-    widgets = db.list_widgets(conn, row["id"])
-    places = db.pack_widgets(widgets)
     return {
         "id": row["id"],
         "name": row["name"],
@@ -98,10 +100,10 @@ def screen_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
                 "w": w["w"],
                 "h": w["h"],
                 "sort_order": w["sort_order"],
-                "col": p["col"],
-                "row": p["row"],
+                "col": w["col"],
+                "row": w["row"],
             }
-            for w, p in zip(widgets, places, strict=True)
+            for w in db.list_widgets(conn, row["id"])
         ],
     }
 
@@ -227,6 +229,11 @@ def get_screens(conn: Conn):
     return all_screens(conn)
 
 
+@router.get("/widget-sizes")
+def get_widget_sizes():
+    return {kind: [list(size) for size in sizes] for kind, sizes in db.ALLOWED_SIZES.items()}
+
+
 @router.post("/screens", status_code=201)
 def create_screen(body: ScreenCreate, conn: Conn):
     try:
@@ -274,18 +281,7 @@ def delete_screen(id: int, conn: Conn):
 def add_widget(id: int, body: WidgetCreate, conn: Conn):
     row = _require_screen(conn, id)
     try:
-        db.add_widget(conn, id, body.kind, body.w, body.h, body.list_id)
-    except ValueError as e:
-        raise HTTPException(422, str(e)) from e
-    events.publish("lists_changed")
-    return screen_dict(conn, row)
-
-
-@router.put("/screens/{id}/widgets/order")
-def order_widgets(id: int, body: Order, conn: Conn):
-    row = _require_screen(conn, id)
-    try:
-        db.reorder_widgets(conn, id, body.ids)
+        db.add_widget(conn, id, body.kind, body.col, body.row, body.w, body.h, body.list_id)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     events.publish("lists_changed")

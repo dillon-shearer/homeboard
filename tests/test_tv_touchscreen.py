@@ -82,13 +82,13 @@ def _seed(base):
             (
                 "Wide lists",
                 [
-                    {"kind": "lists", "w": 2, "h": 1},
-                    {"kind": "clock", "w": 1, "h": 1},
-                    {"kind": "weather", "w": 1, "h": 1},
+                    {"kind": "lists", "col": 0, "row": 0, "w": 2, "h": 1},
+                    {"kind": "clock", "col": 0, "row": 1, "w": 1, "h": 1},
+                    {"kind": "weather", "col": 1, "row": 1, "w": 1, "h": 1},
                 ],
             ),
-            ("Big clock", [{"kind": "clock", "w": 2, "h": 2}]),
-            ("Big weather", [{"kind": "weather", "w": 2, "h": 2}]),
+            ("Wide clock", [{"kind": "clock", "col": 0, "row": 0, "w": 2, "h": 1}]),
+            ("Big weather", [{"kind": "weather", "col": 0, "row": 0, "w": 2, "h": 2}]),
         ):
             screen = c.post("/api/screens", json={"name": name}).json()
             for body in widgets:
