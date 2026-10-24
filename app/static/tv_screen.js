@@ -9,6 +9,9 @@
   var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var NEEDS = { calendar: ["events"], lists: ["lists"], weather: ["weather"] };
   var EMPTY_TEXT = "Nothing on this screen yet. Add widgets from your phone.";
+  var SPOT_TEXT = "Empty spot. Add a widget on your phone: TV, Edit, then the screen name.";
+  var GRID_COLS = 2;
+  var GRID_ROWS = 2;
   var NO_OPEN_TEXT = "No lists open. Open one from your phone or the Notes screen.";
   var NO_LISTS_TEXT = "No lists yet. Add one from your phone.";
   var TAP_TEXT = "Tap a list above to open it.";
@@ -22,6 +25,22 @@
       gridColumn: (widget.col + 1) + " / span " + widget.w,
       gridRow: (widget.row + 1) + " / span " + widget.h,
     };
+  }
+
+  function freeCells(widgets) {
+    var taken = {};
+    (widgets || []).forEach(function (w) {
+      for (var c = w.col; c < w.col + w.w; c++) {
+        for (var r = w.row; r < w.row + w.h; r++) taken[c + "," + r] = true;
+      }
+    });
+    var out = [];
+    for (var r = 0; r < GRID_ROWS; r++) {
+      for (var c = 0; c < GRID_COLS; c++) {
+        if (!taken[c + "," + r]) out.push({ col: c, row: r, w: 1, h: 1 });
+      }
+    }
+    return out;
   }
 
   function sortedScreens(screens) {
@@ -572,7 +591,9 @@
     WIDGETS: WIDGETS,
     NEEDS: NEEDS,
     EMPTY_TEXT: EMPTY_TEXT,
+    SPOT_TEXT: SPOT_TEXT,
     placement: placement,
+    freeCells: freeCells,
     currentScreen: currentScreen,
     needs: needs,
     isFull: isFull,
@@ -657,6 +678,15 @@
     return card;
   }
 
+  function buildSpot(cell) {
+    var card = el("section", "tv-card spot");
+    var place = placement(cell);
+    card.style.gridColumn = place.gridColumn;
+    card.style.gridRow = place.gridRow;
+    message(card, SPOT_TEXT);
+    screenEl.appendChild(card);
+  }
+
   function render() {
     if (!state.settings) return;
     var screen = currentScreen(state.screens, state.settings ? state.settings.screen_id : null);
@@ -670,6 +700,7 @@
       screenEl.textContent = "";
       if (!widgets.length) screenEl.appendChild(el("section", "tv-card empty", EMPTY_TEXT));
       widgets.forEach(function (w) { buildCard(w, ctx); });
+      if (widgets.length) freeCells(widgets).forEach(buildSpot);
       return;
     }
     var cards = screenEl.querySelectorAll(".tv-card[data-kind]");

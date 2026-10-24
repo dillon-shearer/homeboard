@@ -295,6 +295,12 @@ body.tv {
   margin-top: 0;
 }
 
+.tv-card.spot {
+  border-style: dashed;
+  border-color: var(--w95-shadow);
+  box-shadow: none;
+}
+
 .tv-msg {
   margin: auto;
   color: #404040;
