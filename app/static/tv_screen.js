@@ -20,6 +20,7 @@
   var NO_WEATHER_HINT = "Check the weather location on your phone: TV page, Weather.";
   var TAP_SLOP_PX = 10;
   var SWIPE_CLICK_MS = 600;
+  var SLIDE_MS = 250;
 
   function placement(widget) {
     return {
@@ -58,12 +59,23 @@
 
   function needs(screen) {
     var out = [];
-    ((screen && screen.widgets) || []).forEach(function (w) {
-      (NEEDS[w.kind] || []).forEach(function (key) {
-        if (out.indexOf(key) === -1) out.push(key);
+    (Array.isArray(screen) ? screen : [screen]).forEach(function (one) {
+      ((one && one.widgets) || []).forEach(function (w) {
+        (NEEDS[w.kind] || []).forEach(function (key) {
+          if (out.indexOf(key) === -1) out.push(key);
+        });
       });
     });
     return out;
+  }
+
+  function neighbourSide(dx) {
+    if (dx < 0) return "right";
+    return dx > 0 ? "left" : null;
+  }
+
+  function slideX(px) {
+    return "translateX(" + px + "px)";
   }
 
   function isFull(widget) {
@@ -604,6 +616,8 @@
     freeCells: freeCells,
     currentScreen: currentScreen,
     needs: needs,
+    neighbourSide: neighbourSide,
+    slideX: slideX,
     isFull: isFull,
     formatClock: formatClock,
     formatDate: formatDate,
@@ -653,6 +667,8 @@
   var backoff = 1;
   var touchFrom = null;
   var lastSwipe = 0;
+  var drag = null;
+  var sliding = false;
 
   function context() {
     var now = new Date();
@@ -677,7 +693,7 @@
     })]);
   }
 
-  function buildCard(widget, ctx) {
+  function buildCard(widget, ctx, grid) {
     var card = el("section", "tv-card w-" + widget.kind);
     var place = placement(widget);
     card.style.gridColumn = place.gridColumn;
@@ -686,24 +702,31 @@
     card.setAttribute("data-size", widget.w + "x" + widget.h);
     var def = WIDGETS[widget.kind];
     card.appendChild(el("h2", "", def ? def.title(widget, ctx) : "Widget"));
-    screenEl.appendChild(card);
+    grid.appendChild(card);
     if (!def) message(card, "This widget is not available.");
     else if (failedFor(widget)) message(card, "Could not load. Trying again soon.");
     else def.mount(card, widget, ctx);
     return card;
   }
 
-  function buildSpot(cell) {
+  function buildSpot(cell, grid) {
     var card = el("section", "tv-card spot");
     var place = placement(cell);
     card.style.gridColumn = place.gridColumn;
     card.style.gridRow = place.gridRow;
     message(card, SPOT_TEXT);
-    screenEl.appendChild(card);
+    grid.appendChild(card);
+  }
+
+  function fill(grid, widgets, ctx) {
+    grid.textContent = "";
+    if (!widgets.length) grid.appendChild(el("section", "tv-card empty", EMPTY_TEXT));
+    widgets.forEach(function (w) { buildCard(w, ctx, grid); });
+    if (widgets.length) freeCells(widgets).forEach(function (cell) { buildSpot(cell, grid); });
   }
 
   function render() {
-    if (!state.settings) return;
+    if (!state.settings || drag) return;
     var screen = currentScreen(state.screens, state.settings ? state.settings.screen_id : null);
     var ctx = context();
     var key = layoutKey(screen);
@@ -714,10 +737,7 @@
     if (key !== builtKey) {
       builtKey = key;
       closeDay();
-      screenEl.textContent = "";
-      if (!widgets.length) screenEl.appendChild(el("section", "tv-card empty", EMPTY_TEXT));
-      widgets.forEach(function (w) { buildCard(w, ctx); });
-      if (widgets.length) freeCells(widgets).forEach(buildSpot);
+      fill(screenEl, widgets, ctx);
       return;
     }
     var cards = screenEl.querySelectorAll(".tv-card[data-kind]");
@@ -748,8 +768,7 @@
   function load() {
     var seq = ++loadSeq;
     return Promise.all([getJSON("/api/settings"), getJSON("/api/screens")]).then(function (res) {
-      var screen = currentScreen(res[1], res[0].screen_id);
-      var keys = needs(screen);
+      var keys = needs(res[1]);
       return Promise.all(keys.map(function (key) {
         return getJSON(dataUrl(key)).then(function (data) {
           return { key: key, data: data };
@@ -851,6 +870,100 @@
   function closeDay() {
     dayDialog.hidden = true;
   }
+
+  function screenById(id) {
+    for (var i = 0; i < state.screens.length; i++) if (state.screens[i].id === id) return state.screens[i];
+    return null;
+  }
+
+  function dropNeighbour() {
+    if (drag && drag.grid.parentNode) drag.grid.parentNode.removeChild(drag.grid);
+    drag = null;
+    screenEl.classList.remove("slide");
+    screenEl.style.transform = "";
+  }
+
+  function dragTo(dx, targetScreenId) {
+    if (sliding || !state.settings) return;
+    var side = neighbourSide(dx);
+    var screen = side ? screenById(targetScreenId) : null;
+    if (!screen) {
+      if (drag) {
+        dropNeighbour();
+        render();
+      }
+      return;
+    }
+    if (!drag || drag.target !== screen.id || drag.side !== side) {
+      dropNeighbour();
+      var grid = el("div", "w95-body tv-screen next " + side);
+      drag = { grid: grid, target: screen.id, side: side, key: layoutKey(screen) };
+      screenEl.parentNode.appendChild(grid);
+      fill(grid, screen.widgets, context());
+    }
+    var w = screenEl.parentNode.clientWidth;
+    var x = Math.max(-w, Math.min(w, dx));
+    screenEl.style.transform = slideX(x);
+    drag.grid.style.transform = slideX(x);
+  }
+
+  function slideTo(px) {
+    var grids = [screenEl, drag.grid];
+    sliding = true;
+    screenEl.getBoundingClientRect();
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        screenEl.removeEventListener("transitionend", onEnd);
+        sliding = false;
+        resolve();
+      }
+      function onEnd(e) {
+        if (e.target === screenEl && e.propertyName === "transform") finish();
+      }
+      screenEl.addEventListener("transitionend", onEnd);
+      setTimeout(finish, SLIDE_MS + 50);
+      grids.forEach(function (g) {
+        g.classList.add("slide");
+        g.style.transform = slideX(px);
+      });
+    });
+  }
+
+  function commit() {
+    if (!drag || sliding) return Promise.resolve();
+    var d = drag;
+    var w = screenEl.parentNode.clientWidth;
+    return slideTo(d.side === "right" ? -w : w).then(function () {
+      screenEl.removeEventListener("click", onClick);
+      screenEl.parentNode.removeChild(screenEl);
+      d.grid.classList.remove("next", "left", "right", "slide");
+      d.grid.style.transform = "";
+      d.grid.id = "screen";
+      d.grid.addEventListener("click", onClick);
+      screenEl = d.grid;
+      drag = null;
+      builtKey = d.key;
+      loadSeq++;
+      state.settings = Object.assign({}, state.settings, { screen_id: d.target });
+      closeDay();
+      render();
+    });
+  }
+
+  function cancel() {
+    if (!drag || sliding) return Promise.resolve();
+    return slideTo(0).then(function () {
+      dropNeighbour();
+      render();
+    });
+  }
+
+  TvScreen.dragTo = dragTo;
+  TvScreen.commit = commit;
+  TvScreen.cancel = cancel;
 
   function onTouchStart(e) {
     var t = e.changedTouches[0];
