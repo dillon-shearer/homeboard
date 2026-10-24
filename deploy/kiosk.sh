@@ -12,6 +12,11 @@ if [ -r "$STILL" ]; then
     sleep 0.5
 fi
 
+BOOT=file:///opt/homeboard/deploy/splash/boot.html
+if (exec 3<>/dev/tcp/127.0.0.1/80) 2>/dev/null; then
+    BOOT=http://localhost/boot.html
+fi
+
 exec chromium \
     --kiosk \
     --noerrdialogs \
@@ -20,4 +25,4 @@ exec chromium \
     --incognito \
     --autoplay-policy=no-user-gesture-required \
     --ozone-platform=wayland \
-    file:///opt/homeboard/deploy/splash/boot.html
+    "$BOOT"
