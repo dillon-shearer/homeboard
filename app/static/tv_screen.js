@@ -961,9 +961,18 @@
     });
   }
 
+  function show(screenId) {
+    if (!state.settings || state.settings.screen_id === screenId) return;
+    loadSeq++;
+    state.settings = Object.assign({}, state.settings, { screen_id: screenId });
+    closeDay();
+    render();
+  }
+
   TvScreen.dragTo = dragTo;
   TvScreen.commit = commit;
   TvScreen.cancel = cancel;
+  TvScreen.show = show;
 
   function onTouchStart(e) {
     var t = e.changedTouches[0];

@@ -294,6 +294,7 @@
   let dragging = false;
   let sliding = false;
   let tvDrag = false;
+  let shownId = null;
   let edgeDrag = null;
   let readoutTimer = null;
 
@@ -513,6 +514,7 @@
     const p = sliding ? null : touchPoint(e);
     touchStart = p ? { x: p.x, y: p.y, samples: [p] } : null;
     lastMove = null;
+    shownId = null;
     if (e.target && e.target.addEventListener) {
       e.target.addEventListener("touchmove", onTouchMove, { passive: true });
       e.target.addEventListener("touchend", onTouchEnd, { passive: true, once: true });
@@ -541,9 +543,16 @@
     tvDrag = false;
     const px = dragOffset(state.stops, state.settings, lx, viewWidth());
     if (px === null) return;
+    if (lx && state.settings.channel === "photos") showStop(tv, dragStop(state.stops, state.settings, lx));
     dragging = true;
     channelEl.classList.add("drag");
     moveChannel(px);
+  }
+
+  function showStop(tv, stop) {
+    if (!tv || typeof tv.show !== "function" || stop.channel !== "screen" || stop.screen_id === shownId) return;
+    shownId = stop.screen_id;
+    tv.show(stop.screen_id);
   }
 
   function onTouchEnd(e) {
@@ -579,6 +588,7 @@
       setChannel(stop);
       return;
     }
+    if (state.settings.channel === "photos") showStop(tv, stop);
     slideChannel(px, function () { setChannel(stop); });
   }
 
