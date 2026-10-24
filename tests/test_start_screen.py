@@ -162,7 +162,7 @@ def test_start_has_four_icons_and_no_tv_controls(client):
         ("/admin/tv", "TV"),
     ]
     assert page.count('class="w95-icon"') == 4
-    for gone in ('id="tv-stops"', 'id="channel-timeout"', 'id="screens-edit"', 'id="name-dialog"'):
+    for gone in ('id="channel-timeout"', 'id="weather-location"', 'id="clock-size"'):
         assert gone not in page
     tv = re.search(r'<a class="w95-icon" href="/admin/tv">.*?</a>', page, re.DOTALL).group(0)
     assert '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true">' in tv

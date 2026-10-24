@@ -24,16 +24,6 @@
 <span class="w95-close" aria-hidden="true"></span>
 </div>
 <div class="w95-body">
-<section class="w95-group" aria-labelledby="group-showing">
-<h2 id="group-showing" class="w95-legend">Showing on the TV</h2>
-<div class="w95-row">
-<span id="tv-stops" class="w95-seg">
-<button class="w95-btn" type="button" data-channel="photos" aria-pressed="false">Photos</button>
-<button id="screens-new" class="w95-btn" type="button" hidden>New screen</button>
-<button id="screens-edit" class="w95-btn" type="button" aria-pressed="false">Edit</button>
-</span>
-</div>
-</section>
 <section class="w95-group settings" aria-labelledby="group-timeout">
 <h2 id="group-timeout" class="w95-legend">Back to Photos after</h2>
 <div class="w95-row">
@@ -104,85 +94,6 @@
 </div>
 </main>
 
-<div id="name-dialog" class="modal" hidden>
-<div id="name-backdrop" class="modal-backdrop"></div>
-<form id="name-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="name-title">
-<div class="w95-titlebar">
-<span id="name-title" class="w95-title-text">New screen</span>
-<button type="button" id="name-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
-</div>
-<div class="w95-body">
-<label class="field-label" for="name-input">Name:</label>
-<input id="name-input" class="w95-input" type="text" maxlength="60" enterkeyhint="done" autocomplete="off">
-<p id="name-error" class="w95-note" role="alert" hidden>Could not save the name. Try again.</p>
-<div class="buttons">
-<button type="submit" id="name-save" class="w95-btn default">OK</button>
-<button type="button" id="name-cancel" class="w95-btn">Cancel</button>
-</div>
-</div>
-</form>
-</div>
-
-<div id="screen-dialog" class="modal" hidden>
-<div id="screen-backdrop" class="modal-backdrop"></div>
-<form id="screen-form" class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="screen-title">
-<div class="w95-titlebar">
-<span id="screen-title" class="w95-title-text">Screen</span>
-<button type="button" id="screen-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
-</div>
-<div class="w95-body">
-<label class="field-label" for="screen-name">Name:</label>
-<input id="screen-name" class="w95-input" type="text" maxlength="60" enterkeyhint="done" autocomplete="off">
-<span id="layout-label" class="field-label layout-label">Layout:</span>
-<div id="screen-layout" class="layout" role="group" aria-labelledby="layout-label"></div>
-<div id="widget-row" class="widget-row" hidden>
-<select id="widget-size" class="w95-input" aria-label="Size"></select>
-<span id="widget-list-field" class="widget-list" hidden>
-<label for="widget-list">List</label>
-<select id="widget-list" class="w95-input"></select>
-</span>
-<button type="button" id="widget-left" class="w95-btn move" aria-label="Move left"><svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="2,6 9,1 9,11" fill="#000"/></svg></button>
-<button type="button" id="widget-right" class="w95-btn move" aria-label="Move right"><svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="3,1 10,6 3,11" fill="#000"/></svg></button>
-<button type="button" id="widget-remove" class="w95-btn">Remove</button>
-</div>
-<div id="widget-add" class="widget-add" hidden>
-<span class="field-label">Add widget:</span>
-<div class="widget-kinds">
-<button type="button" class="w95-btn" data-kind="clock">Clock</button>
-<button type="button" class="w95-btn" data-kind="weather">Weather</button>
-<button type="button" class="w95-btn" data-kind="calendar">Calendar</button>
-<button type="button" class="w95-btn" data-kind="lists">Lists</button>
-</div>
-</div>
-<p id="screen-error" class="w95-note" role="alert" hidden></p>
-<div class="buttons">
-<button type="button" id="screen-delete" class="w95-btn del">Delete screen</button>
-<button type="submit" id="screen-save" class="w95-btn default">Save</button>
-<button type="button" id="screen-cancel" class="w95-btn">Cancel</button>
-</div>
-</div>
-</form>
-</div>
-
-<div id="screen-delete-dialog" class="modal" hidden>
-<div id="screen-delete-backdrop" class="modal-backdrop"></div>
-<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="screen-delete-title">
-<div class="w95-titlebar">
-<span id="screen-delete-title" class="w95-title-text">Delete screen</span>
-<button type="button" id="screen-delete-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
-</div>
-<div class="w95-body">
-<div class="confirm">
-<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
-<p id="screen-delete-text">Delete this screen and its widgets?</p>
-</div>
-<div class="buttons">
-<button type="button" id="screen-confirm-delete" class="w95-btn default">Delete</button>
-<button type="button" id="screen-confirm-cancel" class="w95-btn">Cancel</button>
-</div>
-</div>
-</div>
-</div>
 <script src="{{ static_url('tv_admin.js') }}"></script>
 </body>
 </html>
