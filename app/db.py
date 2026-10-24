@@ -21,6 +21,7 @@ SETTINGS_FIELDS = (
     "clock_pos",
     "caption_pos",
     "clock_on_top",
+    "brightness",
     "weather_location",
 )
 FITS = ("contain", "cover")
@@ -223,6 +224,10 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
     for k in ("clock_pos", "caption_pos"):
         if k in fields and fields[k] not in POSITIONS:
             raise ValueError(f"{k} must be one of {', '.join(POSITIONS)}")
+    if "brightness" in fields:
+        v = fields["brightness"]
+        if isinstance(v, bool) or not isinstance(v, int) or not 10 <= v <= 100:
+            raise ValueError("brightness must be an integer from 10 to 100")
     if "screen_id" in fields:
         fields["screen_id"] = _check_screen_id(conn, fields["screen_id"])
     if "weather_location" in fields:

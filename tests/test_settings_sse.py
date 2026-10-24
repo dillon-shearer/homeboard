@@ -34,6 +34,7 @@ def test_put_interval_persists(client):
         "clock_pos",
         "caption_pos",
         "clock_on_top",
+        "brightness",
         "weather_location",
         "weather_lat",
         "weather_lon",

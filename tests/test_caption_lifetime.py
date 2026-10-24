@@ -47,6 +47,7 @@ function el(id) {
     getAttribute: (k) => (k in attrs ? attrs[k] : null),
     removeAttribute: (k) => { delete attrs[k]; },
     appendChild: (c) => { c.parentNode = e; },
+    addEventListener: () => {},
   };
   Object.defineProperty(e, "src", {
     get: () => attrs.src,
@@ -61,6 +62,7 @@ function el(id) {
 const els = {
   "layer-a": el("layer-a"), "layer-b": el("layer-b"), caption: el("caption"), clock: el("clock"),
   channel: el("channel"), overlay: el("overlay"), splash: el("splash"),
+  dim: el("dim"), edge: el("edge"), brightness: el("brightness"),
 };
 for (const r of ["top", "middle", "bottom"]) {
   for (const c of ["left", "center", "right"]) els[`cell-${r}-${c}`] = el(`cell-${r}-${c}`);

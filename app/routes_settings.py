@@ -33,6 +33,7 @@ class SettingsPatch(BaseModel):
     clock_pos: str | None = None
     caption_pos: str | None = None
     clock_on_top: bool | None = None
+    brightness: int | None = None
     weather_location: str | None = None
 
 
@@ -55,6 +56,7 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "clock_pos": row["clock_pos"],
         "caption_pos": row["caption_pos"],
         "clock_on_top": bool(row["clock_on_top"]),
+        "brightness": row["brightness"],
         "weather_location": row["weather_location"],
         "weather_lat": row["weather_lat"],
         "weather_lon": row["weather_lon"],
