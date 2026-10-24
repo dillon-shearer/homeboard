@@ -400,6 +400,7 @@
     if (!items.length) ul.appendChild(el("li", "none", "Nothing here"));
     items.forEach(function (item) {
       var li = el("li", item.done ? "done" : item.pinned ? "pin" : "");
+      if (!notes) li.setAttribute("data-item", item.id);
       if (!notes && (item.done || !item.pinned)) li.appendChild(el("span", item.done ? "box tick" : "box"));
       li.appendChild(document.createTextNode(item.text));
       ul.appendChild(li);
@@ -617,6 +618,7 @@
     tabLabel: tabLabel,
     splitTracks: splitTracks,
     moreLabel: moreLabel,
+    itemList: itemList,
     weatherToday: weatherToday,
     hiLo: hiLo,
     rainText: rainText,
@@ -803,6 +805,22 @@
     }).catch(load);
   }
 
+  function setDone(id, done) {
+    (state.data.lists || []).forEach(function (l) {
+      (l.items || []).forEach(function (item) {
+        if (item.id === id) item.done = done;
+      });
+    });
+    render();
+    fetch("/api/items/" + id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: done }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+    }).catch(load);
+  }
+
   function onTouchStart(e) {
     var t = e.changedTouches[0];
     touchFrom = t ? { x: t.clientX, y: t.clientY } : null;
@@ -818,6 +836,11 @@
 
   function onClick(e) {
     if (Date.now() - lastSwipe < SWIPE_CLICK_MS) return;
+    var row = e.target.closest ? e.target.closest("[data-item]") : null;
+    if (row) {
+      setDone(Number(row.getAttribute("data-item")), !row.classList.contains("done"));
+      return;
+    }
     var target = e.target.closest ? e.target.closest("[data-open], [data-close]") : null;
     if (!target) return;
     var open = target.hasAttribute("data-open");

@@ -98,6 +98,14 @@ body.tv {
   box-shadow: inset 1px 1px 0 var(--w95-dark);
 }
 
+.tv-card li[data-item] {
+  min-height: 48px;
+}
+
+.tv-card li[data-item]:active {
+  box-shadow: inset 1px 1px 0 var(--w95-dark), inset -1px -1px 0 var(--w95-light), inset 2px 2px 0 var(--w95-shadow);
+}
+
 .tv-card li[hidden],
 .tv-card.notes li[hidden] {
   display: none;
