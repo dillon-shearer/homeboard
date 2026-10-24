@@ -118,6 +118,7 @@
   function renderSettings(s) {
     current = s;
     showChannel(s.channel, s.screen_id);
+    if (!$("channel-timeout")) return;
     $("channel-timeout").value = String(s.channel_timeout_min);
     renderWeather(s);
     $("clock-size").value = s.clock_size;
@@ -630,6 +631,16 @@
   }
 
   function init() {
+    if ($("tv-stops")) initScreens();
+    if ($("channel-timeout")) initSettings();
+    loadSettings().catch(function () {
+      showSettingsError("Could not load settings");
+    });
+    loadStatus();
+    setInterval(loadStatus, STATUS_MS);
+  }
+
+  function initScreens() {
     var buttons = document.querySelectorAll("[data-channel]");
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener("click", pick);
     $("screens-edit").addEventListener("click", function () {
@@ -637,21 +648,6 @@
       render();
     });
     $("screens-new").addEventListener("click", openName);
-    $("channel-timeout").addEventListener("change", function (e) {
-      putSettings({ channel_timeout_min: parseInt(e.target.value, 10) });
-    });
-    $("weather-location").addEventListener("change", saveWeather);
-    $("weather-location").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") e.target.blur();
-    });
-    makeStepper("clock-size", "clock_size", 2, 12);
-    makeStepper("caption-size", "caption_size", 2, 12);
-    RADIO_KEYS.forEach(function (key) {
-      var radios = document.querySelectorAll('input[name="' + key + '"]');
-      for (var j = 0; j < radios.length; j++) radios[j].addEventListener("change", onRadioChange);
-    });
-    var checks = document.querySelectorAll(".checks input[data-key]");
-    for (var n = 0; n < checks.length; n++) checks[n].addEventListener("change", onCheckChange);
     $("name-form").addEventListener("submit", saveName);
     $("name-cancel").addEventListener("click", closeName);
     $("name-close").addEventListener("click", closeName);
@@ -678,14 +674,26 @@
       else if (!$("name-dialog").hidden) closeName();
       else if (!$("screen-dialog").hidden) closeScreen();
     });
-
-    loadSettings().catch(function () {
-      showSettingsError("Could not load settings");
-    });
     loadScreens();
-    loadStatus();
-    setInterval(loadStatus, STATUS_MS);
     setInterval(loadScreens, STATUS_MS);
+  }
+
+  function initSettings() {
+    $("channel-timeout").addEventListener("change", function (e) {
+      putSettings({ channel_timeout_min: parseInt(e.target.value, 10) });
+    });
+    $("weather-location").addEventListener("change", saveWeather);
+    $("weather-location").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") e.target.blur();
+    });
+    makeStepper("clock-size", "clock_size", 2, 12);
+    makeStepper("caption-size", "caption_size", 2, 12);
+    RADIO_KEYS.forEach(function (key) {
+      var radios = document.querySelectorAll('input[name="' + key + '"]');
+      for (var j = 0; j < radios.length; j++) radios[j].addEventListener("change", onRadioChange);
+    });
+    var checks = document.querySelectorAll(".checks input[data-key]");
+    for (var n = 0; n < checks.length; n++) checks[n].addEventListener("change", onCheckChange);
   }
 
   init();

@@ -58,7 +58,7 @@ def test_js_packer_matches_the_server_rule():
 
 
 def test_screen_window_markup(client):
-    page = client.get("/admin/tv").text
+    page = client.get("/admin").text
     start = page.index('<div id="screen-dialog" class="modal" hidden>')
     html = page[start : page.index('<div id="screen-delete-dialog"', start)]
     assert 'class="w95-window dialog"' in html
@@ -110,7 +110,7 @@ def test_screen_window_in_headless_chrome(server, tmp_path):  # noqa: F811
     q = "document.querySelector"
     shown = "!document.getElementById({}).hidden"
     try:
-        chrome.send("Page.navigate", {"url": f"{server}/admin/tv"})
+        chrome.send("Page.navigate", {"url": f"{server}/admin"})
         _wait(lambda: chrome.eval("document.querySelectorAll('[data-screen-id]').length") > 0)
         chrome.eval("document.getElementById('screens-edit').click()")
         chrome.eval("document.getElementById('screens-new').click()")

@@ -38,10 +38,9 @@ def test_tv_page_loads_its_assets_in_the_admin_shell(client):
 def test_tv_page_groups_in_order(client):
     page = client.get("/admin/tv").text
     legends = re.findall(r'<h2 id="group-\w+" class="w95-legend">([^<]+)</h2>', page)
-    assert legends == ["Showing on the TV", "Back to Photos after", "Weather", "Clock and caption"]
-    row = re.search(r'<span id="tv-stops" class="w95-seg">(.*?)</span>', page, re.DOTALL).group(1)
-    assert re.findall(r"<button[^>]*>([^<]*)</button>", row) == ["Photos", "New screen", "Edit"]
-    assert 'id="screens-new" class="w95-btn" type="button" hidden' in row
+    assert legends == ["Back to Photos after", "Weather", "Clock and caption"]
+    for gone in ('id="tv-stops"', 'id="screens-edit"', 'id="name-dialog"', 'id="screen-dialog"'):
+        assert gone not in page
     assert '<select id="channel-timeout"' in page
     assert '<label for="weather-location">Location (zip or town)</label>' in page
     assert '<input id="weather-location" class="w95-input" type="text" maxlength="40"' in page
@@ -49,6 +48,19 @@ def test_tv_page_groups_in_order(client):
     for el in ('id="clock-size"', 'id="caption-size"', 'name="clock_pos"', 'name="caption_pos"'):
         assert el in page
     assert '<input type="checkbox" data-key="captions">' in page
+
+
+def test_start_page_shows_the_tv_row_last(client):
+    page = client.get("/admin").text
+    legends = re.findall(r'<h2 id="group-\w+" class="w95-legend">([^<]+)</h2>', page)
+    assert legends == ["Board", "Showing on the TV"]
+    assert page.index('id="group-showing"') < page.index('class="w95-footlink"')
+    assert re.search(r'<link rel="stylesheet" href="/static/admin\.css\?v=\d+">', page)
+    assert re.search(r'<script src="/static/tv_admin\.js\?v=\d+"></script>', page)
+    row = re.search(r'<span id="tv-stops" class="w95-seg">(.*?)</span>', page, re.DOTALL).group(1)
+    assert re.findall(r"<button[^>]*>([^<]*)</button>", row) == ["Photos", "New screen", "Edit"]
+    assert 'id="screens-new" class="w95-btn" type="button" hidden' in row
+    assert 'id="settings-error"' in page
     dialog = re.search(r'<div id="name-dialog" class="modal" hidden>.*?</form>', page, re.DOTALL)
     assert dialog and 'class="w95-window dialog"' in dialog.group(0)
     assert '<span id="name-title" class="w95-title-text">New screen</span>' in dialog.group(0)
@@ -308,9 +320,9 @@ def _settings(server):  # noqa: F811
     return httpx.get(f"{server}/api/settings").json()
 
 
-def _open_tv(server, tmp_path):  # noqa: F811
+def _open_tv(server, tmp_path, path="/admin/tv"):  # noqa: F811
     chrome = _Chrome(tmp_path / "chrome", 412, 900)
-    chrome.send("Page.navigate", {"url": f"{server}/admin/tv"})
+    chrome.send("Page.navigate", {"url": f"{server}{path}"})
     return chrome
 
 
@@ -325,7 +337,7 @@ def test_tv_row_shows_screens_and_picks_one(server, tmp_path):  # noqa: F811
     want = ["Photos"] + [s["name"] for s in screens] + ["Edit"]
     target = screens[-1]["id"]
     button = f"document.querySelector('[data-screen-id=\"{target}\"]')"
-    chrome = _open_tv(server, tmp_path)
+    chrome = _open_tv(server, tmp_path, "/admin")
     try:
         row = _wait(lambda: json.loads(chrome.eval(ROW) or "[]") == want)
         chrome.eval(f"{button}.click()")
@@ -345,7 +357,7 @@ def test_tv_edit_down_arrow_swaps_first_two_screens(server, tmp_path):  # noqa: 
     def order():
         return [s["id"] for s in httpx.get(f"{server}/api/screens").json()]
 
-    chrome = _open_tv(server, tmp_path)
+    chrome = _open_tv(server, tmp_path, "/admin")
     try:
         _wait(
             lambda: chrome.eval("document.querySelectorAll('[data-screen-id]').length") == len(ids)
