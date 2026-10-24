@@ -1,5 +1,52 @@
-(function () {
+(function (root) {
   "use strict";
+
+  var COLS = 2;
+  var ROWS = 2;
+  var SIZES = [[2, 2], [2, 1], [1, 2], [1, 1]];
+
+  function pack(widgets) {
+    var taken = {};
+    var placed = [];
+    for (var i = 0; i < widgets.length; i++) {
+      var w = widgets[i].w;
+      var h = widgets[i].h;
+      var spot = null;
+      for (var r = 0; r < ROWS && !spot; r++) {
+        for (var c = 0; c < COLS && !spot; c++) if (!taken[c + "," + r]) spot = [c, r];
+      }
+      if (!spot || spot[0] + w > COLS || spot[1] + h > ROWS) return null;
+      for (var dc = 0; dc < w; dc++) {
+        for (var dr = 0; dr < h; dr++) {
+          var key = (spot[0] + dc) + "," + (spot[1] + dr);
+          if (taken[key]) return null;
+          taken[key] = true;
+        }
+      }
+      placed.push({ id: widgets[i].id, col: spot[0], row: spot[1], w: w, h: h });
+    }
+    return placed;
+  }
+
+  function sizeOptions(widgets, index) {
+    return SIZES.filter(function (s) {
+      return pack(widgets.map(function (wd, i) {
+        return i === index ? { id: wd.id, w: s[0], h: s[1] } : wd;
+      })) !== null;
+    }).map(function (s) { return s[0] + "x" + s[1]; });
+  }
+
+  function addSize(widgets) {
+    for (var i = 0; i < SIZES.length; i++) {
+      if (pack(widgets.concat([{ id: null, w: SIZES[i][0], h: SIZES[i][1] }]))) return SIZES[i][0] + "x" + SIZES[i][1];
+    }
+    return null;
+  }
+
+  var TvAdmin = { SIZES: SIZES, pack: pack, sizeOptions: sizeOptions, addSize: addSize };
+  root.TvAdmin = TvAdmin;
+  if (typeof module !== "undefined" && module.exports) module.exports = TvAdmin;
+  if (typeof document === "undefined") return;
 
   var STATUS_MS = 10000;
   var STEP_DEBOUNCE_MS = 400;
@@ -10,8 +57,11 @@
   var screens = [];
   var shown = { channel: null, screen_id: null };
   var editing = false;
-  var renameId = null;
   var current = {};
+  var win = null;
+  var lists = [];
+  var KIND_NAMES = { clock: "Clock", weather: "Weather", calendar: "Calendar", lists: "Lists" };
+  var SIZE_NAMES = { "2x2": "Full (2x2)", "2x1": "Wide (2x1)", "1x2": "Tall (1x2)", "1x1": "Quarter (1x1)" };
 
   function $(id) {
     return document.getElementById(id);
@@ -130,14 +180,14 @@
     group.className = "stop-edit";
     group.setAttribute("data-edit-screen", String(screen.id));
     var up = button("w95-btn move", UP, "Move " + screen.name + " up");
-    var name = button("w95-btn", "", "Rename " + screen.name);
+    var name = button("w95-btn", "", "Edit " + screen.name);
     var down = button("w95-btn move", DOWN, "Move " + screen.name + " down");
     name.textContent = screen.name;
     up.disabled = i === 0;
     down.disabled = i === screens.length - 1;
     up.addEventListener("click", function () { move(i, -1); });
     down.addEventListener("click", function () { move(i, 1); });
-    name.addEventListener("click", function () { openName(screen); });
+    name.addEventListener("click", function () { openScreen(screen); });
     group.appendChild(up);
     group.appendChild(name);
     group.appendChild(down);
@@ -159,8 +209,12 @@
     showChannel(shown.channel);
   }
 
+  function busy() {
+    return win !== null;
+  }
+
   function setScreens(list) {
-    if (!Array.isArray(list)) return;
+    if (!Array.isArray(list) || busy()) return;
     var next = list.map(function (s) { return { id: s.id, name: s.name }; });
     if (JSON.stringify(next) === JSON.stringify(screens)) return;
     screens = next;
@@ -168,7 +222,8 @@
   }
 
   function loadScreens() {
-    getJSON("/api/screens").then(setScreens).catch(function () {});
+    if (busy()) return Promise.resolve();
+    return getJSON("/api/screens").then(setScreens).catch(function () {});
   }
 
   function move(i, step) {
@@ -184,10 +239,8 @@
     });
   }
 
-  function openName(screen) {
-    renameId = screen ? screen.id : null;
-    $("name-title").textContent = screen ? "Rename" : "New screen";
-    $("name-input").value = screen ? screen.name : "";
+  function openName() {
+    $("name-input").value = "";
     $("name-error").hidden = true;
     $("name-dialog").hidden = false;
     $("name-input").focus();
@@ -195,7 +248,6 @@
 
   function closeName() {
     $("name-dialog").hidden = true;
-    renameId = null;
   }
 
   function saveName(e) {
@@ -205,14 +257,268 @@
       $("name-input").focus();
       return;
     }
-    var req = renameId === null
-      ? send("POST", "/api/screens", { name: name })
-      : send("PATCH", "/api/screens/" + renameId, { name: name });
-    req.then(function () {
+    send("POST", "/api/screens", { name: name }).then(function (created) {
       closeName();
-      loadScreens();
+      return loadScreens().then(function () { openScreen(created); });
     }).catch(function () {
       $("name-error").hidden = false;
+    });
+  }
+
+  function widgetLabel(wd) {
+    if (wd.kind === "lists" && wd.w === 1 && wd.h === 1) {
+      for (var i = 0; i < lists.length; i++) if (lists[i].id === wd.list_id) return lists[i].name;
+    }
+    return KIND_NAMES[wd.kind] || wd.kind;
+  }
+
+  function selectedIndex() {
+    for (var i = 0; i < win.widgets.length; i++) if (win.widgets[i].id === win.selected) return i;
+    return -1;
+  }
+
+  function swapped(i, j) {
+    var out = win.widgets.slice();
+    var t = out[i];
+    out[i] = out[j];
+    out[j] = t;
+    return out;
+  }
+
+  function canMove(i, step) {
+    var j = i + step;
+    return j >= 0 && j < win.widgets.length && pack(swapped(i, j)) !== null;
+  }
+
+  function showScreenError(msg) {
+    $("screen-error").textContent = msg || "";
+    $("screen-error").hidden = !msg;
+  }
+
+  function option(value, text) {
+    var o = document.createElement("option");
+    o.value = value;
+    o.textContent = text;
+    return o;
+  }
+
+  function cell(cls, text) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = cls;
+    b.textContent = text;
+    return b;
+  }
+
+  function renderLayout() {
+    var box = $("screen-layout");
+    box.textContent = "";
+    var taken = {};
+    win.widgets.forEach(function (wd) {
+      var on = wd.id === win.selected;
+      var b = cell(on ? "cell on" : "cell", widgetLabel(wd));
+      b.setAttribute("data-widget-id", String(wd.id));
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.style.gridColumn = (wd.col + 1) + " / span " + wd.w;
+      b.style.gridRow = (wd.row + 1) + " / span " + wd.h;
+      b.addEventListener("click", function () { selectWidget(wd.id); });
+      for (var dc = 0; dc < wd.w; dc++) {
+        for (var dr = 0; dr < wd.h; dr++) taken[(wd.col + dc) + "," + (wd.row + dr)] = true;
+      }
+      box.appendChild(b);
+    });
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        if (taken[c + "," + r]) continue;
+        var add = cell("cell empty", "+");
+        add.setAttribute("aria-label", "Add widget");
+        add.setAttribute("data-cell", c + "," + r);
+        add.style.gridColumn = String(c + 1);
+        add.style.gridRow = String(r + 1);
+        add.addEventListener("click", openAdd);
+        box.appendChild(add);
+      }
+    }
+    renderWidgetRow();
+  }
+
+  function renderWidgetRow() {
+    var i = selectedIndex();
+    var wd = win.widgets[i];
+    $("widget-row").hidden = !wd;
+    $("widget-add").hidden = !win.adding;
+    if (!wd) return;
+    var size = $("widget-size");
+    size.textContent = "";
+    sizeOptions(win.widgets, i).forEach(function (s) { size.appendChild(option(s, SIZE_NAMES[s])); });
+    size.value = wd.w + "x" + wd.h;
+    var single = wd.kind === "lists" && wd.w === 1 && wd.h === 1;
+    $("widget-list-field").hidden = !single;
+    if (single) {
+      var sel = $("widget-list");
+      sel.textContent = "";
+      var known = lists.some(function (l) { return l.id === wd.list_id; });
+      if (!known) sel.appendChild(option("", "Pick a list"));
+      lists.forEach(function (l) { sel.appendChild(option(String(l.id), l.name)); });
+      sel.value = known ? String(wd.list_id) : "";
+    }
+    $("widget-left").disabled = !canMove(i, -1);
+    $("widget-right").disabled = !canMove(i, 1);
+  }
+
+  function applyScreen(s, selected) {
+    if (!win || !s) return;
+    win.widgets = Array.isArray(s.widgets) ? s.widgets : [];
+    if (selected !== undefined) win.selected = selected;
+    if (selectedIndex() === -1) win.selected = null;
+    renderLayout();
+  }
+
+  function refreshScreen() {
+    var ed = win;
+    return getJSON("/api/screens").then(function (all) {
+      if (win !== ed) return;
+      var s = all.filter(function (x) { return x.id === ed.id; })[0];
+      if (!s) {
+        closeScreen();
+        return;
+      }
+      applyScreen(s);
+    }).catch(function () {
+      if (win === ed) showScreenError("Could not load the screen. Try again.");
+    });
+  }
+
+  function windowCall(method, url, body, msg, pickNew) {
+    var ed = win;
+    var before = win.widgets.map(function (wd) { return wd.id; });
+    showScreenError("");
+    return send(method, url, body).then(function (s) {
+      if (win !== ed) return;
+      if (!s || !Array.isArray(s.widgets)) return refreshScreen();
+      var added = pickNew ? s.widgets.filter(function (wd) { return before.indexOf(wd.id) === -1; })[0] : null;
+      applyScreen(s, added ? added.id : undefined);
+    }).catch(function () {
+      if (win !== ed) return;
+      showScreenError(msg);
+      refreshScreen();
+    });
+  }
+
+  function openScreen(screen) {
+    win = { id: screen.id, name: screen.name, widgets: [], selected: null, adding: false };
+    $("screen-name").value = screen.name;
+    showScreenError("");
+    $("screen-layout").textContent = "";
+    $("widget-row").hidden = true;
+    $("widget-add").hidden = true;
+    $("screen-delete-dialog").hidden = true;
+    $("screen-dialog").hidden = false;
+    var ed = win;
+    getJSON("/api/lists").then(function (data) {
+      if (Array.isArray(data)) lists = data.map(function (l) { return { id: l.id, name: l.name }; });
+    }).catch(function () {}).then(function () {
+      if (win === ed) return refreshScreen();
+    });
+  }
+
+  function closeScreen() {
+    $("screen-dialog").hidden = true;
+    $("screen-delete-dialog").hidden = true;
+    win = null;
+    return loadScreens();
+  }
+
+  function selectWidget(id) {
+    win.selected = id;
+    win.adding = false;
+    renderLayout();
+  }
+
+  function openAdd() {
+    win.selected = null;
+    win.adding = true;
+    renderLayout();
+  }
+
+  function addWidget(e) {
+    if (!win) return;
+    var kind = e.currentTarget.getAttribute("data-kind");
+    var body = { kind: kind };
+    if (kind === "lists" && addSize(win.widgets) === "1x1" && lists.length) body.list_id = lists[0].id;
+    win.adding = false;
+    windowCall("POST", "/api/screens/" + win.id + "/widgets", body, "Could not add the widget. Try again.", true);
+  }
+
+  function onSizeChange() {
+    var wd = win && win.widgets[selectedIndex()];
+    if (!wd) return;
+    var parts = $("widget-size").value.split("x");
+    windowCall("PATCH", "/api/widgets/" + wd.id, { w: Number(parts[0]), h: Number(parts[1]) }, "Could not change the size. Try again.");
+  }
+
+  function onListChange() {
+    var wd = win && win.widgets[selectedIndex()];
+    var v = $("widget-list").value;
+    if (!wd || !v) return;
+    windowCall("PATCH", "/api/widgets/" + wd.id, { list_id: Number(v) }, "Could not pick that list. Try again.");
+  }
+
+  function moveWidget(step) {
+    if (!win) return;
+    var i = selectedIndex();
+    if (i === -1 || !canMove(i, step)) return;
+    var ids = swapped(i, i + step).map(function (wd) { return wd.id; });
+    windowCall("PUT", "/api/screens/" + win.id + "/widgets/order", { ids: ids }, "Could not move the widget. Try again.");
+  }
+
+  function removeWidget() {
+    var wd = win && win.widgets[selectedIndex()];
+    if (!wd) return;
+    win.selected = null;
+    windowCall("DELETE", "/api/widgets/" + wd.id, undefined, "Could not remove the widget. Try again.");
+  }
+
+  function saveScreen(e) {
+    e.preventDefault();
+    if (!win) return;
+    var name = $("screen-name").value.trim();
+    if (!name) {
+      $("screen-name").focus();
+      return;
+    }
+    if (name === win.name) {
+      closeScreen();
+      return;
+    }
+    var ed = win;
+    send("PATCH", "/api/screens/" + win.id, { name: name }).then(function () {
+      if (win === ed) closeScreen();
+    }).catch(function () {
+      if (win === ed) showScreenError("Could not save the name. Try again.");
+    });
+  }
+
+  function openDeleteScreen() {
+    if (!win) return;
+    $("screen-delete-text").textContent = "Delete \"" + win.name + "\" and its widgets? The TV goes back to Photos if it is showing it.";
+    $("screen-delete-dialog").hidden = false;
+    $("screen-confirm-delete").focus();
+  }
+
+  function closeDeleteScreen() {
+    $("screen-delete-dialog").hidden = true;
+  }
+
+  function deleteScreen() {
+    if (!win) return;
+    var ed = win;
+    closeDeleteScreen();
+    send("DELETE", "/api/screens/" + win.id).then(function () {
+      if (win === ed) closeScreen();
+      loadSettings().catch(function () {});
+    }).catch(function () {
+      if (win === ed) showScreenError("Could not delete the screen. Try again.");
     });
   }
 
@@ -330,7 +636,7 @@
       editing = !editing;
       render();
     });
-    $("screens-new").addEventListener("click", function () { openName(null); });
+    $("screens-new").addEventListener("click", openName);
     $("channel-timeout").addEventListener("change", function (e) {
       putSettings({ channel_timeout_min: parseInt(e.target.value, 10) });
     });
@@ -350,8 +656,27 @@
     $("name-cancel").addEventListener("click", closeName);
     $("name-close").addEventListener("click", closeName);
     $("name-backdrop").addEventListener("click", closeName);
+    $("screen-form").addEventListener("submit", saveScreen);
+    $("screen-cancel").addEventListener("click", closeScreen);
+    $("screen-close").addEventListener("click", closeScreen);
+    $("screen-backdrop").addEventListener("click", closeScreen);
+    $("screen-delete").addEventListener("click", openDeleteScreen);
+    $("screen-confirm-delete").addEventListener("click", deleteScreen);
+    $("screen-confirm-cancel").addEventListener("click", closeDeleteScreen);
+    $("screen-delete-close").addEventListener("click", closeDeleteScreen);
+    $("screen-delete-backdrop").addEventListener("click", closeDeleteScreen);
+    $("widget-size").addEventListener("change", onSizeChange);
+    $("widget-list").addEventListener("change", onListChange);
+    $("widget-left").addEventListener("click", function () { moveWidget(-1); });
+    $("widget-right").addEventListener("click", function () { moveWidget(1); });
+    $("widget-remove").addEventListener("click", removeWidget);
+    var kinds = document.querySelectorAll("[data-kind]");
+    for (var k = 0; k < kinds.length; k++) kinds[k].addEventListener("click", addWidget);
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !$("name-dialog").hidden) closeName();
+      if (e.key !== "Escape") return;
+      if (!$("screen-delete-dialog").hidden) closeDeleteScreen();
+      else if (!$("name-dialog").hidden) closeName();
+      else if (!$("screen-dialog").hidden) closeScreen();
     });
 
     loadSettings().catch(function () {
@@ -364,4 +689,4 @@
   }
 
   init();
-})();
+})(typeof window !== "undefined" ? window : globalThis);

@@ -48,13 +48,12 @@
     return patch;
   }
 
-  function listPatch(list, name, kind, screenId) {
+  function listPatch(list, name, kind, tvOpen) {
     var n = (name || "").trim();
     var patch = {};
     if (n !== "" && n !== list.name) patch.name = n;
     if (kind && kind !== list.kind) patch.kind = kind;
-    var current = list.screen_id == null ? null : list.screen_id;
-    if (screenId !== undefined && screenId !== current) patch.screen_id = screenId;
+    if (tvOpen !== undefined && tvOpen !== !!list.tv_open) patch.tv_open = tvOpen;
     return patch;
   }
 
@@ -304,7 +303,7 @@
   function onTabsClick(e) {
     var b = e.target.closest(".tab");
     if (!b) return;
-    if (b.id === "add-tab") openName("new");
+    if (b.id === "add-tab") openName();
     else selectTab(Number(b.getAttribute("data-id")));
   }
 
@@ -591,29 +590,6 @@
     });
   }
 
-  var screenPrev = "";
-
-  function screenValue() {
-    var v = $("list-screen").value;
-    if ($("list-screen").disabled || v === "new") return undefined;
-    return v === "" ? null : Number(v);
-  }
-
-  function fillScreens(screens, value) {
-    var sel = $("list-screen");
-    var last = sel.lastElementChild;
-    while (sel.options.length > 2) sel.removeChild(sel.options[1]);
-    screens.forEach(function (sc) {
-      var o = document.createElement("option");
-      o.value = String(sc.id);
-      o.textContent = sc.name;
-      sel.insertBefore(o, last);
-    });
-    sel.value = value;
-    if (sel.value !== value) sel.value = "";
-    screenPrev = sel.value;
-  }
-
   function openOptions() {
     var list = currentList();
     if (!list || editing) return;
@@ -622,20 +598,9 @@
     $("list-name").value = list.name;
     var radios = document.querySelectorAll('input[name="kind"]');
     for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === list.kind;
-    var sel = $("list-screen");
-    var value = list.screen_id == null ? "" : String(list.screen_id);
-    fillScreens([], "");
-    sel.disabled = true;
+    $("list-tv-open").checked = !!list.tv_open;
     $("list-dialog").hidden = false;
     $("list-name").focus();
-    var ed = editing;
-    getJSON("/api/screens").then(function (screens) {
-      if (editing !== ed) return;
-      sel.disabled = false;
-      fillScreens(screens, value);
-    }, function () {
-      if (editing === ed) showError("Could not load the TV choices. Try again.");
-    });
   }
 
   function closeOptions() {
@@ -658,35 +623,10 @@
       return;
     }
     var kind = document.querySelector('input[name="kind"]:checked');
-    var patch = listPatch(list, $("list-name").value, kind && kind.value, screenValue());
+    var patch = listPatch(list, $("list-name").value, kind && kind.value, $("list-tv-open").checked);
     closeOptions();
     if (!Object.keys(patch).length) return;
     send("PATCH", "/api/lists/" + list.id, patch).then(load, fail("Could not save the list. Try again."));
-  }
-
-  function onScreenChange() {
-    var sel = $("list-screen");
-    if (sel.value === "new") openName("screen");
-    else screenPrev = sel.value;
-  }
-
-  function addScreen(name) {
-    var sel = $("list-screen");
-    var ed = editing;
-    send("POST", "/api/screens", { name: name }).then(function (r) {
-      return r.json();
-    }).then(function (created) {
-      if (editing !== ed) return;
-      var o = document.createElement("option");
-      o.value = String(created.id);
-      o.textContent = created.name;
-      sel.insertBefore(o, sel.lastElementChild);
-      sel.value = o.value;
-      screenPrev = o.value;
-    }, function () {
-      if (editing === ed) sel.value = screenPrev;
-      showError("Could not add that to the TV. Try again.");
-    });
   }
 
   function deleteFromOptions() {
@@ -700,11 +640,7 @@
     send("POST", "/api/lists/" + list.id + "/clear-done").then(load, fail("Could not clear the done items. Try again."));
   }
 
-  var nameMode = null;
-
-  function openName(mode) {
-    nameMode = mode;
-    $("name-title").textContent = mode === "screen" ? "New screen" : "New list";
+  function openName() {
     $("name-input").value = "";
     $("name-dialog").hidden = false;
     $("name-input").focus();
@@ -712,11 +648,6 @@
 
   function closeName() {
     $("name-dialog").hidden = true;
-    if (nameMode === "screen") {
-      $("list-screen").value = screenPrev;
-      $("list-screen").focus();
-    }
-    nameMode = null;
   }
 
   function saveName(e) {
@@ -726,26 +657,16 @@
       $("name-input").focus();
       return;
     }
-    var mode = nameMode;
-    if (mode === "screen") {
-      $("name-dialog").hidden = true;
-      nameMode = null;
-      $("list-screen").focus();
-      addScreen(name);
-      return;
-    }
     closeName();
-    if (mode === "new") {
-      send("POST", "/api/lists", { name: name }).then(function (r) {
-        return r.json();
-      }).then(function (created) {
-        selected = created.id;
-        saveTab(created.id);
-        return load();
-      }, function () {
-        showError("Could not make the list. Try again.");
-      });
-    }
+    send("POST", "/api/lists", { name: name }).then(function (r) {
+      return r.json();
+    }).then(function (created) {
+      selected = created.id;
+      saveTab(created.id);
+      return load();
+    }, function () {
+      showError("Could not make the list. Try again.");
+    });
   }
 
   function openDelete() {
@@ -823,7 +744,6 @@
     $("list-cancel").addEventListener("click", closeOptions);
     $("list-close").addEventListener("click", closeOptions);
     $("list-backdrop").addEventListener("click", closeOptions);
-    $("list-screen").addEventListener("change", onScreenChange);
     $("delete-list").addEventListener("click", deleteFromOptions);
     $("name-form").addEventListener("submit", saveName);
     $("name-cancel").addEventListener("click", closeName);

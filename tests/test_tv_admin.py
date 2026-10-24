@@ -51,6 +51,7 @@ def test_tv_page_groups_in_order(client):
     assert '<input type="checkbox" data-key="captions">' in page
     dialog = re.search(r'<div id="name-dialog" class="modal" hidden>.*?</form>', page, re.DOTALL)
     assert dialog and 'class="w95-window dialog"' in dialog.group(0)
+    assert '<span id="name-title" class="w95-title-text">New screen</span>' in dialog.group(0)
 
 
 def test_tv_js_has_no_native_dialogs():
@@ -70,7 +71,7 @@ function make(tag, id) {
   const listeners = {};
   const e = {
     tag, id, children: [], parentNode: null, hidden: false, disabled: false, value: "",
-    textContent: "", innerHTML: "", type: "", className: "",
+    textContent: "", innerHTML: "", type: "", className: "", style: {},
     classList: {
       contains: (c) => classes.has(c),
       toggle: (c, on) => { if (on) classes.add(c); else classes.delete(c); },
@@ -108,7 +109,12 @@ const body = make("body");
 for (const id of ["display-state", "channel-timeout", "name-dialog", "name-form", "name-title",
   "name-input", "name-error", "name-cancel", "name-close", "name-backdrop", "settings-error",
   "weather-location", "weather-name", "clock-size", "clock-size-minus", "clock-size-plus",
-  "caption-size", "caption-size-minus", "caption-size-plus", "stack-row"]) {
+  "caption-size", "caption-size-minus", "caption-size-plus", "stack-row", "screen-dialog",
+  "screen-form", "screen-name", "screen-error", "screen-layout", "screen-close", "screen-backdrop",
+  "screen-cancel", "screen-delete", "screen-delete-dialog", "screen-delete-text",
+  "screen-confirm-delete", "screen-confirm-cancel", "screen-delete-close",
+  "screen-delete-backdrop", "widget-row", "widget-add", "widget-size", "widget-list-field",
+  "widget-list", "widget-left", "widget-right", "widget-remove"]) {
   body.appendChild(make("x", id));
 }
 const row = body.appendChild(make("span", "tv-stops"));
@@ -123,6 +129,8 @@ add.hidden = true;
 const edit = row.appendChild(make("button", "screens-edit"));
 edit.textContent = "Edit";
 all["name-dialog"].hidden = true;
+all["screen-dialog"].hidden = true;
+all["screen-delete-dialog"].hidden = true;
 globalThis.document = {
   getElementById: (id) => all[id] || null,
   createElement: (tag) => make(tag),
@@ -132,7 +140,10 @@ globalThis.document = {
 
 const server = {
   settings: { channel: "screen", screen_id: 2, channel_timeout_min: 5 },
-  screens: [{ id: 4, name: "Kitchen", sort_order: 10 }, { id: 2, name: "Chores", sort_order: 20 }],
+  screens: [
+    { id: 4, name: "Kitchen", sort_order: 10, widgets: [] },
+    { id: 2, name: "Chores", sort_order: 20, widgets: [] },
+  ],
 };
 const calls = [];
 globalThis.fetch = (url, opts) => {
@@ -153,8 +164,10 @@ globalThis.fetch = (url, opts) => {
     s.name = sent.name;
     out = s;
   } else if (url === "/api/screens") {
-    if (method === "POST") server.screens.push({ id: 9, name: sent.name, sort_order: 30 });
+    if (method === "POST") server.screens.push({ id: 9, name: sent.name, sort_order: 30, widgets: [] });
     out = method === "POST" ? server.screens[server.screens.length - 1] : server.screens;
+  } else if (url === "/api/lists") {
+    out = [{ id: 1, name: "Groceries" }];
   }
   return Promise.resolve({ ok: true, json: () => Promise.resolve(JSON.parse(JSON.stringify(out))) });
 };
@@ -218,11 +231,12 @@ def test_tv_edit_mode_moves_and_renames_screens():
         await settle();
         const moved = view();
         byText("Chores").fire("click");
-        const dialog = { open: !all["name-dialog"].hidden, value: all["name-input"].value };
-        all["name-input"].value = "  Fridge ";
-        all["name-form"].fire("submit");
         await settle();
-        const closed = all["name-dialog"].hidden;
+        const dialog = { open: !all["screen-dialog"].hidden, value: all["screen-name"].value };
+        all["screen-name"].value = "  Fridge ";
+        all["screen-form"].fire("submit");
+        await settle();
+        const closed = all["screen-dialog"].hidden;
         edit.fire("click");
         const done = view();
         console.log(JSON.stringify({ editing, moved, dialog, closed, done, calls }));
@@ -251,7 +265,7 @@ def test_tv_edit_mode_moves_and_renames_screens():
 
 
 @needs_node
-def test_tv_new_screen_button_posts_a_name():
+def test_tv_new_screen_button_posts_a_name_and_opens_the_screen_window():
     r = _tv(
         """
         await settle();
@@ -259,18 +273,20 @@ def test_tv_new_screen_button_posts_a_name():
         edit.fire("click");
         const shownInEdit = !add.hidden;
         add.fire("click");
-        const dialog = { open: !all["name-dialog"].hidden, title: all["name-title"].textContent,
-          value: all["name-input"].value };
+        const dialog = { open: !all["name-dialog"].hidden, value: all["name-input"].value };
         all["name-input"].value = " Hall ";
         all["name-form"].fire("submit");
         await settle();
         const names = view().filter((c) => c.edit).map((c) => c.edit[1][0]);
-        console.log(JSON.stringify({ before, shownInEdit, dialog, names, calls }));
+        const screen = { open: !all["screen-dialog"].hidden, name: all["screen-name"].value,
+          nameClosed: all["name-dialog"].hidden };
+        console.log(JSON.stringify({ before, shownInEdit, dialog, names, screen, calls }));
         """
     )
     assert r["before"] is True and r["shownInEdit"] is True
-    assert r["dialog"] == {"open": True, "title": "New screen", "value": ""}
+    assert r["dialog"] == {"open": True, "value": ""}
     assert r["names"] == ["Kitchen", "Chores", "Hall"]
+    assert r["screen"] == {"open": True, "name": "Hall", "nameClosed": True}
     assert r["calls"] == [{"method": "POST", "url": "/api/screens", "body": {"name": "Hall"}}]
 
 
