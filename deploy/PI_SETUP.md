@@ -466,3 +466,9 @@ If any check is wrong, run the installer again (`sudo bash /opt/homeboard/deploy
 ### Photos stop changing or the page looks stuck
 
 Run `sudo systemctl restart homeboard-kiosk`. If it keeps happening, check both logs as shown above.
+
+### The brightness drag does not change the real backlight
+
+That is expected. Dragging up or down on the left edge of the screen dims the page in software: a black layer is laid over it. The backlight itself stays the same.
+
+The HMTECH 10.1 inch panel does not accept brightness commands over the HDMI cable (DDC/CI). Tested on the Pi with `ddcutil` 1.4.1: the panel shows up on `/dev/i2c-20` with a generic Dell `TLD1280` EDID, but every command ends with `DDC communication failed`. To change the real backlight, use the OSD buttons on the back of the panel.
