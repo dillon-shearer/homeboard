@@ -142,7 +142,7 @@
   var SWIPE_SLOP_PX = 8;
 
   function busy() {
-    return !!(editing || drag || swipe || openRow);
+    return !!(editing || drag || swipe || openRow) || !$("name-dialog").hidden || !$("delete-dialog").hidden;
   }
 
   function currentList() {
@@ -195,6 +195,8 @@
 
   function renderTabs() {
     var tabs = $("tabs");
+    var had = tabs.contains(document.activeElement) ? document.activeElement : null;
+    var keep = had ? (had.id === "add-tab" ? "#add-tab" : '[data-id="' + had.getAttribute("data-id") + '"]') : null;
     tabs.textContent = "";
     lists.forEach(function (l) {
       var b = document.createElement("button");
@@ -214,6 +216,9 @@
     add.setAttribute("aria-label", "New list");
     add.textContent = "+";
     tabs.appendChild(add);
+    if (keep === null) return;
+    var again = tabs.querySelector(keep);
+    if (again) again.focus();
   }
 
   function buildRow(item, notes) {
@@ -648,6 +653,9 @@
 
   function closeName() {
     $("name-dialog").hidden = true;
+    var add = $("tabs").querySelector(".add");
+    if (add) add.focus();
+    afterIdle();
   }
 
   function saveName(e) {
@@ -679,6 +687,8 @@
 
   function closeDelete() {
     $("delete-dialog").hidden = true;
+    $("list-options").focus();
+    afterIdle();
   }
 
   function deleteList() {
