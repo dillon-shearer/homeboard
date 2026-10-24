@@ -15,11 +15,14 @@
     clock_pos: "bottom-right",
     caption_pos: "bottom-left",
     clock_on_top: true,
+    brightness: 100,
   };
   const MAX_BACKOFF_S = 30;
   const SWIPE_PX = 80;
   const FLING_PX = 30;
   const FLING_V = 0.5;
+  const BRIGHTNESS_MIN = 10;
+  const BRIGHTNESS_MAX = 100;
   const CHANNELS = ["photos", "screen"];
   const POSITIONS = [
     "top-left", "top-center", "top-right",
@@ -50,7 +53,21 @@
     if (POSITIONS.indexOf(s.clock_pos) !== -1) out.clock_pos = s.clock_pos;
     if (POSITIONS.indexOf(s.caption_pos) !== -1) out.caption_pos = s.caption_pos;
     if ("clock_on_top" in s) out.clock_on_top = !!s.clock_on_top;
+    if (typeof s.brightness === "number" && isFinite(s.brightness)) out.brightness = clampBrightness(s.brightness);
     return out;
+  }
+
+  function clampBrightness(v) {
+    return Math.max(BRIGHTNESS_MIN, Math.min(BRIGHTNESS_MAX, Math.round(v)));
+  }
+
+  function dragBrightness(start, dy, height) {
+    if (!height) return clampBrightness(start);
+    return clampBrightness(start + Math.round(-dy / height * 100));
+  }
+
+  function dimOpacity(v) {
+    return (100 - clampBrightness(v)) / 100;
   }
 
   function overlayLayout(settings) {
@@ -219,6 +236,9 @@
     swipeCommits: swipeCommits,
     shouldReturn: shouldReturn,
     focusPosition: focusPosition,
+    clampBrightness: clampBrightness,
+    dragBrightness: dragBrightness,
+    dimOpacity: dimOpacity,
   };
 
   root.Slideshow = Slideshow;
@@ -232,6 +252,7 @@
   const SLIDE_MS = 250;
   const VELOCITY_MS = 100;
   const SPLASH_FADE_MS = 500;
+  const READOUT_HIDE_MS = 800;
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
@@ -240,6 +261,9 @@
   const channelEl = document.getElementById("channel");
   const overlayEl = document.getElementById("overlay");
   const splashEl = document.getElementById("splash");
+  const dimEl = document.getElementById("dim");
+  const edgeEl = document.getElementById("edge");
+  const brightnessEl = document.getElementById("brightness");
 
   const state = {
     photos: [],
@@ -269,6 +293,8 @@
   let lastMove = null;
   let dragging = false;
   let sliding = false;
+  let edgeDrag = null;
+  let readoutTimer = null;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -303,6 +329,66 @@
     if (!state.settings.captions) hideCaption();
     placeOverlay(state.settings);
     applyChannel();
+    if (!edgeDrag) applyBrightness(state.settings.brightness);
+  }
+
+  function applyBrightness(v) {
+    dimEl.style.opacity = String(dimOpacity(v));
+  }
+
+  function viewHeight() {
+    return root.innerHeight || 0;
+  }
+
+  function showReadout(v) {
+    clearTimeout(readoutTimer);
+    readoutTimer = null;
+    brightnessEl.textContent = v + "%";
+    brightnessEl.classList.add("show");
+  }
+
+  function onEdgeStart(e) {
+    e.stopPropagation();
+    markActivity();
+    const t = e.changedTouches[0];
+    if (!t) return;
+    edgeDrag = { y: t.clientY, start: state.settings.brightness, value: state.settings.brightness };
+    showReadout(edgeDrag.value);
+  }
+
+  function onEdgeMove(e) {
+    e.stopPropagation();
+    markActivity();
+    const t = e.changedTouches[0];
+    if (!edgeDrag || !t) return;
+    edgeDrag.value = dragBrightness(edgeDrag.start, t.clientY - edgeDrag.y, viewHeight());
+    applyBrightness(edgeDrag.value);
+    showReadout(edgeDrag.value);
+  }
+
+  function onEdgeEnd(e) {
+    e.stopPropagation();
+    markActivity();
+    const drag = edgeDrag;
+    edgeDrag = null;
+    clearTimeout(readoutTimer);
+    readoutTimer = setTimeout(function () {
+      readoutTimer = null;
+      brightnessEl.classList.remove("show");
+    }, READOUT_HIDE_MS);
+    if (!drag) return;
+    applyBrightness(drag.value);
+    if (drag.value === state.settings.brightness) return;
+    state.settings = applySettings(state.settings, { brightness: drag.value });
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brightness: drag.value }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+    }).catch(function () {
+      loadSettings();
+    });
   }
 
   function placeOverlay(settings) {
@@ -787,6 +873,10 @@
     document.addEventListener("touchmove", onTouchMove, { passive: true });
     document.addEventListener("touchend", onTouchEnd, { passive: true });
     channelEl.onload = hookFrame;
+    edgeEl.addEventListener("touchstart", onEdgeStart, { passive: true });
+    edgeEl.addEventListener("touchmove", onEdgeMove, { passive: true });
+    edgeEl.addEventListener("touchend", onEdgeEnd, { passive: true });
+    edgeEl.addEventListener("touchcancel", onEdgeEnd, { passive: true });
     setInterval(checkIdle, IDLE_CHECK_MS);
     Promise.all([loadResume(), loadSettings(), loadScreens()]).then(loadPhotos).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);
