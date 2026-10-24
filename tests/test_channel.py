@@ -106,11 +106,13 @@ def test_invalid_is_422(client, body):
 
 
 def test_tv_page_markup(client):
+    start = client.get("/admin").text
+    assert ">Showing on the TV<" in start
+    assert re.search(r'<button class="w95-btn"[^>]*data-channel="photos"[^>]*aria-pressed', start)
+    assert 'data-channel="calendar"' not in start
+    assert 'data-channel="lists"' not in start
     page = client.get("/admin/tv").text
-    assert ">Showing on the TV<" in page
-    assert re.search(r'<button class="w95-btn"[^>]*data-channel="photos"[^>]*aria-pressed', page)
-    assert 'data-channel="calendar"' not in page
-    assert 'data-channel="lists"' not in page
+    assert ">Showing on the TV<" not in page and 'id="tv-stops"' not in page
     select = re.search(r'<select id="channel-timeout".*?</select>', page, re.DOTALL)
     assert select
     assert re.findall(r'<option value="(\d+)"', select.group(0)) == ["0", "2", "5", "10", "30"]
