@@ -157,13 +157,16 @@ html, body {
   border: 0;
   background: #000;
   z-index: 10;
+  transform: translateX(100vw);
 }
 
-#swipe {
-  position: fixed;
-  inset: 0;
-  z-index: 11;
-  pointer-events: none;
+#channel.drag,
+#channel.slide {
+  box-shadow: 0 0 4vh rgba(0, 0, 0, 0.6);
+}
+
+#channel.slide {
+  transition: transform 250ms ease-out;
 }
 
 #splash {
