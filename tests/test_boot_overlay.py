@@ -39,12 +39,14 @@ def test_overlay_is_plain_ascii_with_lf_endings():
     raw.decode("ascii")
 
 
-def test_ground_matches_the_splash_top_left_only():
+def test_pixels_split_into_splash_black_blank_and_photo():
     background = Image.open(DEPLOY / "splash" / "cover" / "background.png").convert("RGB")
-    assert overlay.is_ground(background.getpixel((0, 0)))
-    assert overlay.is_ground((27, 63, 143))
-    for pixel in [(60, 60, 60), (255, 255, 255), (0, 0, 0), (175, 177, 173), (207, 159, 84)]:
-        assert not overlay.is_ground(pixel)
+    assert overlay.kind(background.getpixel((0, 0))) == "ground"
+    assert overlay.kind((27, 63, 143)) == "ground"
+    assert overlay.kind((0, 0, 0)) == "black"
+    assert overlay.kind((60, 60, 60)) == "blank"
+    assert overlay.kind((255, 255, 255)) == "blank"
+    assert overlay.kind((207, 159, 84)) == "other"
 
 
 def test_load_keeps_the_first_frame_and_one_strip_per_frame(tmp_path):

@@ -9,11 +9,12 @@ import time
 from PIL import Image, ImageChops, ImageSequence
 
 HOLE = 4
+PROBE = 8
 ARGB8888 = 0
 XBGR8888 = 0x34324258
 ABGR8888 = 0x34324241
 WAIT_FOR_MAP = 120
-WAIT_FOR_PAGE = 30
+WAIT_FOR_PAGE = 60
 
 
 def u(value):
@@ -35,9 +36,15 @@ def read_string(body, at):
     return text, at + 4 + size + (-size % 4)
 
 
-def is_ground(pixel):
+def kind(pixel):
     r, _, b = pixel
-    return b > 100 and b > r + 60
+    if b > 100 and b > r + 60:
+        return "ground"
+    if max(pixel) < 16:
+        return "black"
+    if max(pixel) - min(pixel) < 12:
+        return "blank"
+    return "other"
 
 
 class Wayland:
@@ -154,6 +161,67 @@ class Pool:
         return oid
 
 
+class Window:
+    def __init__(self, overlay):
+        self.overlay = overlay
+        wl = overlay.wl
+        self.size = None
+        self.configured = False
+        self.shown = False
+        self.viewport = None
+        self.surface = wl.new_id()
+        wl.send(overlay.compositor, 0, u(self.surface))
+        self.xdg = wl.new_id(self.on_xdg_surface)
+        wl.send(overlay.wm, 2, u(self.xdg), u(self.surface))
+        self.toplevel = wl.new_id(self.on_toplevel)
+        wl.send(self.xdg, 1, u(self.toplevel))
+        wl.send(self.toplevel, 3, s("homeboard-overlay"))
+        wl.send(self.toplevel, 11, u(0))
+        wl.send(self.surface, 6)
+
+    def on_toplevel(self, op, body):
+        if op == 0:
+            width, height = struct.unpack_from("<ii", body)
+            if width > 0 and height > 0:
+                self.size = (width, height)
+
+    def on_xdg_surface(self, op, body):
+        if op == 0:
+            self.overlay.wl.send(self.xdg, 4, body[:4])
+            self.configured = True
+            if self.shown:
+                self.place()
+                self.overlay.wl.send(self.surface, 6)
+
+    def place(self):
+        overlay = self.overlay
+        target = self.size or overlay.mode
+        if overlay.viewporter and target and target != (overlay.width, overlay.height):
+            if self.viewport is None:
+                self.viewport = overlay.wl.new_id()
+                overlay.wl.send(overlay.viewporter, 1, u(self.viewport), u(self.surface))
+            overlay.wl.send(self.viewport, 2, i(target[0]), i(target[1]))
+
+    def attach(self, oid, box):
+        wl = self.overlay.wl
+        if not self.shown:
+            self.place()
+            self.shown = True
+        wl.send(self.surface, 1, u(oid), i(0), i(0))
+        wl.send(self.surface, 9, *[i(v) for v in box])
+        wl.send(self.surface, 6)
+
+    def destroy(self):
+        wl = self.overlay.wl
+        wl.send(self.toplevel, 0)
+        wl.send(self.xdg, 0)
+        if self.viewport is not None:
+            wl.send(self.viewport, 0)
+        wl.send(self.surface, 0)
+        for oid in (self.xdg, self.toplevel):
+            wl.handlers.pop(oid, None)
+
+
 class Overlay:
     def __init__(self, path):
         (self.width, self.height), base, self.box, self.strips, self.delay = load(path)
@@ -165,7 +233,6 @@ class Overlay:
         self.copier = wl.bind("zwlr_screencopy_manager_v1", 2)
         self.viewporter = wl.bind("wp_viewporter", 1) if "wp_viewporter" in wl.globals else None
         self.mode = None
-        self.size = None
         self.stride = self.width * 4
         frame_bytes = self.stride * self.height
         self.pool = Pool(wl, self.shm, frame_bytes * 2 + 64)
@@ -180,18 +247,11 @@ class Overlay:
             wl.handlers[oid] = self.released(oid)
             self.busy[oid] = False
             self.offsets[oid] = n * frame_bytes
-        self.pixel = None
-        self.shown = False
+        self.front = next(iter(self.busy))
+        self.pixels = None
         self.index = 0
-        self.surface = wl.new_id()
-        wl.send(self.compositor, 0, u(self.surface))
-        self.xdg = wl.new_id(self.on_xdg_surface)
-        wl.send(self.wm, 2, u(self.xdg), u(self.surface))
-        self.toplevel = wl.new_id(self.on_toplevel)
-        wl.send(self.xdg, 1, u(self.toplevel))
-        wl.send(self.toplevel, 3, s("homeboard-overlay"))
-        wl.send(self.toplevel, 11, u(0))
-        wl.send(self.surface, 6)
+        self.window = None
+        self.spare = Window(self)
         wl.roundtrip()
 
     def on_wm(self, op, body):
@@ -204,19 +264,6 @@ class Overlay:
             if flags & 1:
                 self.mode = (width, height)
 
-    def on_toplevel(self, op, body):
-        if op == 0:
-            width, height = struct.unpack_from("<ii", body)
-            if width > 0 and height > 0:
-                self.size = (width, height)
-
-    def on_xdg_surface(self, op, body):
-        if op == 0:
-            self.wl.send(self.xdg, 4, body[:4])
-            if self.shown:
-                self.place()
-                self.wl.send(self.surface, 6)
-
     def released(self, oid):
         def handler(op, body):
             if op == 0:
@@ -224,18 +271,16 @@ class Overlay:
 
         return handler
 
-    def place(self):
-        target = self.size or self.mode
-        if self.viewporter and target and target != (self.width, self.height):
-            if not hasattr(self, "viewport"):
-                self.viewport = self.wl.new_id()
-                self.wl.send(self.viewporter, 1, u(self.viewport), u(self.surface))
-            self.wl.send(self.viewport, 2, i(target[0]), i(target[1]))
-
-    def show(self):
-        self.place()
-        self.shown = True
-        self.commit(next(iter(self.busy)), (0, 0, self.width, self.height))
+    def raise_cover(self):
+        if not self.spare.configured:
+            return False
+        window, self.spare = self.spare, Window(self)
+        window.attach(self.front, (0, 0, self.width, self.height))
+        self.busy[self.front] = True
+        if self.window is not None:
+            self.window.destroy()
+        self.window = window
+        return True
 
     def draw(self):
         free = [oid for oid, busy in self.busy.items() if not busy]
@@ -250,19 +295,15 @@ class Overlay:
             at = start + (y0 + n) * self.stride + x0 * 4
             self.pool.map[at : at + row] = strip[n * row : (n + 1) * row]
         self.punch(start)
-        self.commit(oid, (x0, y0, x1 - x0, y1 - y0))
+        self.window.attach(oid, (x0, y0, x1 - x0, y1 - y0))
+        self.busy[oid] = True
+        self.front = oid
+        self.index += 1
 
     def punch(self, start):
         for y in range(HOLE):
             at = start + y * self.stride
             self.pool.map[at : at + HOLE * 4] = bytes(HOLE * 4)
-
-    def commit(self, oid, box):
-        self.wl.send(self.surface, 1, u(oid), i(0), i(0))
-        self.wl.send(self.surface, 9, *[i(v) for v in box])
-        self.wl.send(self.surface, 6)
-        self.busy[oid] = True
-        self.index += 1
 
     def sample(self):
         frame = self.wl.new_id()
@@ -271,21 +312,19 @@ class Overlay:
         def handler(op, body):
             if op == 0:
                 fmt, width, height, stride = struct.unpack_from("<IIII", body)
-                if self.pixel is None or self.pixel[1:3] != (fmt, stride):
-                    pool = Pool(self.wl, self.shm, max(stride * height, 4))
-                    self.pixel = (pool.buffer(0, width, height, stride, fmt), fmt, stride, pool)
-                self.wl.send(frame, 2, u(self.pixel[0]))
+                if self.pixels is None or self.pixels[1:3] != (fmt, stride):
+                    pool = Pool(self.wl, self.shm, stride * height)
+                    self.pixels = (pool.buffer(0, width, height, stride, fmt), fmt, stride, pool)
+                self.wl.send(frame, 2, u(self.pixels[0]))
             elif op == 2:
-                raw = self.pixel[3].map[:4]
-                if self.pixel[1] in (XBGR8888, ABGR8888):
-                    result.append((raw[0], raw[1], raw[2]))
-                else:
-                    result.append((raw[2], raw[1], raw[0]))
+                raw = self.pixels[3].map
+                order = (0, 1, 2) if self.pixels[1] in (XBGR8888, ABGR8888) else (2, 1, 0)
+                result.append([tuple(raw[x * 4 + n] for n in order) for x in (0, PROBE - 1)])
             elif op == 3:
                 result.append(None)
 
         self.wl.handlers[frame] = handler
-        self.wl.send(self.copier, 1, u(frame), i(0), u(self.output), i(0), i(0), i(1), i(1))
+        self.wl.send(self.copier, 1, u(frame), i(0), u(self.output), i(0), i(0), i(PROBE), i(1))
         return frame, result
 
     def run(self):
@@ -305,19 +344,25 @@ class Overlay:
                     tick = time.monotonic() + self.delay
             if not result:
                 continue
-            pixel = result[0]
+            pixels = result[0]
             self.wl.send(frame, 1)
             del self.wl.handlers[frame]
-            if pixel is not None:
-                ground = is_ground(pixel)
-                if state == "seen" and ground:
-                    state = "wait"
-                elif state == "wait" and not ground:
-                    self.show()
-                    state = "cover"
-                    tick = time.monotonic() + self.delay
-                    deadline = time.monotonic() + WAIT_FOR_PAGE
-                elif state == "cover" and ground:
+            if pixels is not None:
+                under, top = (kind(pixel) for pixel in pixels)
+                if state == "seen":
+                    if top == "ground":
+                        state = "wait"
+                elif top != "ground":
+                    if self.raise_cover():
+                        if state == "wait":
+                            state = "cover"
+                            tick = time.monotonic() + self.delay
+                        deadline = time.monotonic() + WAIT_FOR_PAGE
+                elif state == "wait":
+                    pass
+                elif under == "blank":
+                    state = "under"
+                elif under == "other" or (under == "ground" and state == "under"):
                     return
             frame, result = self.sample()
 
