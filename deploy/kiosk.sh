@@ -29,6 +29,7 @@ exec chromium \
     --disable-infobars \
     --disable-session-crashed-bubble \
     --incognito \
+    --disable-renderer-accessibility \
     --autoplay-policy=no-user-gesture-required \
     --ozone-platform=wayland \
     "$BOOT"

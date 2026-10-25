@@ -185,6 +185,31 @@ def test_two_polls_inside_3_seconds_make_one_call(linked, fake, monkeypatch):
     assert fake.count("GET", "/me/player") == 2
 
 
+def test_spotify_calls_share_one_tls_context(monkeypatch):
+    seen = []
+
+    class Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def urlopen(req, timeout, context):
+        seen.append(context)
+        return Resp()
+
+    monkeypatch.setattr(spotify.urllib.request, "urlopen", urlopen)
+    spotify.fetch("GET", "https://api.spotify.com/v1/me/player")
+    spotify.fetch("GET", "https://api.spotify.com/v1/me/player")
+    assert seen[0] is not None and seen[0] is seen[1]
+
+
 def test_network_failure_returns_last_known_as_stale(linked, fake, monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(spotify, "_clock", lambda: clock[0])
