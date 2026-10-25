@@ -54,7 +54,7 @@ def test_proxy_keeps_client_address_sse_and_large_uploads():
     assert "proxy_set_header X-Forwarded-For $remote_addr;" in text
     assert "proxy_buffering off;" in text
     assert "proxy_request_buffering off;" in text
-    assert "client_max_body_size 0;" in text
+    assert "client_max_body_size 51m;" in text
 
 
 def test_kiosk_still_uses_plain_localhost():

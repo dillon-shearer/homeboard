@@ -15,6 +15,7 @@ from app import db, settings
 from app.auth import TunnelGate
 from app.routes_calendar import router as calendar_router
 from app.routes_lists import router as lists_router
+from app.routes_photos import UploadGate
 from app.routes_photos import router as photos_router
 from app.routes_settings import lan_ip
 from app.routes_settings import router as settings_router
@@ -80,6 +81,7 @@ def create_app(data_dir=None) -> FastAPI:
     app.state.photos_dir = photos_dir
     app.state.thumbs_dir = thumbs_dir
     app.state.sse_limit = None
+    app.add_middleware(UploadGate)
     app.add_middleware(TunnelGate)
     app.include_router(photos_router)
     app.include_router(settings_router)

@@ -13,6 +13,8 @@ from app import settings
 pillow_heif.register_heif_opener()
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 1024 * 1024
+MAX_ADMITTED = 2
 SCREEN_WIDTH = settings.SCREEN_WIDTH
 SCREEN_HEIGHT = settings.SCREEN_HEIGHT
 THUMB_EDGE = 400
