@@ -1380,7 +1380,7 @@ def test_spotify_taps_send_controls(chrome, server, fake, tmp_path):
 def test_spotify_polls_only_while_shown_and_visible(chrome, server, fake):
     ids = _sp_setup(server, [(2, 1)])
     brief = _screens(server)["Daily Brief"]
-    idle = "__test.waiting(3000) === 0 && window.__inflight === 0"
+    idle = "__test.waiting(15000) === 0 && window.__inflight === 0"
 
     def polls():
         return len(fake.sent("GET", "/api/spotify/now"))
@@ -1389,16 +1389,16 @@ def test_spotify_polls_only_while_shown_and_visible(chrome, server, fake):
     _show_screen(server, ids[(2, 1)])
     chrome.send("Page.navigate", {"url": f"{server}/tv"})
     _sp_card(chrome, "Music 2x1", lambda o: o["track"] == "Here Comes the Sun")
-    chrome.wait("__test.waiting(3000) > 0 && window.__inflight === 0")
+    chrome.wait("__test.waiting(15000) > 0 && window.__inflight === 0")
     first = polls()
-    chrome.eval("__test.fire(3000)")
+    chrome.eval("__test.fire(15000)")
     _sp_until(lambda: polls() > first, "the next poll")
 
     _show_screen(server, brief)
     chrome.wait("document.getElementById('title').textContent === 'Daily Brief'")
     chrome.wait(idle)
     stopped = polls()
-    chrome.eval("__test.fire(3000)")
+    chrome.eval("__test.fire(15000)")
     chrome.wait("window.__inflight === 0")
     assert polls() == stopped
 
@@ -1408,7 +1408,7 @@ def test_spotify_polls_only_while_shown_and_visible(chrome, server, fake):
     chrome.eval(SP_HIDE % "hidden")
     chrome.wait(idle)
     hidden = polls()
-    chrome.eval("__test.fire(3000)")
+    chrome.eval("__test.fire(15000)")
     chrome.wait("window.__inflight === 0")
     assert polls() == hidden
     chrome.eval(SP_HIDE % "visible")

@@ -22,10 +22,10 @@
   var TAP_SLOP_PX = 10;
   var SWIPE_CLICK_MS = 600;
   var SLIDE_MS = 250;
-  var SPOTIFY_POLL_MS = 3000;
+  var SPOTIFY_POLL_MS = 15000;
   var SPOTIFY_TICK_MS = 1000;
   var SPOTIFY_AFTER_TAP_MS = 1000;
-  var SPOTIFY_EXTRA_EVERY = 10;
+  var SPOTIFY_EXTRA_EVERY = 2;
   var SPOTIFY_NOTE_MS = 3000;
   var VOLUME_STEP = 5;
   var VOLUME_CHAIN_MS = 1000;
@@ -1143,6 +1143,10 @@
     });
   }
 
+  function onSpotifyChanged() {
+    if (spot.on) pollSpotify();
+  }
+
   function spotifyNote(text) {
     spot.note = text;
     clearTimeout(spot.noteTimer);
@@ -1295,6 +1299,7 @@
     ["hello", "settings_changed", "lists_changed", "events_changed", "weather_changed"].forEach(function (name) {
       es.addEventListener(name, load);
     });
+    es.addEventListener("spotify_changed", onSpotifyChanged);
     es.onerror = function () {
       es.close();
       setTimeout(connect, backoff * 1000);

@@ -125,6 +125,11 @@ def forget(data_dir=None) -> None:
         _now.clear()
 
 
+def clear_now() -> None:
+    with _now_lock:
+        _now.clear()
+
+
 def linked(data_dir) -> dict:
     if credentials() is None:
         return {"linked": False, "reason": "no credentials"}
