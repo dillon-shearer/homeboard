@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#008080">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Home Board">
+<title>Sound - Home Board</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-512.png">
+<link rel="icon" type="image/png" href="/static/icon-512.png">
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
+<link rel="stylesheet" href="{{ static_url('admin.css') }}">
+<link rel="stylesheet" href="{{ static_url('sound.css') }}">
+</head>
+<body class="w95-desktop">
+<main class="w95-window">
+<div class="w95-titlebar">
+<a class="w95-back" href="/admin">Start</a>
+<span class="w95-title-text">Sound</span>
+<a class="title-close" href="/admin" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></a>
+</div>
+<div class="w95-body">
+<section class="w95-group settings" aria-labelledby="group-spotify">
+<h2 id="group-spotify" class="w95-legend">Spotify</h2>
+<p id="spotify-state" class="sound-line">Checking...</p>
+<div class="w95-row">
+<a id="spotify-login" class="w95-btn" href="/api/spotify/login" hidden>Sign in to Spotify</a>
+<button type="button" id="spotify-unlink" class="w95-btn" hidden>Unlink</button>
+</div>
+<p id="spotify-track" class="sound-line" hidden></p>
+</section>
+<section class="w95-group settings" aria-labelledby="group-speaker">
+<h2 id="group-speaker" class="w95-legend">Speaker</h2>
+<p id="speaker-state" class="sound-line">Checking...</p>
+<div class="w95-row">
+<button type="button" id="speaker-connect" class="w95-btn">Connect</button>
+<button type="button" id="speaker-disconnect" class="w95-btn">Disconnect</button>
+</div>
+<div class="form">
+<label for="idle-minutes">Let go after N minutes idle</label>
+<div class="stepper">
+<button type="button" id="idle-minutes-minus" class="w95-btn step" aria-label="Fewer minutes">&minus;</button>
+<input id="idle-minutes" type="number" min="1" max="120" step="1" inputmode="numeric" class="w95-input" aria-label="Minutes idle">
+<button type="button" id="idle-minutes-plus" class="w95-btn step" aria-label="More minutes">+</button>
+</div>
+</div>
+</section>
+<section class="w95-group settings" aria-labelledby="group-playlists">
+<h2 id="group-playlists" class="w95-legend">Playlists on the board</h2>
+<p id="playlists-note" class="sound-line">Loading...</p>
+<ul id="playlists" class="playlists"></ul>
+<p id="shown-count" class="w95-note" hidden></p>
+</section>
+<p id="settings-error" class="error" hidden></p>
+</div>
+</main>
+
+<div id="unlink-dialog" class="modal" hidden>
+<div id="unlink-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog" role="dialog" aria-modal="true" aria-labelledby="unlink-title">
+<div class="w95-titlebar">
+<span id="unlink-title" class="w95-title-text">Unlink Spotify</span>
+<button type="button" id="unlink-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="confirm">
+<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
+<p>Unlink Spotify from the board? You can sign in again later.</p>
+</div>
+<div class="buttons">
+<button type="button" id="unlink-confirm" class="w95-btn default">Unlink</button>
+<button type="button" id="unlink-cancel" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
+<script src="{{ static_url('sound.js') }}"></script>
+</body>
+</html>
