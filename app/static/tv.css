@@ -898,7 +898,15 @@ body.tv {
 }
 
 .sp-full .sp-info {
-  justify-content: space-between;
+  justify-content: center;
+}
+
+.sp-left {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5vh;
 }
 
 .sp-head,
