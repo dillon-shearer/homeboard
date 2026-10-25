@@ -303,8 +303,8 @@ The Pi plays sound on the soundbar over Bluetooth. First the two have to meet on
 How the board uses the soundbar after that:
 
 - When music starts, the Pi connects to the soundbar by itself.
-- When nothing has played for a while, the Pi lets go of the soundbar, so the TV can use it again. The time is set on the phone in the Sound window (Start > Sound, or `/admin/sound`) under **Let go after N minutes idle**. It starts at 10 minutes.
-- To connect or let go by hand, use the **Connect** and **Disconnect** buttons in the Sound window, or the **Speaker** switch in the Control Panel.
+- When nothing has played for a while, the Pi lets go of the soundbar, so the TV can use it again. The time is set on the phone in the Settings window (Start > Settings, or `/admin/settings`), in the Sound group, under **Let go after N minutes idle**. It starts at 10 minutes.
+- To connect or let go by hand, use the **Connect** and **Disconnect** buttons in the Sound group of the Settings window, or the **Speaker** switch in the Control Panel.
 
 ## Part 9: Spotify
 
@@ -339,9 +339,9 @@ sudo bash /opt/homeboard/deploy/install.sh --new-spotify
 
 ### Sign in
 
-38. On the phone, open the Sound window (Start > Sound, or `/admin/sound`) and tap **Sign in to Spotify**.
+38. On the phone, open the Settings window (Start > Settings, or `/admin/settings`) and, in the Sound group, tap **Sign in to Spotify**.
 
-39. Spotify asks if Home Board may use your account. Tap **Agree**. You come back to the Sound window and it says `Linked as` and your Spotify name.
+39. Spotify asks if Home Board may use your account. Tap **Agree**. You come back to the Settings window and it says `Linked as` and your Spotify name.
 
 ### Home Board as a Spotify speaker
 
@@ -359,7 +359,7 @@ The Pi shows up as "Home Board" in the Spotify app's device list through Spotify
 
 42. In the Spotify app on the phone, tap the devices button, pick **Home Board** and press play. The soundbar wakes up and plays the music.
 
-The key is saved in `/etc/homeboard/soloist.env`, readable only by root. Each Soloist build stops working 90 days after it was made. The Pi fetches the newest build every Monday. If that fails, the Sound window shows a warning two weeks before the end. To fetch it by hand:
+The key is saved in `/etc/homeboard/soloist.env`, readable only by root. Each Soloist build stops working 90 days after it was made. The Pi fetches the newest build every Monday. If that fails, the Sound group of the Settings window shows a warning two weeks before the end. To fetch it by hand:
 
 ```
 sudo bash /opt/homeboard/deploy/install.sh --update-soloist
@@ -369,7 +369,7 @@ Logs: `journalctl -u homeboard-soloist -u homeboard-soloist-events -n 50`
 
 ### Show music on the board
 
-43. In the Sound window, under **Playlists on the board**, tick the playlists you want to start from the board.
+43. In the Settings window, in the Sound group, under **Playlists on the board**, tick the playlists you want to start from the board.
 
 44. On the phone, open the TV page and add a **Spotify** widget to a TV screen.
 

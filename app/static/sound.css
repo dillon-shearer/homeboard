@@ -21,3 +21,12 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.sound-sub {
+  margin: 14px 0 8px;
+  font-size: 1em;
+}
+
+.sound-sub:first-of-type {
+  margin-top: 0;
+}

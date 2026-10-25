@@ -17,7 +17,7 @@ def test_settings_page_groups_in_order(client):
     r = client.get("/admin/settings")
     assert r.status_code == 200
     legends = re.findall(r'class="w95-legend">([^<]+)</h2>', r.text)
-    assert legends == ["Photos", "Clock, date and caption", "Screens", "Board"]
+    assert legends == ["Photos", "Clock, date and caption", "Screens", "Sound", "Board"]
     assert '<span class="w95-title-text">Settings</span>' in r.text
 
 

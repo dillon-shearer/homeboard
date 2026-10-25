@@ -66,11 +66,11 @@ def callback(request: Request, state: str | None = None, code: str | None = None
     if not spotify.check_state(state):
         return JSONResponse({"detail": "bad state"}, status_code=400)
     if not code:
-        return RedirectResponse("/admin/sound", status_code=303)
+        return RedirectResponse("/admin/settings", status_code=303)
     out = _call(spotify.exchange_code, _data_dir(request), code, redirect_uri(request))
     if out is not None:
         return out
-    return RedirectResponse("/admin/sound", status_code=303)
+    return RedirectResponse("/admin/settings", status_code=303)
 
 
 @router.post("/unlink")
