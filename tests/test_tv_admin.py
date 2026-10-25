@@ -9,8 +9,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.db import POSITIONS
 from app.main import create_app
 from tests.chrome import _Chrome, needs_chrome, server  # noqa: F401
+from tests.test_clock_caption_form import FORM_SETUP
+from tests.test_clock_caption_form import _node as _form_node
 
 ROOT = Path(__file__).resolve().parent.parent / "app"
 TV_JS = ROOT / "static" / "tv_admin.js"
@@ -38,7 +41,7 @@ def test_tv_page_loads_its_assets_in_the_admin_shell(client):
 def test_tv_page_groups_in_order(client):
     page = client.get("/admin/tv").text
     legends = re.findall(r'<h2 id="group-\w+" class="w95-legend">([^<]+)</h2>', page)
-    assert legends == ["Back to Photos after", "Weather", "Clock and caption"]
+    assert legends == ["Back to Photos after", "Weather", "Clock, date and caption"]
     for gone in ('id="tv-stops"', 'id="screens-edit"', 'id="name-dialog"', 'id="screen-dialog"'):
         assert gone not in page
     assert '<select id="channel-timeout"' in page
@@ -122,6 +125,7 @@ for (const id of ["display-state", "channel-timeout", "name-dialog", "name-form"
   "name-input", "name-error", "name-cancel", "name-close", "name-backdrop", "settings-error",
   "weather-location", "weather-name", "clock-size", "clock-size-minus", "clock-size-plus",
   "caption-size", "caption-size-minus", "caption-size-plus", "stack-row", "screen-dialog",
+  "date-size", "date-size-minus", "date-size-plus", "date-stack-row",
   "screen-form", "screen-name", "screen-error", "screen-layout", "screen-close", "screen-backdrop",
   "screens-hint", "screen-delete", "screen-delete-dialog", "screen-delete-text",
   "screen-confirm-delete", "screen-confirm-cancel", "screen-delete-close",
@@ -452,3 +456,52 @@ def test_tv_clock_size_stepper_saves(server, tmp_path):  # noqa: F811
     finally:
         chrome.close()
     assert _settings(server)["clock_size"] == before + 1
+
+
+def test_tv_date_controls_markup(client):
+    page = client.get("/admin/tv").text
+    start = page.index('id="group-overlay"')
+    group = page[start : page.index("</section>", start)]
+    assert 'id="date-size" type="number" min="2" max="12" step="1" inputmode="numeric"' in group
+    assert 'id="date-size-minus"' in group and 'id="date-size-plus"' in group
+    assert re.findall(r'name="date_pos" value="([a-z-]+)"', group) == list(POSITIONS)
+    assert '<span id="date_pos-label">Date spot</span>' in group
+    assert '<div id="date-stack-row" class="stack-row" hidden>' in group
+    assert re.findall(r'name="date_on_top" value="(\w+)"> (Date \w+)', group) == [
+        ("true", "Date above"),
+        ("false", "Date below"),
+    ]
+    checks = group[group.index('<div class="checks">') :]
+    assert '<input type="checkbox" data-key="date_show"><span>Show the date</span>' in checks
+
+
+@needs_node
+def test_tv_date_stack_row_and_date_radios_put_one_field():
+    r = _form_node(
+        """
+        await flush();
+        const rows = [$("date-stack-row").hidden];
+        const pick = (key, value) => { const el = radio(key, value); el.checked = true; el.fire("change"); };
+        pick("date_pos", "top-left");
+        await flush();
+        rows.push($("date-stack-row").hidden);
+        pick("date_pos", "bottom-left");
+        await flush();
+        rows.push($("date-stack-row").hidden);
+        pick("date_on_top", "true");
+        await flush();
+        pick("date_pos", "middle-right");
+        await flush();
+        rows.push($("date-stack-row").hidden);
+        console.log(JSON.stringify({ rows, puts, size: $("date-size").value }));
+        """,
+        FORM_SETUP,
+    )
+    assert r["rows"] == [False, True, False, True]
+    assert r["puts"] == [
+        {"date_pos": "top-left"},
+        {"date_pos": "bottom-left"},
+        {"date_on_top": True},
+        {"date_pos": "middle-right"},
+    ]
+    assert r["size"] == 3

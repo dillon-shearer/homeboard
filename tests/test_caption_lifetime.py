@@ -61,6 +61,7 @@ function el(id) {
 }
 const els = {
   "layer-a": el("layer-a"), "layer-b": el("layer-b"), caption: el("caption"), clock: el("clock"),
+  date: el("date"),
   channel: el("channel"), overlay: el("overlay"), splash: el("splash"),
   dim: el("dim"), edge: el("edge"), brightness: el("brightness"),
 };

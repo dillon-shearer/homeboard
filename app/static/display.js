@@ -15,6 +15,10 @@
     clock_pos: "bottom-right",
     caption_pos: "bottom-left",
     clock_on_top: true,
+    date_size: 3,
+    date_pos: "bottom-right",
+    date_on_top: false,
+    date_show: true,
     brightness: 100,
   };
   const MAX_BACKOFF_S = 30;
@@ -53,6 +57,10 @@
     if (POSITIONS.indexOf(s.clock_pos) !== -1) out.clock_pos = s.clock_pos;
     if (POSITIONS.indexOf(s.caption_pos) !== -1) out.caption_pos = s.caption_pos;
     if ("clock_on_top" in s) out.clock_on_top = !!s.clock_on_top;
+    if (validSize(s.date_size)) out.date_size = s.date_size;
+    if (POSITIONS.indexOf(s.date_pos) !== -1) out.date_pos = s.date_pos;
+    if ("date_on_top" in s) out.date_on_top = !!s.date_on_top;
+    if ("date_show" in s) out.date_show = !!s.date_show;
     if (typeof s.brightness === "number" && isFinite(s.brightness)) out.brightness = clampBrightness(s.brightness);
     return out;
   }
@@ -72,11 +80,19 @@
 
   function overlayLayout(settings) {
     const s = applySettings(null, settings);
+    const order = s.clock_on_top ? ["clock", "caption"] : ["caption", "clock"];
+    const anchor = s.date_pos !== s.clock_pos && s.date_pos === s.caption_pos ? "caption" : "clock";
+    order.splice(order.indexOf(anchor) + (s.date_on_top ? 0 : 1), 0, "date");
     return {
       clockCell: s.clock_pos,
       captionCell: s.caption_pos,
-      order: s.clock_on_top ? ["clock", "caption"] : ["caption", "clock"],
+      dateCell: s.date_pos,
+      order: order,
     };
+  }
+
+  function formatDate(d) {
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   }
 
   function buildStops(screens) {
@@ -226,6 +242,7 @@
     resumeOrder: resumeOrder,
     nextBackoff: nextBackoff,
     formatClock: formatClock,
+    formatDate: formatDate,
     CHANNELS: CHANNELS,
     buildStops: buildStops,
     nextStop: nextStop,
@@ -258,6 +275,7 @@
   const layerB = document.getElementById("layer-b");
   const captionEl = document.getElementById("caption");
   const clockEl = document.getElementById("clock");
+  const dateEl = document.getElementById("date");
   const channelEl = document.getElementById("channel");
   const overlayEl = document.getElementById("overlay");
   const splashEl = document.getElementById("splash");
@@ -397,15 +415,20 @@
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty("--clock-size", settings.clock_size + "vh");
     rootStyle.setProperty("--caption-size", settings.caption_size + "vh");
+    rootStyle.setProperty("--date-size", settings.date_size + "vh");
+    dateEl.hidden = !settings.date_show;
     const layout = overlayLayout(settings);
-    const nodes = { clock: clockEl, caption: captionEl };
+    const nodes = { clock: clockEl, caption: captionEl, date: dateEl };
     const cells = {
       clock: document.getElementById("cell-" + layout.clockCell),
       caption: document.getElementById("cell-" + layout.captionCell),
+      date: document.getElementById("cell-" + layout.dateCell),
     };
-    const first = layout.order[0];
-    const placed = clockEl.parentNode === cells.clock && captionEl.parentNode === cells.caption &&
-      (cells.clock !== cells.caption || cells.clock.firstElementChild === nodes[first]);
+    const placed = layout.order.every(function (name, i) {
+      if (nodes[name].parentNode !== cells[name]) return false;
+      const later = layout.order.slice(i + 1).filter(function (n) { return cells[n] === cells[name]; });
+      return !later.length || nodes[name].nextElementSibling === nodes[later[0]];
+    });
     if (placed) return;
     layout.order.forEach(function (name) {
       cells[name].appendChild(nodes[name]);
@@ -920,6 +943,7 @@
   function updateClock() {
     const now = new Date();
     clockEl.textContent = formatClock(now);
+    dateEl.textContent = formatDate(now);
     setTimeout(updateClock, 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 20);
   }
 
