@@ -74,7 +74,9 @@ def unlink(request: Request):
 
 
 @router.get("/now")
-def now(request: Request):
+def now(request: Request, fresh: bool = False):
+    if fresh:
+        return _call(spotify.now_playing, _data_dir(request), True)
     return _call(spotify.now_playing, _data_dir(request))
 
 

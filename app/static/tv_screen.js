@@ -28,6 +28,7 @@
   var SPOTIFY_EXTRA_EVERY = 10;
   var SPOTIFY_NOTE_MS = 3000;
   var VOLUME_STEP = 5;
+  var VOLUME_CHAIN_MS = 1000;
   var SPOTIFY_LAYOUTS = { "2x2": "full", "2x1": "wide", "1x2": "tall", "1x1": "tile" };
   var NOT_LINKED_TEXT = "Spotify not linked";
   var IDLE_TEXT = "Nothing playing";
@@ -337,8 +338,8 @@
   }
 
   function volumeStep(volume, delta) {
-    var v = typeof volume === "number" ? volume : 50;
-    return Math.max(0, Math.min(100, v + delta));
+    if (typeof volume !== "number") return null;
+    return Math.max(0, Math.min(100, volume + delta));
   }
 
   function speakerOn(sound) {
@@ -788,9 +789,9 @@
         if (live) {
           var known = typeof now.volume === "number";
           var vol = el("div", "sp-volume");
-          vol.appendChild(spotButton("vol-down", "Volume down", null, "-"));
+          vol.appendChild(spotButton("vol-down", "Volume down", null, "-")).disabled = !known;
           vol.appendChild(el("span", "sp-volbar")).appendChild(el("i")).style.width = (known ? now.volume : 0) + "%";
-          vol.appendChild(spotButton("vol-up", "Volume up", null, "+"));
+          vol.appendChild(spotButton("vol-up", "Volume up", null, "+")).disabled = !known;
           vol.appendChild(el("span", "sp-vol", known ? now.volume + "%" : "--%"));
           controls.appendChild(vol);
         }
@@ -975,7 +976,7 @@
   var drag = null;
   var sliding = false;
   var spot = { on: false, seq: 0, polls: 0, timer: null, tick: null, now: null, at: 0, shown: [], sound: null,
-    note: null, noteTimer: null, connecting: false };
+    note: null, noteTimer: null, connecting: false, vol: null };
 
   function context() {
     var now = new Date();
@@ -1188,6 +1189,35 @@
     });
   }
 
+  function freshVolume() {
+    spot.seq++;
+    clearTimeout(spot.timer);
+    return getJSON("/api/spotify/now?fresh=1").then(function (now) {
+      return now.volume;
+    }, function () {
+      spotifyNote(SPOTIFY_DOWN_TEXT);
+      return null;
+    });
+  }
+
+  function volumeTap(delta) {
+    var chained = spot.vol && Date.now() - spot.vol.at < VOLUME_CHAIN_MS;
+    var sent = (chained ? spot.vol.sent : freshVolume()).then(function (volume) {
+      var next = volumeStep(volume, delta);
+      if (next === null) {
+        clearTimeout(spot.timer);
+        if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
+        return null;
+      }
+      if (spot.now) spot.now.volume = next;
+      spotifyCall("PUT", "/api/spotify/volume", { percent: next });
+      return next;
+    });
+    spot.vol = { sent: sent, at: Date.now() };
+    spot.now.volume = volumeStep(spot.now.volume, delta);
+    renderSpotifyCards();
+  }
+
   function spotifyTap(btn) {
     var now = spot.now || {};
     if (btn.hasAttribute("data-playlist")) {
@@ -1206,8 +1236,8 @@
     } else if (action === "previous" || action === "next") {
       spotifyCall("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {
-      now.volume = volumeStep(now.volume, action === "vol-up" ? VOLUME_STEP : -VOLUME_STEP);
-      spotifyCall("PUT", "/api/spotify/volume", { percent: now.volume });
+      if (btn.disabled || typeof now.volume !== "number") return;
+      volumeTap(action === "vol-up" ? VOLUME_STEP : -VOLUME_STEP);
     }
   }
 

@@ -1163,8 +1163,8 @@ class FakeSpotify:
         self.fail = {}
         self.connected = False
 
-    def now_playing(self, data_dir):
-        self.calls.append(("GET", "/api/spotify/now"))
+    def now_playing(self, data_dir, fresh=False):
+        self.calls.append(("GET", "/api/spotify/now?fresh=1" if fresh else "/api/spotify/now"))
         return self.now
 
     def control(self, data_dir, method, path, payload=None, query=None):

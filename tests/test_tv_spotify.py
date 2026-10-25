@@ -73,7 +73,7 @@ def test_spotify_helpers():
     assert result["states"] == ["idle", "playing", "paused", "unlinked", "idle"]
     assert result["covers"] == [None, "https://i.scdn.co/big", "https://i.scdn.co/big", None]
     assert result["progress"] == [67000, 65000, 185000, 0]
-    assert result["volume"] == [45, 100, 0, 55]
+    assert result["volume"] == [45, 100, 0, None]
     assert result["speaker"] == [True, False, False]
 
 

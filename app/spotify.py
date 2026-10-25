@@ -291,9 +291,9 @@ def _shape(data) -> dict:
     }
 
 
-def now_playing(data_dir) -> dict:
+def now_playing(data_dir, fresh=False) -> dict:
     with _now_lock:
-        if _now.get("data") is not None and _clock() - _now["at"] < NOW_EVERY_S:
+        if not fresh and _now.get("data") is not None and _clock() - _now["at"] < NOW_EVERY_S:
             return _now["data"]
         _now["at"] = _clock()
         try:
