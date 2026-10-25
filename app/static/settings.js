@@ -84,6 +84,7 @@
     var checks = document.querySelectorAll(".checks input[data-key]");
     for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
     if (!sliding && typeof s.brightness === "number") showBrightness(clampBrightness(s.brightness));
+    document.dispatchEvent(new CustomEvent("homeboard:settings", { detail: s }));
   }
 
   function loadSettings() {

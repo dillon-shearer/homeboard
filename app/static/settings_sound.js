@@ -327,6 +327,9 @@
   $("speaker-disconnect").addEventListener("click", function () { speakerAction("/api/sound/disconnect", "Disconnecting..."); });
   idleStepper();
 
+  document.addEventListener("homeboard:settings", function (e) {
+    if (typeof e.detail.speaker_idle_minutes === "number") renderIdle(e.detail.speaker_idle_minutes);
+  });
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible") return;
     loadNow();

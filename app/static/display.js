@@ -36,6 +36,7 @@
   const INTERVAL_PRESETS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
   const TIMEOUT_PRESETS = [0, 2, 5, 10, 30];
   const IDLE_PRESETS = [1, 2, 5, 10, 15, 30, 60, 120];
+  const KIOSK_RETRY_MS = 2000;
   const POSITIONS = [
     "top-left", "top-center", "top-right",
     "middle-left", "middle-center", "middle-right",
@@ -218,8 +219,15 @@
   }
 
   function stepPreset(presets, value, step) {
-    const i = presets.indexOf(nearestPreset(presets, value)) + step;
-    return presets[Math.max(0, Math.min(presets.length - 1, i))];
+    if (typeof value !== "number" || !isFinite(value)) return nearestPreset(presets, value);
+    const first = presets[0];
+    const last = presets[presets.length - 1];
+    if (step > 0) {
+      const up = presets.find(function (p) { return p > value; });
+      return up === undefined ? Math.min(value, last) : up;
+    }
+    const down = presets.filter(function (p) { return p < value; }).pop();
+    return down === undefined ? Math.max(value, first) : down;
   }
 
   function shouldReturn(now, last, timeoutMin, channel) {
@@ -443,6 +451,7 @@
   let kioskData = null;
   let kioskSeq = 0;
   let kioskPending = 0;
+  let kioskRetry = null;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -1103,7 +1112,7 @@
     kioskData = data;
     Object.keys(KIOSK_PRESETS).forEach(function (field) {
       document.getElementById("cp-kiosk-" + field).textContent =
-        kioskLabel(field, nearestPreset(KIOSK_PRESETS[field], data[field]));
+        typeof data[field] === "number" ? kioskLabel(field, data[field]) : "";
     });
     kioskEl.querySelectorAll("input").forEach(function (input) {
       const v = data[input.dataset.field];
@@ -1111,21 +1120,30 @@
     });
   }
 
-  function loadKiosk() {
+  function loadKiosk(retry) {
+    clearTimeout(kioskRetry);
     return fetchJson("/api/settings").then(function (data) {
+      if (retry) kioskErrorEl.hidden = true;
       if (!kioskPending) renderKiosk(data);
-    }, function () {});
+    }, function () {
+      if (kioskEl.hidden) return;
+      kioskErrorEl.textContent = "Could not load the settings. Trying again.";
+      kioskErrorEl.hidden = false;
+      kioskRetry = setTimeout(function () { loadKiosk(true); }, KIOSK_RETRY_MS);
+    });
   }
 
   function openKiosk() {
     markActivity();
     kioskErrorEl.hidden = true;
+    if (kioskData) renderKiosk(kioskData);
     kioskEl.hidden = false;
     loadKiosk();
   }
 
   function closeKiosk() {
     markActivity();
+    clearTimeout(kioskRetry);
     kioskEl.hidden = true;
   }
 
@@ -1244,7 +1262,7 @@
     return fetchJson("/api/settings").then(function (data) {
       state.needSettings = false;
       setSettings(data);
-      if (kioskEl && !kioskEl.hidden && !kioskPending) renderKiosk(data);
+      if (kioskEl && !kioskPending) renderKiosk(data);
     }, function () {
       state.needSettings = true;
     });
