@@ -357,6 +357,31 @@ body.tv {
   font-size: 14vh;
 }
 
+.tv-card[data-size="2x1"] .tv-face {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 5vh;
+  align-items: center;
+  text-align: left;
+}
+
+.tv-card[data-size="2x1"] .tv-face .time {
+  grid-row: 1 / span 2;
+  font-size: 18vh;
+}
+
+.tv-card[data-size="2x1"] .tv-face .day {
+  grid-column: 2;
+  align-self: end;
+  font-size: 6vh;
+}
+
+.tv-card[data-size="2x1"] .tv-face .date {
+  grid-column: 2;
+  align-self: start;
+  font-size: 4.8vh;
+}
+
 .tv-card[data-size="2x2"] .tv-face .time {
   font-size: 22vh;
 }
@@ -442,6 +467,30 @@ body.tv {
 .tv-cal-day h3 {
   margin: 0 0 0.4vh;
   font-size: 3.2vh;
+}
+
+.tv-cal-day.one .tv-up-list {
+  margin-top: 0.4vh;
+}
+
+.tv-card .tv-week {
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.tv-week .dh {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.8vh;
+}
+
+.tv-week .wd {
+  font-size: 3vh;
+}
+
+.tv-week .d.today .wd {
+  font-weight: bold;
 }
 
 .tv-lists-body {

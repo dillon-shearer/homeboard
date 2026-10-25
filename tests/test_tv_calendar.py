@@ -139,3 +139,116 @@ def test_too_many_chips_are_cut_with_plus_n(server, tmp_path):  # noqa: F811
     more = cell["chips"][-1]
     assert re.fullmatch(r"\+\d+", more)
     assert len(cell["chips"]) - 1 + int(more[1:]) == 13
+
+
+@needs_node
+def test_day_label_next_event_and_week_days():
+    result = _node(
+        "const occ = ["
+        "{title: 'Dinner', date: '2026-10-25', time: '18:30'},"
+        "{title: 'Trash', date: '2026-10-25', time: null},"
+        "{title: 'Trip', date: '2026-10-31', time: null},"
+        "{title: 'Far', date: '2026-11-01', time: null}];"
+        "console.log(JSON.stringify({label: T.dayLabel('2026-10-24'),"
+        " next: T.nextEvent(occ, '2026-10-24'), none: T.nextEvent(occ.slice(3), '2026-10-24'),"
+        " week: T.weekDays(occ, '2026-10-24')}))"
+    )
+    assert result["label"] == "Sat, Oct 24"
+    assert result["next"] == {"title": "Trash", "when": "Tomorrow, all day"}
+    assert result["none"] is None
+    week = result["week"]
+    assert [w["date"] for w in week] == [f"2026-10-{d}" for d in range(24, 31)]
+    assert [w["name"] for w in week] == ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"]
+    assert [w["day"] for w in week] == list(range(24, 31))
+    assert [w["today"] for w in week] == [True] + [False] * 6
+    assert week[1]["chips"] == ["Trash", "Dinner 6:30"]
+    assert all(not w["chips"] for w in week if w["date"] != "2026-10-25")
+
+
+CARD = """JSON.stringify((() => {
+  const c = document.querySelector('#screen .tv-card[data-kind="calendar"]');
+  if (!c) return null;
+  return {
+    title: document.getElementById('title').textContent,
+    h2: c.querySelector('h2').textContent,
+    text: c.innerText,
+    grid: !!c.querySelector('.tv-cal-grid:not(.tv-week)'),
+    up: c.innerText.includes('Coming up'),
+    week: [...c.querySelectorAll('.tv-week .d')].map(d => ({
+      date: d.dataset.date, cls: d.className, head: d.querySelector('.dh').innerText,
+      chips: [...d.querySelectorAll('.ev')].map(e => e.textContent)})),
+  };
+})())"""
+
+
+def _calendar_screens(base):
+    out = {}
+    with httpx.Client(base_url=base) as c:
+        for w, h in ((1, 1), (2, 1), (1, 2), (2, 2)):
+            screen = c.post("/api/screens", json={"name": f"Cal {w}x{h}"}).json()
+            r = c.post(
+                f"/api/screens/{screen['id']}/widgets",
+                json={"kind": "calendar", "col": 0, "row": 0, "w": w, "h": h},
+            )
+            assert r.status_code == 201, r.text
+            out[f"{w}x{h}"] = screen
+    return out
+
+
+def _card(base, chrome, screen):
+    httpx.put(f"{base}/api/settings", json={"channel": "screen", "screen_id": screen["id"]})
+    chrome.send("Page.navigate", {"url": f"{base}/tv"})
+    card = None
+    for _ in range(100):
+        card = json.loads(chrome.eval(CARD) or "null")
+        if card and card["title"] == screen["name"]:
+            break
+        time.sleep(0.05)
+    time.sleep(0.2)
+    return json.loads(chrome.eval(CARD))
+
+
+def _event(base, title, day, time_=None):
+    r = httpx.post(
+        f"{base}/api/events",
+        json={"title": title, "date": day.isoformat(), "time": time_, "repeat": "never"},
+    )
+    assert r.status_code == 201, r.text
+
+
+@needs_chrome
+def test_calendar_content_per_size(server, tmp_path):  # noqa: F811
+    today = date.today()
+    screens = _calendar_screens(server)
+    label = f"{today:%a}, {today:%b} {today.day}"
+    _event(server, "Dentist", today + timedelta(days=2), "09:00")
+    _event(server, "Far trip", today + timedelta(days=9))
+    chrome = _Chrome(tmp_path / "chrome", 1024, 600)
+    try:
+        empty_one = _card(server, chrome, screens["1x1"])
+        _event(server, "Vet", today, "15:00")
+        _event(server, "Bins", today)
+        one = _card(server, chrome, screens["1x1"])
+        wide = _card(server, chrome, screens["2x1"])
+        tall = _card(server, chrome, screens["1x2"])
+        full = _card(server, chrome, screens["2x2"])
+    finally:
+        chrome.close()
+    assert empty_one["h2"] == label
+    assert "Nothing today" in empty_one["text"]
+    assert "Dentist" in empty_one["text"] and "9:00 am" in empty_one["text"]
+    assert "Far trip" not in empty_one["text"] and not empty_one["up"]
+    assert one["h2"] == label
+    assert one["text"].index("Bins") < one["text"].index("Vet")
+    assert "3:00 pm" in one["text"] and "all day" in one["text"]
+    assert "Nothing today" not in one["text"] and "Dentist" not in one["text"]
+    assert wide["h2"] == "This week" and not wide["grid"]
+    days = [today + timedelta(days=i) for i in range(7)]
+    assert [w["date"] for w in wide["week"]] == [d.isoformat() for d in days]
+    assert [w["head"].split() for w in wide["week"]] == [[f"{d:%a}", str(d.day)] for d in days]
+    assert ["today" in w["cls"] for w in wide["week"]] == [True] + [False] * 6
+    assert wide["week"][0]["chips"] == ["Bins", "Vet 3pm"]
+    assert wide["week"][2]["chips"] == ["Dentist 9am"]
+    assert tall["h2"] == "Today" and tall["up"]
+    assert "Vet" in tall["text"] and "Dentist" in tall["text"]
+    assert full["grid"] and full["up"] and full["h2"] == today.strftime("%B %Y")
