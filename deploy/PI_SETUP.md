@@ -287,7 +287,7 @@ This links the board to your Spotify Premium account, so the board can show what
    - Under **Which API/SDKs are you planning to use?** tick only **Web API**. Leave Web Playback SDK, Android, iOS and the others unticked.
 3. Click Settings. Copy the Client ID. Click View client secret and copy it.
 4. On the Pi: `sudo bash /opt/homeboard/deploy/install.sh --spotify`, paste the Client ID and then the secret when asked.
-5. On the phone, open the Sound window (next ticket) and tap Sign in to Spotify.
+5. On the phone, open the Sound window (Start > Sound, or `/admin/sound`) and tap Sign in to Spotify.
 
 The installer saves the Client ID and secret in `/etc/homeboard/spotify.env`. Only the administrator (root) can read it. Later runs of the installer keep it. To paste a new Client ID and secret, run:
 

@@ -148,7 +148,7 @@ def test_tunnel_gate_demands_password(tunnel_client, path):
     assert tunnel_client.get(path, headers=TUNNEL).status_code == 200
 
 
-def test_start_has_four_icons_and_no_tv_controls(client):
+def test_start_has_five_icons_and_no_tv_controls(client):
     page = client.get("/admin").text
     icons = re.findall(
         r'<a class="w95-icon" href="([^"]+)">.*?<span class="w95-icon-label">([^<]+)<',
@@ -160,8 +160,9 @@ def test_start_has_four_icons_and_no_tv_controls(client):
         ("/admin/calendar", "Calendar"),
         ("/admin/lists", "Lists"),
         ("/admin/tv", "TV"),
+        ("/admin/sound", "Sound"),
     ]
-    assert page.count('class="w95-icon"') == 4
+    assert page.count('class="w95-icon"') == 5
     for gone in ('id="channel-timeout"', 'id="weather-location"', 'id="clock-size"'):
         assert gone not in page
     tv = re.search(r'<a class="w95-icon" href="/admin/tv">.*?</a>', page, re.DOTALL).group(0)
