@@ -63,7 +63,7 @@ const els = {
   "layer-a": el("layer-a"), "layer-b": el("layer-b"), caption: el("caption"), clock: el("clock"),
   date: el("date"), cover: el("cover"),
   channel: el("channel"), overlay: el("overlay"), splash: el("splash"),
-  dim: el("dim"), edge: el("edge"), brightness: el("brightness"),
+  dim: el("dim"),
 };
 for (const r of ["top", "middle", "bottom"]) {
   for (const c of ["left", "center", "right"]) els[`cell-${r}-${c}`] = el(`cell-${r}-${c}`);

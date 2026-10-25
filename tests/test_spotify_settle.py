@@ -21,9 +21,12 @@ class Lagging(FakeSpotify):
 
     def __call__(self, method, url, headers=None, body=None):
         out = super().__call__(method, url, headers, body)
-        if method == "GET" and url.endswith("/me/player"):
-            if self.count("GET", "/me/player") > self.old_reads:
-                return (200, NEW)
+        if (
+            method == "GET"
+            and url.endswith("/me/player")
+            and self.count("GET", "/me/player") > self.old_reads
+        ):
+            return (200, NEW)
         return out
 
 

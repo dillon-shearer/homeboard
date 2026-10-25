@@ -207,38 +207,6 @@ html, body {
   z-index: 30;
 }
 
-#brightness {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 16vh;
-  font-weight: 700;
-  line-height: 1;
-  white-space: nowrap;
-  color: #fff;
-  text-shadow: 0 0 1vh #000, 0 0 0.4vh #000, 0 0 2vh #000;
-  pointer-events: none;
-  z-index: 31;
-  opacity: 0;
-  transition: opacity 0.5s;
-}
-
-#brightness.show {
-  opacity: 1;
-}
-
-#edge {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 6vw;
-  height: 100vh;
-  background: transparent;
-  pointer-events: auto;
-  z-index: 32;
-}
-
 #control-panel {
   position: fixed;
   top: 2vh;

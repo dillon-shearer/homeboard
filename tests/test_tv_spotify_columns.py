@@ -17,8 +17,15 @@ COLUMNS = """JSON.stringify((() => {
   return out;
 })())"""
 
-MIDDLE = ['.sp-progress', '[data-sp="previous"]', '[data-sp="toggle"]', '[data-sp="next"]', '.sp-volume',
-          '.sp-vol', '[data-sp="speaker"]']
+MIDDLE = [
+    ".sp-progress",
+    '[data-sp="previous"]',
+    '[data-sp="toggle"]',
+    '[data-sp="next"]',
+    ".sp-volume",
+    ".sp-vol",
+    '[data-sp="speaker"]',
+]
 
 
 @needs_chrome
@@ -51,7 +58,9 @@ def test_full_spotify_long_title_stays_inside_the_card(chrome, server, fake):  #
     chrome.size(1024, 600)
     _show_screen(server, ids[(2, 2)])
     chrome.send("Page.navigate", {"url": f"{server}/tv"})
-    full = _sp_card(chrome, "Music 2x2", lambda o: o["rows"] and o["track"] == long and o["coverImg"])
+    full = _sp_card(
+        chrome, "Music 2x2", lambda o: o["rows"] and o["track"] == long and o["coverImg"]
+    )
     assert full["out"] == [] and full["small"] == []
     box = _until(lambda: _json(chrome, COLUMNS), lambda o: o and all(o.values()))
     assert box[".sp-artist"][3] <= box["card"][3] + 1, box
