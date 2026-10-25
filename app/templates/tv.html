@@ -69,8 +69,14 @@
 <input id="date-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Date size">
 <button type="button" id="date-size-plus" class="w95-btn step" aria-label="Bigger date">+</button>
 </div>
+<label for="cover-size">Now playing cover</label>
+<div class="stepper">
+<button type="button" id="cover-size-minus" class="w95-btn step" aria-label="Smaller cover">&minus;</button>
+<input id="cover-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Cover size">
+<button type="button" id="cover-size-plus" class="w95-btn step" aria-label="Bigger cover">+</button>
+</div>
 <div class="spot-pair">
-{% for key, title in [("clock_pos", "Clock spot"), ("caption_pos", "Caption spot"), ("date_pos", "Date spot")] %}
+{% for key, title in [("clock_pos", "Clock spot"), ("caption_pos", "Caption spot"), ("date_pos", "Date spot"), ("cover_pos", "Cover spot")] %}
 <div class="spot-field">
 <span id="{{ key }}-label">{{ title }}</span>
 <div class="spots" role="radiogroup" aria-labelledby="{{ key }}-label">
@@ -95,9 +101,17 @@
 <label class="w95-check w95-radio"><input type="radio" name="date_on_top" value="false"> Date below</label>
 </div>
 </div>
+<div id="cover-stack-row" class="stack-row" hidden>
+<span id="cover-stack-label">When the cover shares a spot:</span>
+<div class="choices" role="radiogroup" aria-labelledby="cover-stack-label">
+<label class="w95-check w95-radio"><input type="radio" name="cover_on_top" value="true"> Cover above</label>
+<label class="w95-check w95-radio"><input type="radio" name="cover_on_top" value="false"> Cover below</label>
+</div>
+</div>
 <div class="checks">
 <label class="w95-check"><input type="checkbox" data-key="captions"><span>Show captions on the TV</span></label>
 <label class="w95-check"><input type="checkbox" data-key="date_show"><span>Show the date</span></label>
+<label class="w95-check"><input type="checkbox" data-key="cover_show"><span>Show the now playing cover<small class="hint">While Spotify plays on the board</small></span></label>
 </div>
 </div>
 </section>

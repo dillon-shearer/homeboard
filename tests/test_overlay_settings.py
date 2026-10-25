@@ -134,15 +134,17 @@ def test_overlay_layout_cells_and_order():
         "clockCell": "bottom-right",
         "captionCell": "bottom-left",
         "dateCell": "bottom-right",
-        "order": ["clock", "date", "caption"],
+        "coverCell": "top-right",
+        "order": ["cover", "clock", "date", "caption"],
     }
     assert r["shared"] == {
         "clockCell": "top-left",
         "captionCell": "top-left",
         "dateCell": "bottom-right",
-        "order": ["clock", "date", "caption"],
+        "coverCell": "top-right",
+        "order": ["cover", "clock", "date", "caption"],
     }
-    assert r["below"]["order"] == ["caption", "clock", "date"]
+    assert r["below"]["order"] == ["cover", "caption", "clock", "date"]
     assert r["below"]["clockCell"] == r["below"]["captionCell"] == "bottom-right"
 
 
@@ -160,12 +162,22 @@ def test_settings_change_moves_elements_and_sets_sizes():
         """
     )
     assert r["before"] == {
-        "vars": {"--clock-size": "5vh", "--caption-size": "5vh", "--date-size": "3vh"},
+        "vars": {
+            "--clock-size": "5vh",
+            "--caption-size": "5vh",
+            "--date-size": "3vh",
+            "--cover-size": "3",
+        },
         "clock": "cell-bottom-right",
         "caption": "cell-bottom-left",
     }
     assert r["after"] == {
-        "vars": {"--clock-size": "8vh", "--caption-size": "3vh", "--date-size": "3vh"},
+        "vars": {
+            "--clock-size": "8vh",
+            "--caption-size": "3vh",
+            "--date-size": "3vh",
+            "--cover-size": "3",
+        },
         "clock": "cell-top-center",
         "caption": "cell-middle-right",
     }
@@ -221,14 +233,14 @@ def test_overlay_layout_date_order():
         }));
         """
     )
-    assert r["d"]["order"] == ["clock", "date", "caption"]
-    assert r["under"]["order"] == ["caption", "clock", "date"]
-    assert r["above"]["order"] == ["date", "clock", "caption"]
-    assert r["capBelow"]["order"] == ["clock", "caption", "date"]
+    assert r["d"]["order"] == ["cover", "clock", "date", "caption"]
+    assert r["under"]["order"] == ["cover", "caption", "clock", "date"]
+    assert r["above"]["order"] == ["cover", "date", "clock", "caption"]
+    assert r["capBelow"]["order"] == ["cover", "clock", "caption", "date"]
     assert r["capBelow"]["dateCell"] == "middle-center"
-    assert r["capAbove"]["order"] == ["clock", "date", "caption"]
+    assert r["capAbove"]["order"] == ["cover", "clock", "date", "caption"]
     assert r["alone"]["dateCell"] == "top-center"
-    assert sorted(r["alone"]["order"]) == ["caption", "clock", "date"]
+    assert sorted(r["alone"]["order"]) == ["caption", "clock", "cover", "date"]
 
 
 @needs_node
