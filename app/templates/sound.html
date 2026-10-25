@@ -28,10 +28,21 @@
 <section class="w95-group settings" aria-labelledby="group-spotify">
 <h2 id="group-spotify" class="w95-legend">Spotify</h2>
 <p id="spotify-state" class="sound-line">Checking...</p>
+<p id="not-linked" class="sound-line" hidden>Spotify is not linked. <a href="/admin/settings">Link it in Settings</a></p>
+<div id="player"></div>
+<p id="player-note" class="error" hidden></p>
 </section>
-<section class="w95-group settings" aria-labelledby="group-speaker">
+<section id="speaker-group" class="w95-group settings" aria-labelledby="group-speaker" hidden>
 <h2 id="group-speaker" class="w95-legend">Speaker</h2>
+<div class="w95-row player-speaker">
 <p id="speaker-state" class="sound-line">Checking...</p>
+<button id="speaker-toggle" class="w95-btn" type="button" disabled>Connect</button>
+</div>
+</section>
+<section id="playlists-group" class="w95-group settings" aria-labelledby="group-playlists" hidden>
+<h2 id="group-playlists" class="w95-legend">Playlists</h2>
+<ul id="board-playlists" class="player-tiles"></ul>
+<p id="playlists-none" class="sound-line" hidden>No playlists are shown on the board. Pick some in <a href="/admin/settings">Settings</a>.</p>
 </section>
 </div>
 </main>
