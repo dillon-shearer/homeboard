@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN speaker_volume INTEGER NOT NULL DEFAULT 70;

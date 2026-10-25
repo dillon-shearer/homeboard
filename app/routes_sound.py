@@ -4,6 +4,10 @@ import urllib.request
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
+
+from app import db, events
+from app.routes_photos import Conn
 
 router = APIRouter(prefix="/api/sound")
 
@@ -12,8 +16,16 @@ TIMEOUT_S = 5
 CONNECT_TIMEOUT_S = 40
 
 
-def helper(method: str, path: str, timeout: float = TIMEOUT_S) -> JSONResponse:
-    data = b"{}" if method == "POST" else None
+class Volume(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    volume: int = Field(ge=0, le=100, strict=True)
+
+
+def helper(
+    method: str, path: str, timeout: float = TIMEOUT_S, body: dict | None = None
+) -> JSONResponse:
+    data = json.dumps(body or {}).encode() if method == "POST" else None
     req = urllib.request.Request(
         HELPER_URL + path, data=data, method=method, headers={"Content-Type": "application/json"}
     )
@@ -48,3 +60,15 @@ def sound_disconnect():
 @router.post("/reboot")
 def sound_reboot():
     return helper("POST", "/reboot")
+
+
+@router.get("/volume")
+def sound_volume():
+    return helper("GET", "/volume")
+
+
+@router.post("/volume")
+def sound_set_volume(body: Volume, conn: Conn):
+    db.update_settings(conn, speaker_volume=body.volume)
+    events.publish("settings_changed")
+    return helper("POST", "/volume", body={"volume": body.volume})

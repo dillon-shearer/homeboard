@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -278,7 +279,84 @@ def drive_menu(chrome: str, base: str, out: Path, profile: Path) -> None:
         print(f"deleted photo {del_id}")
 
 
+def touch(cdp: Cdp, kind: str, points: list) -> None:
+    cdp.call("Input.dispatchTouchEvent", type=kind, touchPoints=points)
+
+
+def shoot_panel(chrome: str, base: str, out: Path, profile: Path) -> None:
+    width, height = 1024, 600
+    with open_page(chrome, profile, width, height) as cdp:
+        cdp.call("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=1)
+        cdp.call("Page.navigate", url=f"{base}/")
+        cdp.wait(
+            "!!document.querySelector('.layer.front') && document.getElementById('splash').hidden",
+            "the first photo",
+        )
+        touch(cdp, "touchStart", [{"x": 500, "y": 80}])
+        for y in range(120, 440, 40):
+            touch(cdp, "touchMove", [{"x": 500, "y": y}])
+            time.sleep(0.02)
+        touch(cdp, "touchEnd", [])
+        cdp.wait(
+            "!document.getElementById('control-panel').hidden && "
+            "document.getElementById('control-panel').style.transform === 'translateY(0px)' && "
+            "document.querySelectorAll('#cp-screens .cp-icon').length > 1 && "
+            "document.getElementById('cp-speaker-state').textContent === 'Connected'",
+            "the open Control Panel",
+        )
+        time.sleep(0.4)
+        shot = cdp.call("Page.captureScreenshot", format="png")
+        out.write_bytes(base64.b64decode(shot["data"]))
+        with Image.open(out) as img:
+            if img.size != (width, height):
+                sys.exit(f"{out} is {img.size}, expected {width}x{height}")
+        print(f"wrote {out}")
+
+
+def panel_main(out_dir: Path) -> None:
+    sys.path.insert(0, str(ROOT))
+    import uvicorn
+    from fastapi.responses import JSONResponse
+
+    from app import routes_sound, weather
+    from app.main import create_app
+
+    def helper(method, path, timeout=5):
+        return JSONResponse({"speaker": {"connected": True, "name": "Soundbar"}})
+
+    def offline(url):
+        raise OSError(f"offline in shots: {url}")
+
+    routes_sound.helper = helper
+    weather.fetch_json = offline
+    chrome = find_chrome()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix="homeboard-shot-"))
+    port = free_port()
+    base = f"http://127.0.0.1:{port}"
+    server = uvicorn.Server(
+        uvicorn.Config(create_app(tmp / "data"), host="127.0.0.1", port=port, log_level="warning")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 30
+        while not server.started:
+            if time.monotonic() > deadline:
+                sys.exit("uvicorn did not start")
+            time.sleep(0.1)
+        seed(base)
+        shoot_panel(chrome, base, out_dir / "control-panel-1024.png", tmp / "chrome-panel")
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--control-panel":
+        panel_main(Path(sys.argv[2]))
+        return
     chrome = find_chrome()
     SHOTS.mkdir(exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="homeboard-shot-"))

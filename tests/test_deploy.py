@@ -293,7 +293,9 @@ def test_install_sets_up_spotify_credential():
 
 def test_setup_guide_has_spotify_steps():
     text = (DEPLOY / "PI_SETUP.md").read_text(encoding="utf-8")
-    assert "## Spotify" in text
+    assert "## Part 9: Spotify" in text
+    assert "## Part 8: Play music through the soundbar" in text
+    assert "install.sh --pair-speaker" in text
     assert "https://developer.spotify.com/dashboard" in text
     assert "https://homeboard.datawithdillon.com/api/spotify/callback" in text
     assert "sudo bash /opt/homeboard/deploy/install.sh --spotify" in text
