@@ -1230,8 +1230,9 @@
         return null;
       }
       if (spot.now) spot.now.volume = next;
-      spotifyCall("PUT", "/api/spotify/volume", { percent: next });
-      return next;
+      return spotifyCall("PUT", "/api/spotify/volume", { percent: next }).then(function () {
+        return next;
+      });
     });
     spot.vol = { sent: sent, at: Date.now() };
     spot.now.volume = volumeStep(spot.now.volume, delta);
@@ -1254,7 +1255,7 @@
       spot.at = Date.now();
       spotifyCall("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
     } else if (action === "here") {
-      spotifyCall("POST", "/api/spotify/play");
+      spotifyCall("POST", "/api/spotify/here");
     } else if (action === "previous" || action === "next") {
       spotifyCall("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {

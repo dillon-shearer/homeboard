@@ -34,6 +34,7 @@ _token: dict = {}
 _now: dict = {}
 _profile: dict = {}
 _settle = {"gen": 0}
+_cool = {"until": 0.0}
 _states: dict[str, float] = {}
 
 
@@ -58,7 +59,16 @@ def _context() -> ssl.SSLContext:
     return _tls
 
 
+def _retry_after(value) -> float:
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def fetch(method: str, url: str, headers=None, body: bytes | None = None):
+    if _clock() < _cool["until"]:
+        return 429, None
     req = urllib.request.Request(
         url, data=body, method=method, headers={"User-Agent": "homeboard", **(headers or {})}
     )
@@ -67,6 +77,8 @@ def fetch(method: str, url: str, headers=None, body: bytes | None = None):
             status, raw = resp.status, resp.read()
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read()
+        if status == 429:
+            _cool["until"] = _clock() + _retry_after(e.headers.get("Retry-After"))
     try:
         return status, json.loads(raw) if raw else None
     except ValueError:
@@ -125,6 +137,7 @@ def forget(data_dir=None) -> None:
             token_path(data_dir).unlink(missing_ok=True)
         _token.clear()
         _profile.clear()
+        _cool["until"] = 0.0
     with _now_lock:
         _now.clear()
 
@@ -273,9 +286,20 @@ def control(data_dir, method: str, path: str, payload=None, query=None) -> dict:
             device = _take_over(data_dir, play)
             try:
                 api(data_dir, method, path, payload, {**(query or {}), "device_id": device})
-            except SpotifyError:
-                if path != "/me/player/pause" and not (play and payload is None):
+            except SpotifyError as e:
+                if e.status != 409 or (
+                    path != "/me/player/pause" and not (play and payload is None)
+                ):
                     raise
+    finally:
+        with _now_lock:
+            _now.clear()
+    return {"linked": True, "ok": True}
+
+
+def play_here(data_dir) -> dict:
+    try:
+        _take_over(data_dir, True)
     finally:
         with _now_lock:
             _now.clear()
@@ -344,7 +368,15 @@ def now_playing(data_dir, fresh=False) -> dict:
 
 def _seen(now) -> tuple:
     now = now or {}
-    return (now.get("track"), now.get("cover"), now.get("playing"), now.get("device"))
+    return (
+        now.get("track"),
+        now.get("artist"),
+        now.get("album"),
+        now.get("duration_ms"),
+        now.get("cover"),
+        now.get("playing"),
+        now.get("device"),
+    )
 
 
 def settle(data_dir, publish) -> None:
@@ -364,7 +396,10 @@ def settle(data_dir, publish) -> None:
             waited = at
             if _settle["gen"] != gen:
                 return
-            now = now_playing(data_dir, True)
+            try:
+                now = now_playing(data_dir, True)
+            except NotLinked:
+                return
             if now.get("stale"):
                 continue
             seen = _seen(now)

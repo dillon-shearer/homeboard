@@ -14,6 +14,7 @@
   var playlists = [];
   var idle = null;
   var busy = false;
+  var speakerSeq = 0;
   var saving = Promise.resolve();
 
   function $(id) {
@@ -114,12 +115,18 @@
   }
 
   function loadSpeaker() {
-    return getJSON("/api/sound/status").then(renderSpeaker).catch(speakerError);
+    var mine = ++speakerSeq;
+    return getJSON("/api/sound/status").then(function (s) {
+      if (mine === speakerSeq) renderSpeaker(s);
+    }, function (err) {
+      if (mine === speakerSeq) speakerError(err);
+    });
   }
 
   function speakerAction(path, label) {
     if (busy) return;
     busy = true;
+    speakerSeq++;
     $("speaker-connect").disabled = true;
     $("speaker-disconnect").disabled = true;
     $("speaker-state").textContent = label;
@@ -336,7 +343,9 @@
     loadSpeaker();
   });
   setInterval(function () {
-    if (document.visibilityState === "visible") loadNow();
+    if (document.visibilityState !== "visible") return;
+    loadNow();
+    if (!busy) loadSpeaker();
   }, NOW_MS);
 
   loadSettings();

@@ -280,8 +280,9 @@
       touchedAt = Date.now();
       if (now) now.volume = next;
       if (ui) showVolume(next);
-      call("PUT", "/api/spotify/volume", { percent: next });
-      return next;
+      return call("PUT", "/api/spotify/volume", { percent: next }).then(function () {
+        return next;
+      });
     });
     vol = { sent: sent, at: Date.now() };
     var guess = volumeStep(now.volume, delta);
@@ -299,7 +300,7 @@
       render();
       call("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
     } else if (action === "here") {
-      call("POST", "/api/spotify/play");
+      call("POST", "/api/spotify/here");
     } else if (action === "previous" || action === "next") {
       call("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {
