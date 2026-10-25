@@ -371,7 +371,7 @@ fi
 echo "== Spotify Connect speaker"
 install -d -m 755 /etc/raspotify /etc/systemd/system/raspotify.service.d
 install -m 644 "$APP_DIR"/deploy/raspotify.conf /etc/raspotify/conf
-printf '[Unit]\nWants=user@1000.service\nAfter=user@1000.service\n\n[Service]\nUser=%s\nGroup=%s\nProtectHome=no\n' \
+printf '[Unit]\nWants=user@1000.service\nAfter=user@1000.service\n\n[Service]\nUser=%s\nGroup=%s\nProtectHome=no\nConfigurationDirectoryMode=0755\n' \
     "$KIOSK_USER" "$KIOSK_USER" > /etc/systemd/system/raspotify.service.d/homeboard.conf
 
 echo "== Enabling services"

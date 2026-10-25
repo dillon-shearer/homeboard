@@ -294,7 +294,7 @@ def test_install_sets_up_raspotify():
     ) in text
     assert "apt-get install -y -o Dpkg::Options::=--force-confold raspotify\n" in text
     assert 'install -m 644 "$APP_DIR"/deploy/raspotify.conf /etc/raspotify/conf\n' in text
-    assert "User=%s\\nGroup=%s\\nProtectHome=no" in text
+    assert "User=%s\\nGroup=%s\\nProtectHome=no\\nConfigurationDirectoryMode=0755" in text
     assert "/etc/systemd/system/raspotify.service.d/homeboard.conf" in text
     enable = text.split("systemctl enable \\\n", 1)[1].split("\n\n", 1)[0]
     assert "    raspotify.service \\\n" in enable
