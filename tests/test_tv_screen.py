@@ -1114,45 +1114,29 @@ def test_weather_card_without_forecast_says_so(chrome, server, tmp_path):
 
 
 DIM = """JSON.stringify((() => {
-  const b = document.getElementById('brightness');
   const d = document.getElementById('dim');
-  if (!b || !d || !d.style.opacity) return null;
-  return {
-    text: b.textContent,
-    readout: parseFloat(getComputedStyle(b).opacity),
-    dim: parseFloat(getComputedStyle(d).opacity),
-  };
+  if (!d || !d.style.opacity) return null;
+  return { dim: parseFloat(getComputedStyle(d).opacity) };
 })())"""
 
 
 @needs_chrome
-def test_left_edge_drag_dims_and_saves(chrome, server):
+def test_brightness_dims_and_survives_a_swipe(chrome, server):
     chrome.size(1024, 600)
     chrome.touch()
     chrome.send("Page.navigate", {"url": f"{server}/"})
     _until(lambda: _json(chrome, DIM), bool)
-    _move(chrome, "touchStart", 30, 100)
-    for y in range(130, 280, 30):
-        _move(chrome, "touchMove", 30, y)
-    mid = _until(lambda: _json(chrome, DIM), lambda s: s and s["readout"] > 0.9)
-    for y in range(280, 401, 30):
-        _move(chrome, "touchMove", 30, y)
-    _move(chrome, "touchMove", 30, 400)
-    _move(chrome, "touchEnd", 30, 400)
-    saved = _until(lambda: _settings(server), lambda s: s["brightness"] != 100)
-    after = _json(chrome, DIM)
-    chrome.eval("__test.fire(800)")
-    faded = _until(lambda: _json(chrome, DIM), lambda s: s["readout"] == 0)
+    edge = chrome.eval("document.getElementById('edge')")
+    api.put(f"{server}/api/settings", json={"brightness": 50})
+    live = _until(lambda: _json(chrome, DIM), lambda s: s and abs(s["dim"] - 0.5) < 0.02)
     _swipe(chrome, [{"x": 200 + 30 * i, "y": 300} for i in range(11)])
     swiped = _until(lambda: _settings(server), lambda s: s["channel"] == "screen")
     api.put(f"{server}/api/settings", json={"brightness": 40})
     chrome.send("Page.navigate", {"url": f"{server}/"})
     reloaded = _until(lambda: _json(chrome, DIM), lambda s: s and abs(s["dim"] - 0.6) < 0.02)
-    assert mid["readout"] > 0.9 and mid["text"].endswith("%")
-    assert abs(saved["brightness"] - 50) <= 2
-    assert after["dim"] == pytest.approx(1 - saved["brightness"] / 100, abs=0.02)
-    assert faded["readout"] == 0
-    assert swiped["brightness"] == saved["brightness"]
+    assert edge is None
+    assert live["dim"] == pytest.approx(0.5, abs=0.02)
+    assert swiped["brightness"] == 50
     assert reloaded["dim"] == pytest.approx(0.6, abs=0.02)
 
 

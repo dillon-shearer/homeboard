@@ -18,7 +18,9 @@ def test_tv_polls_spotify_again_when_the_song_ends():
       S.nextPollMs(p({{ duration_ms: null }})),
       S.nextPollMs(null),
     ]));"""
-    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30, check=True)
+    out = subprocess.run(
+        ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
+    )
     assert json.loads(out.stdout) == [15000, 5000, 1000, 15000, 15000, 15000]
 
 
@@ -29,7 +31,7 @@ def _open(chrome, server):
 
 
 @needs_chrome
-def test_cover_follows_the_next_song_at_track_end(chrome, server, now):
+def test_cover_follows_the_next_song_at_track_end(chrome, server, now):  # noqa: F811
     _seed(server)
     first = _png((200, 40, 40), 200)
     second = _png((40, 40, 200), 200)
@@ -45,7 +47,7 @@ def test_cover_follows_the_next_song_at_track_end(chrome, server, now):
 
 
 @needs_chrome
-def test_cover_is_fresh_when_the_board_comes_back_to_photos(chrome, server, now):
+def test_cover_is_fresh_when_the_board_comes_back_to_photos(chrome, server, now):  # noqa: F811
     sid = _seed(server)
     first = _png((200, 40, 40), 200)
     second = _png((40, 40, 200), 200)

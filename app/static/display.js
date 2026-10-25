@@ -32,7 +32,6 @@
   const TAP_PX = 10;
   const BRIGHTNESS_MIN = 10;
   const BRIGHTNESS_MAX = 100;
-  const EDGE_FRAC = 0.06;
   const CHANNELS = ["photos", "screen"];
   const POSITIONS = [
     "top-left", "top-center", "top-right",
@@ -77,11 +76,6 @@
 
   function clampBrightness(v) {
     return Math.max(BRIGHTNESS_MIN, Math.min(BRIGHTNESS_MAX, Math.round(v)));
-  }
-
-  function dragBrightness(start, dy, height) {
-    if (!height) return clampBrightness(start);
-    return clampBrightness(start + Math.round(-dy / height * 100));
   }
 
   function dimOpacity(v) {
@@ -179,12 +173,16 @@
     return Math.abs(dx) > FLING_PX && Math.abs(speed) >= FLING_V && speed * dx > 0;
   }
 
-  function inEdge(x, width) {
-    return x < width * EDGE_FRAC;
+  function panelCommits(dx, dy, v) {
+    return dy > 0 && swipeCommits(dy, dx, v);
   }
 
-  function panelCommits(x, dx, dy, v, width) {
-    return !inEdge(x, width) && dy > 0 && swipeCommits(dy, dx, v);
+  function inScroller(el, styleOf) {
+    for (; el && el.nodeType === 1; el = el.parentElement) {
+      const oy = styleOf(el).overflowY;
+      if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight) return true;
+    }
+    return false;
   }
 
   function panelOffset(dy, height, open) {
@@ -295,13 +293,12 @@
     restOffset: restOffset,
     dragOffset: dragOffset,
     swipeCommits: swipeCommits,
-    inEdge: inEdge,
     panelCommits: panelCommits,
+    inScroller: inScroller,
     panelOffset: panelOffset,
     shouldReturn: shouldReturn,
     focusPosition: focusPosition,
     clampBrightness: clampBrightness,
-    dragBrightness: dragBrightness,
     dimOpacity: dimOpacity,
   };
 
@@ -316,7 +313,6 @@
   const SLIDE_MS = 250;
   const VELOCITY_MS = 100;
   const SPLASH_FADE_MS = 500;
-  const READOUT_HIDE_MS = 800;
   const COVER_POLL_MS = 15000;
   const COVER_END_MS = 1000;
   const PHOTOS_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="22" fill="#000"/><rect x="3" y="6" width="26" height="20" fill="#c0c0c0"/><rect x="5" y="8" width="22" height="16" fill="#00ffff"/><polygon points="5,24 13,14 19,21 22,18 27,24" fill="#008000"/><rect x="21" y="10" width="4" height="4" fill="#ffff00"/></svg>';
@@ -332,8 +328,6 @@
   const overlayEl = document.getElementById("overlay");
   const splashEl = document.getElementById("splash");
   const dimEl = document.getElementById("dim");
-  const edgeEl = document.getElementById("edge");
-  const brightnessEl = document.getElementById("brightness");
   const panelEl = document.getElementById("control-panel");
   const screensEl = document.getElementById("cp-screens");
   const speakerEl = document.getElementById("cp-speaker");
@@ -376,8 +370,6 @@
   let sliding = false;
   let tvDrag = false;
   let shownId = null;
-  let edgeDrag = null;
-  let readoutTimer = null;
   let coverTouch = null;
   let coverEndTimer = null;
   let panelOpen = false;
@@ -424,7 +416,7 @@
     if (!state.settings.captions) hideCaption();
     placeOverlay(state.settings);
     applyChannel();
-    if (!edgeDrag && !sliderDrag) applyBrightness(state.settings.brightness);
+    if (!sliderDrag) applyBrightness(state.settings.brightness);
     if (sliderEl && !sliderDrag) showSlider(state.settings.brightness);
   }
 
@@ -434,46 +426,6 @@
 
   function viewHeight() {
     return root.innerHeight || 0;
-  }
-
-  function showReadout(v) {
-    clearTimeout(readoutTimer);
-    readoutTimer = null;
-    brightnessEl.textContent = v + "%";
-    brightnessEl.classList.add("show");
-  }
-
-  function onEdgeStart(e) {
-    e.stopPropagation();
-    markActivity();
-    const t = e.changedTouches[0];
-    if (!t) return;
-    edgeDrag = { y: t.clientY, start: state.settings.brightness, value: state.settings.brightness };
-    showReadout(edgeDrag.value);
-  }
-
-  function onEdgeMove(e) {
-    e.stopPropagation();
-    markActivity();
-    const t = e.changedTouches[0];
-    if (!edgeDrag || !t) return;
-    edgeDrag.value = dragBrightness(edgeDrag.start, t.clientY - edgeDrag.y, viewHeight());
-    applyBrightness(edgeDrag.value);
-    showReadout(edgeDrag.value);
-  }
-
-  function onEdgeEnd(e) {
-    e.stopPropagation();
-    markActivity();
-    const drag = edgeDrag;
-    edgeDrag = null;
-    clearTimeout(readoutTimer);
-    readoutTimer = setTimeout(function () {
-      readoutTimer = null;
-      brightnessEl.classList.remove("show");
-    }, READOUT_HIDE_MS);
-    if (!drag) return;
-    saveBrightness(drag.value);
   }
 
   function saveBrightness(v) {
@@ -761,7 +713,10 @@
   }
 
   function panelGrab(e) {
-    return !!panelEl && e.target !== sliderEl && confirmEl.hidden;
+    if (!panelEl || e.target === sliderEl || !confirmEl.hidden) return false;
+    return panelOpen || !inScroller(e.target, function (el) {
+      return el.ownerDocument.defaultView.getComputedStyle(el);
+    });
   }
 
   function panelMove(dx, dy) {
@@ -775,12 +730,16 @@
       return true;
     }
     if (!panelDrag) {
-      if (!touchStart.grab || state.settings.channel !== "photos" || dy <= 0 || !steep) return false;
-      if (inEdge(touchStart.x, viewWidth())) return false;
+      if (!touchStart.grab || dy <= 0 || !steep) return false;
       if (dragging) {
         dragging = false;
         channelEl.classList.remove("drag");
-        moveChannel(restOffset("photos", viewWidth()));
+        moveChannel(restOffset(state.settings.channel, viewWidth()));
+      }
+      if (tvDrag) {
+        tvDrag = false;
+        const tv = tvScreen();
+        if (tv) tv.dragTo(0, null);
       }
       panelDrag = true;
       preparePanel();
@@ -797,7 +756,7 @@
     if (panelOpen) {
       if (dy < 0 && swipeCommits(dy, dx, v)) closePanel();
       else slidePanel(0);
-    } else if (panelCommits(start.x, dx, dy, v, viewWidth())) {
+    } else if (panelCommits(dx, dy, v)) {
       openPanel();
     } else {
       closePanel();
@@ -828,7 +787,6 @@
     loadSpeaker();
     movePanel(-viewHeight());
     panelEl.hidden = false;
-    edgeEl.hidden = true;
   }
 
   function openPanel() {
@@ -847,7 +805,6 @@
     slidePanel(-viewHeight(), function () {
       if (panelOpen) return;
       panelEl.hidden = true;
-      edgeEl.hidden = false;
     });
   }
 
@@ -1343,10 +1300,6 @@
     document.addEventListener("touchend", onTouchEnd, { passive: true });
     channelEl.onload = hookFrame;
     if (panelEl) hookPanel();
-    edgeEl.addEventListener("touchstart", onEdgeStart, { passive: true });
-    edgeEl.addEventListener("touchmove", onEdgeMove, { passive: true });
-    edgeEl.addEventListener("touchend", onEdgeEnd, { passive: true });
-    edgeEl.addEventListener("touchcancel", onEdgeEnd, { passive: true });
     coverEl.addEventListener("touchstart", onCoverStart, { passive: true });
     coverEl.addEventListener("touchmove", onCoverMove, { passive: true });
     coverEl.addEventListener("touchend", onCoverEnd, { passive: true });

@@ -22,16 +22,14 @@ def _node(body):
 def test_panel_drag_helpers():
     r = _node(
         """
-        const w = 1024, h = 600;
+        const h = 600;
         console.log(JSON.stringify({
-          down: S.panelCommits(500, 0, S.SWIPE_PX + 1, 0, w),
-          short: S.panelCommits(500, 0, S.SWIPE_PX, 0, w),
-          fling: S.panelCommits(500, 0, 40, 1, w),
-          edge: S.panelCommits(30, 0, S.SWIPE_PX + 40, 0, w),
-          edgeBorder: S.panelCommits(62, 0, S.SWIPE_PX + 40, 0, w),
-          sideways: S.panelCommits(500, 200, S.SWIPE_PX + 40, 0, w),
-          up: S.panelCommits(500, 0, -200, 0, w),
-          inEdge: [S.inEdge(0, w), S.inEdge(61, w), S.inEdge(62, w)],
+          down: S.panelCommits(0, S.SWIPE_PX + 1, 0),
+          short: S.panelCommits(0, S.SWIPE_PX, 0),
+          fling: S.panelCommits(0, 40, 1),
+          left: S.panelCommits(0, S.SWIPE_PX + 40, 0),
+          sideways: S.panelCommits(200, S.SWIPE_PX + 40, 0),
+          up: S.panelCommits(0, -200, 0),
           offsets: [
             S.panelOffset(0, h, false), S.panelOffset(200, h, false), S.panelOffset(900, h, false),
             S.panelOffset(-50, h, false), S.panelOffset(0, h, true), S.panelOffset(-200, h, true),
@@ -43,11 +41,9 @@ def test_panel_drag_helpers():
     assert r["down"] is True
     assert r["short"] is False
     assert r["fling"] is True
-    assert r["edge"] is False
-    assert r["edgeBorder"] is True
+    assert r["left"] is True
     assert r["sideways"] is False
     assert r["up"] is False
-    assert r["inEdge"] == [True, True, False]
     assert r["offsets"] == [-600, -400, 0, -600, 0, -200, 0, -600]
 
 
@@ -118,9 +114,6 @@ def test_control_panel_screens_speaker_and_brightness(chrome, server, helper):
     extra = api.post(f"{server}/api/screens", json={"name": "Kitchen"}).json()
     names = [s["name"] for s in api.get(f"{server}/api/screens").json()]
     _load(chrome, server)
-    _swipe(chrome, 30, DOWN)
-    time.sleep(0.4)
-    edge_hidden = chrome.eval(HIDDEN)
     _swipe(chrome, 500, [300, 310, 330, 340])
     time.sleep(0.4)
     sideways_hidden = chrome.eval(HIDDEN)
@@ -163,7 +156,6 @@ def test_control_panel_screens_speaker_and_brightness(chrome, server, helper):
     settings = api.get(f"{server}/api/settings").json()
     errors = chrome.eval("window.__errors")
 
-    assert edge_hidden is True
     assert sideways_hidden is True
     assert title == "Control Panel"
     assert labels == ["Photos"] + names
@@ -189,7 +181,6 @@ def test_control_panel_restart_and_idle_close(chrome, server, helper):
     _load(chrome, server)
     _swipe(chrome, 500, DOWN)
     chrome.wait(OPEN)
-    edge_hidden = chrome.eval("document.getElementById('edge').hidden")
     chrome.eval("document.getElementById('cp-restart').click()")
     asked = chrome.eval("!document.getElementById('cp-confirm').hidden")
     text = chrome.eval("document.getElementById('cp-confirm-text').textContent")
@@ -204,7 +195,6 @@ def test_control_panel_restart_and_idle_close(chrome, server, helper):
     chrome.eval("__test.skip(6 * 60000)")
     chrome.run("__test.tick(15000)")
     chrome.wait(HIDDEN)
-    edge_back = chrome.eval("!document.getElementById('edge').hidden")
 
     _swipe(chrome, 500, DOWN)
     chrome.wait(OPEN)
@@ -219,13 +209,11 @@ def test_control_panel_restart_and_idle_close(chrome, server, helper):
     reboots = [s for s in _sent(chrome) if s["url"] == "/api/sound/reboot"]
     errors = chrome.eval("window.__errors")
 
-    assert edge_hidden is True
     assert asked is True
     assert text == "Restart the board? It takes about a minute."
     assert buttons == ["Restart", "Cancel"]
     assert cancelled is True
     assert ("POST", "/reboot") not in after_cancel
-    assert edge_back is True
     assert len(reboots) == 1 and reboots[0]["method"] == "POST"
     assert helper.calls.count(("POST", "/reboot")) == 1
     assert label == "Home Board is restarting..."

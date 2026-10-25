@@ -41,11 +41,6 @@ def test_brightness_helpers():
     script = f"""
     const S = require({json.dumps(str(DISPLAY_JS))});
     console.log(JSON.stringify({{
-      half: S.dragBrightness(100, 300, 600),
-      up: S.dragBrightness(50, -150, 600),
-      low: S.dragBrightness(30, 600, 600),
-      high: S.dragBrightness(90, -600, 600),
-      none: S.dragBrightness(70, 0, 600),
       clampLow: S.clampBrightness(3),
       clampHigh: S.clampBrightness(140),
       dim65: S.dimOpacity(65),
@@ -59,9 +54,6 @@ def test_brightness_helpers():
         ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
     )
     r = json.loads(out.stdout)
-    assert r["half"] == 50
-    assert r["up"] == 75
-    assert r["low"] == 10 and r["high"] == 100 and r["none"] == 70
     assert r["clampLow"] == 10 and r["clampHigh"] == 100
     assert r["dim65"] == pytest.approx(0.35)
     assert r["dim100"] == 0 and r["dimFloor"] == pytest.approx(0.9)
