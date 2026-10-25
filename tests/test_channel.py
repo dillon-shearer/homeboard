@@ -111,7 +111,7 @@ def test_tv_page_markup(client):
     assert re.search(r'<button class="w95-btn"[^>]*data-channel="photos"[^>]*aria-pressed', start)
     assert 'data-channel="calendar"' not in start
     assert 'data-channel="lists"' not in start
-    page = client.get("/admin/tv").text
+    page = client.get("/admin/settings").text
     assert ">Showing on the TV<" not in page
     select = re.search(r'<select id="channel-timeout".*?</select>', page, re.DOTALL)
     assert select
@@ -124,7 +124,8 @@ def test_tv_js_puts_channel_and_timeout():
     js = (ROOT / "static" / "tv_admin.js").read_text(encoding="utf-8")
     assert "var body = { channel: channel };" in js and "putSettings(body)" in js
     assert 'if (channel === "screen") body.screen_id = parseInt(' in js
-    assert "channel_timeout_min: parseInt" in js
+    settings_js = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
+    assert "channel_timeout_min: parseInt" in settings_js and "channel_timeout_min" not in js
     assert 'classList.toggle("on", on)' in js and "aria-pressed" in js
 
 

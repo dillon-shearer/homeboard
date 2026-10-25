@@ -37,7 +37,7 @@ function count(url) { return calls.filter(function (u) { return u === url; }).le
 
 
 @needs_node
-def test_events_reload_grid_and_settings():
+def test_events_reload_grid_and_not_settings():
     r = _node(
         """
         await flush();
@@ -50,21 +50,20 @@ def test_events_reload_grid_and_settings():
         es.emit("photos_changed");
         await flush();
         const tiles = $("grid").children.length;
-        settings = Object.assign({}, settings, { interval_s: 45 });
         es.emit("settings_changed");
         await flush();
         console.log(JSON.stringify({
           url: es.url, n: sources.length, before: before, afterHello: afterHello,
           photos: count("/api/photos?all=1"), settings: count("/api/settings"),
-          tiles: tiles, interval: $("interval").value,
+          tiles: tiles,
         }));
         """,
         LIVE_SETUP,
     )
     assert r["url"] == "/api/events" and r["n"] == 1
-    assert r["afterHello"] == r["before"] == {"photos": 1, "settings": 1}
+    assert r["afterHello"] == r["before"] == {"photos": 1, "settings": 0}
     assert r["photos"] == 2 and r["tiles"] == 3
-    assert r["settings"] == 2 and r["interval"] == 45
+    assert r["settings"] == 0
 
 
 @needs_node

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 
-SUB_PAGES = ["/admin/photos", "/admin/calendar", "/admin/lists", "/admin/tv", "/admin/about"]
+SUB_PAGES = ["/admin/photos", "/admin/calendar", "/admin/lists", "/admin/settings", "/admin/about"]
 
 
 @pytest.fixture

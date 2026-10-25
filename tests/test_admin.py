@@ -45,9 +45,11 @@ def test_icon(client):
     assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
-def test_admin_js_uses_xhr_progress_and_settings_put():
+def test_admin_js_uses_xhr_progress_and_settings_js_puts():
     js = (STATIC / "admin.js").read_text()
     assert "new XMLHttpRequest()" in js
     assert "xhr.upload.onprogress" in js
-    assert '"/api/settings"' in js and 'method: "PUT"' in js
+    assert '"/api/settings"' not in js
+    settings_js = (STATIC / "settings.js").read_text()
+    assert 'send("PUT", "/api/settings", patch)' in settings_js
     assert "/api/photos?all=1" in js and "/api/status" in js

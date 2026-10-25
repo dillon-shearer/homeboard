@@ -10,7 +10,7 @@ from app.db import POSITIONS
 from app.main import create_app
 from tests.test_upload_batches import PAGE_STUB, needs_node
 
-TV_JS = Path(__file__).resolve().parent.parent / "app" / "static" / "tv_admin.js"
+SETTINGS_JS = Path(__file__).resolve().parent.parent / "app" / "static" / "settings.js"
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def client(tmp_path):
 
 @pytest.fixture
 def page(client):
-    r = client.get("/admin/tv")
+    r = client.get("/admin/settings")
     assert r.status_code == 200
     return r.text
 
@@ -31,8 +31,8 @@ def _group(page, legend_id):
     return page[start : page.index("</section>", start)]
 
 
-def test_group_lives_on_tv_page_after_weather(client, page):
-    assert page.index(">Clock, date and caption</h2>") > page.index(">Weather</h2>")
+def test_group_lives_on_settings_page_after_photos(client, page):
+    assert page.index(">Clock, date and caption</h2>") > page.index(">Photos</h2>")
     photos = client.get("/admin/photos").text
     for gone in ("Clock, date and caption", 'name="clock_pos"', 'name="caption_pos"'):
         assert gone not in photos
@@ -47,7 +47,7 @@ def test_group_has_steppers_spots_stack_and_captions(page):
     assert 'aria-label="Top left"' in group and 'aria-label="Middle center"' in group
     assert re.findall(r'name="clock_on_top" value="(\w+)"', group) == ["true", "false"]
     assert '<input type="checkbox" data-key="captions">' in group
-    assert "group-slideshow" not in page
+    assert 'name="fit"' not in group
 
 
 FORM_SETUP = """
@@ -103,7 +103,7 @@ function tap(id) { $(id).fire("click", { detail: 0 }); }
 
 def _node(body, setup=""):
     script = (
-        f"{PAGE_STUB}\n{setup}\nrequire({json.dumps(str(TV_JS))});\n"
+        f"{PAGE_STUB}\n{setup}\nrequire({json.dumps(str(SETTINGS_JS))});\n"
         f"(async function () {{\n{body}\n}})().catch(function (e) {{ console.error(e); process.exit(1); }});"
     )
     out = subprocess.run(

@@ -249,8 +249,8 @@ def test_cover_not_in_layout_when_not_playing(chrome, server, now):
     assert gone["hidden"] is True
 
 
-def test_tv_page_has_now_playing_cover_row(client):
-    group = form._group(client.get("/admin/tv").text, "group-overlay")
+def test_settings_page_has_now_playing_cover_row(client):
+    group = form._group(client.get("/admin/settings").text, "group-overlay")
     assert '<label for="cover-size">Now playing cover</label>' in group
     for part in ('id="cover-size-minus"', 'id="cover-size"', 'id="cover-size-plus"'):
         assert part in group

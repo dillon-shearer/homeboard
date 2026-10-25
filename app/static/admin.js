@@ -178,7 +178,6 @@
   var STATUS_MS = 10000;
   var FIRST_PAGE = 12;
   var PAGE = 24;
-  var INTERVAL_DEBOUNCE_MS = 400;
   var TOAST_MS = 4000;
   var TOAST_FADE_MS = 400;
 
@@ -729,141 +728,12 @@
     });
   }
 
-  var current = {};
-  var RADIO_KEYS = ["fit"];
-
-  function showSettingsError(msg) {
-    var el = $("settings-error");
-    el.textContent = msg || "";
-    el.hidden = !msg;
-  }
-
-  function renderSettings(s) {
-    current = s;
-    $("interval").value = s.interval_s;
-    RADIO_KEYS.forEach(function (key) {
-      var radios = document.querySelectorAll('input[name="' + key + '"]');
-      for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s[key]);
-    });
-    var checks = document.querySelectorAll(".checks input[data-key]");
-    for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
-  }
-
-  function loadSettings() {
-    return getJSON("/api/settings").then(renderSettings);
-  }
-
-  function putSettings(patch) {
-    return fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch)
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (body) {
-        if (!r.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not save");
-        showSettingsError("");
-        renderSettings(body);
-      });
-    }).catch(function (err) {
-      showSettingsError(plainError(err.message) + ". Try again.");
-      loadSettings().catch(function () {});
-    });
-  }
-
-  function makeStepper(id, key, min, max) {
-    var input = $(id);
-    var timer = null;
-
-    function clamp(v) {
-      v = Math.round(Number(v));
-      if (!isFinite(v)) v = current[key] || min;
-      return Math.min(max, Math.max(min, v));
-    }
-
-    function put(v) {
-      var patch = {};
-      patch[key] = v;
-      putSettings(patch);
-    }
-
-    function step(delta) {
-      var v = clamp(Number(input.value) + delta);
-      input.value = v;
-      clearTimeout(timer);
-      timer = setTimeout(function () { put(v); }, INTERVAL_DEBOUNCE_MS);
-    }
-
-    holdStep($(id + "-minus"), function () { step(-1); });
-    holdStep($(id + "-plus"), function () { step(1); });
-    input.addEventListener("input", function () {
-      var raw = input.value;
-      if (raw === "") return;
-      var v = clamp(raw);
-      clearTimeout(timer);
-      timer = setTimeout(function () {
-        input.value = v;
-        put(v);
-      }, INTERVAL_DEBOUNCE_MS);
-    });
-    input.addEventListener("change", function () {
-      if (input.value === "") input.value = current[key];
-    });
-  }
-
-  function holdStep(btn, step) {
-    var delay = null;
-    var repeat = null;
-    function stop() {
-      clearTimeout(delay);
-      clearInterval(repeat);
-      delay = repeat = null;
-    }
-    btn.addEventListener("pointerdown", function (e) {
-      if (e.button !== 0) return;
-      stop();
-      step();
-      delay = setTimeout(function () {
-        repeat = setInterval(step, 80);
-      }, 400);
-    });
-    btn.addEventListener("pointerup", stop);
-    btn.addEventListener("pointerleave", stop);
-    btn.addEventListener("pointercancel", stop);
-    btn.addEventListener("click", function (e) {
-      if (e.detail === 0) step();
-    });
-  }
-
-  function onCheckChange(e) {
-    setSetting(e.currentTarget.getAttribute("data-key"), e.currentTarget.checked);
-  }
-
-  function onRadioChange(e) {
-    var el = e.currentTarget;
-    if (!el.checked) return;
-    setSetting(el.getAttribute("name"), el.value);
-  }
-
-  function setSetting(key, value) {
-    var patch = {};
-    patch[key] = value;
-    var next = {};
-    for (var k in current) next[k] = current[k];
-    next[key] = value;
-    renderSettings(next);
-    putSettings(patch);
-  }
-
   function onPhotosChanged() {
     if (drag || dialogTile) {
       gridStale = true;
       return;
     }
     refreshGrid();
-  }
-
-  function onSettingsChanged() {
-    loadSettings().catch(function () {});
   }
 
   var backoff = 1;
@@ -885,14 +755,10 @@
     }
     es.onopen = function () { backoff = 1; };
     es.addEventListener("hello", function () {
-      if (everConnected) {
-        onSettingsChanged();
-        onPhotosChanged();
-      }
+      if (everConnected) onPhotosChanged();
       everConnected = true;
     });
     es.addEventListener("photos_changed", onPhotosChanged);
-    es.addEventListener("settings_changed", onSettingsChanged);
     es.onerror = function () {
       es.close();
       retryEvents();
@@ -904,19 +770,9 @@
     $("upload-close").addEventListener("click", closeUpload);
     $("upload-x").addEventListener("click", closeUpload);
     $("upload-backdrop").addEventListener("click", closeUpload);
-    makeStepper("interval", "interval_s", 5, 600);
-    RADIO_KEYS.forEach(function (key) {
-      var radios = document.querySelectorAll('input[name="' + key + '"]');
-      for (var i = 0; i < radios.length; i++) radios[i].addEventListener("change", onRadioChange);
-    });
-    var checks = document.querySelectorAll(".checks input[data-key]");
-    for (var j = 0; j < checks.length; j++) checks[j].addEventListener("change", onCheckChange);
     initTiles();
     $("grid-retry").addEventListener("click", refreshGrid);
 
-    loadSettings().catch(function () {
-      showSettingsError("Could not load settings");
-    });
     refreshGrid();
     loadStatus();
     setInterval(loadStatus, STATUS_MS);

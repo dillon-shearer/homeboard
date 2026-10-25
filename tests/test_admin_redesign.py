@@ -38,8 +38,13 @@ def test_grid_pages_photos(page):
     assert 'img.loading = "lazy"' in JS
 
 
-def test_settings_are_radios_and_checkboxes(page):
-    assert 'class="w95-group settings"' in page
+def test_slideshow_settings_left_photos_for_settings_page(page, tmp_path):
+    assert 'id="interval"' not in page and ">Slideshow<" not in page
+    assert 'name="fit"' not in page and 'data-key="transition"' not in page
+    with TestClient(create_app(tmp_path / "settings")) as c:
+        page = c.get("/admin/settings").text
+    page = page[page.index('aria-labelledby="group-slideshow"') : page.index("</section>")]
+    assert 'class="w95-legend">Photos</h2>' in page
     for value in ("contain", "cover"):
         assert f'<input type="radio" name="fit" value="{value}">' in page
     for key in ("transition", "shuffle"):
