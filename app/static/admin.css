@@ -584,3 +584,53 @@ button, input {
 .buttons .del {
   margin-right: auto;
 }
+
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.volume-step {
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  font-size: 1.3em;
+}
+
+.volume-slider {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  background: var(--w95-light);
+  border: 1px solid;
+  border-color: var(--w95-shadow) var(--w95-light) var(--w95-light) var(--w95-shadow);
+  box-shadow: inset 1px 1px 0 var(--w95-dark);
+}
+
+.volume-slider::-webkit-slider-thumb {
+  width: 26px;
+  height: 44px;
+  margin-top: -19px;
+  background: var(--w95-face);
+  border: 1px solid;
+  border-color: var(--w95-light) var(--w95-dark) var(--w95-dark) var(--w95-light);
+  box-shadow: inset -1px -1px 0 var(--w95-shadow), inset 1px 1px 0 #dfdfdf;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.volume-value {
+  flex: none;
+  width: 3em;
+  text-align: right;
+}

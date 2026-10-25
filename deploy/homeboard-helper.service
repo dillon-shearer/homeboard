@@ -6,7 +6,7 @@ Wants=bluetooth.service
 [Service]
 User=dillon
 EnvironmentFile=-/etc/homeboard/speaker.env
-Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONUNBUFFERED=1 XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/usr/bin/python3 /opt/homeboard/deploy/helper/helperd.py
 Restart=always
 RestartSec=2

@@ -185,6 +185,31 @@ def test_two_polls_inside_3_seconds_make_one_call(linked, fake, monkeypatch):
     assert fake.count("GET", "/me/player") == 2
 
 
+def test_spotify_calls_share_one_tls_context(monkeypatch):
+    seen = []
+
+    class Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def urlopen(req, timeout, context):
+        seen.append(context)
+        return Resp()
+
+    monkeypatch.setattr(spotify.urllib.request, "urlopen", urlopen)
+    spotify.fetch("GET", "https://api.spotify.com/v1/me/player")
+    spotify.fetch("GET", "https://api.spotify.com/v1/me/player")
+    assert seen[0] is not None and seen[0] is seen[1]
+
+
 def test_network_failure_returns_last_known_as_stale(linked, fake, monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(spotify, "_clock", lambda: clock[0])
@@ -226,10 +251,14 @@ def test_controls_call_the_right_endpoints(linked, fake):
 def test_no_active_device_is_409(linked, fake):
     fake.routes[("PUT", "/me/player/pause")] = NO_DEVICE
     fake.routes[("POST", "/me/player/next")] = NO_DEVICE
-    for path in ("/pause", "/next"):
-        r = linked.post("/api/spotify" + path)
-        assert r.status_code == 409
-        assert r.json() == {"detail": "no active device"}
+    fake.routes[("GET", "/me/player/devices")] = (
+        200,
+        {"devices": [{"id": "hb", "name": "Home Board", "is_active": True}]},
+    )
+    r = linked.post("/api/spotify/next")
+    assert r.status_code == 409
+    assert r.json() == {"detail": "no active device"}
+    assert fake.count("POST", "/me/player/next") == 2
 
 
 def test_playlists_follow_pagination(linked, fake):

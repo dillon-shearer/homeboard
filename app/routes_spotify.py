@@ -4,7 +4,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from app import db, spotify
+from app import db, events, spotify
+from app.auth import is_tunnel
 from app.routes_photos import Conn
 
 router = APIRouter(prefix="/api/spotify")
@@ -16,6 +17,11 @@ class Volume(BaseModel):
 
 class PlaylistId(BaseModel):
     id: str = Field(min_length=1)
+
+
+class PlayerEvent(BaseModel):
+    type: str | None = None
+    status: str | None = None
 
 
 class ShownPlaylist(BaseModel):
@@ -74,13 +80,25 @@ def unlink(request: Request):
 
 
 @router.get("/now")
-def now(request: Request):
+def now(request: Request, fresh: bool = False):
+    if fresh:
+        return _call(spotify.now_playing, _data_dir(request), True)
     return _call(spotify.now_playing, _data_dir(request))
 
 
 @router.get("/me")
 def me(request: Request):
     return _call(spotify.profile, _data_dir(request))
+
+
+@router.post("/event")
+def player_event(body: PlayerEvent, request: Request):
+    host = request.client.host if request.client else None
+    if is_tunnel(request.scope) or host not in events.LOCAL_HOSTS:
+        return JSONResponse({"detail": "local only"}, status_code=403)
+    spotify.clear_now()
+    events.publish("spotify_changed")
+    return {"ok": True}
 
 
 @router.post("/play")

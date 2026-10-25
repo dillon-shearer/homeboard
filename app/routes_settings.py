@@ -37,9 +37,14 @@ class SettingsPatch(BaseModel):
     date_pos: str | None = None
     date_on_top: bool | None = None
     date_show: bool | None = None
+    cover_size: int | None = None
+    cover_pos: str | None = None
+    cover_on_top: bool | None = None
+    cover_show: bool | None = None
     brightness: int | None = None
     weather_location: str | None = None
     speaker_idle_minutes: int | None = None
+    speaker_volume: int | None = None
 
 
 class DisplayCurrent(BaseModel):
@@ -65,12 +70,17 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "date_pos": row["date_pos"],
         "date_on_top": bool(row["date_on_top"]),
         "date_show": bool(row["date_show"]),
+        "cover_size": row["cover_size"],
+        "cover_pos": row["cover_pos"],
+        "cover_on_top": bool(row["cover_on_top"]),
+        "cover_show": bool(row["cover_show"]),
         "brightness": row["brightness"],
         "weather_location": row["weather_location"],
         "weather_lat": row["weather_lat"],
         "weather_lon": row["weather_lon"],
         "weather_name": row["weather_name"],
         "speaker_idle_minutes": row["speaker_idle_minutes"],
+        "speaker_volume": row["speaker_volume"],
         "updated_at": row["updated_at"],
     }
 

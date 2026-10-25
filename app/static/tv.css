@@ -898,7 +898,15 @@ body.tv {
 }
 
 .sp-full .sp-info {
-  justify-content: space-between;
+  justify-content: center;
+}
+
+.sp-left {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5vh;
 }
 
 .sp-head,
@@ -1015,6 +1023,12 @@ body.tv {
   box-shadow: inset 1px 1px 0 var(--w95-shadow);
 }
 
+.sp-btn:disabled {
+  color: var(--w95-shadow);
+  border-color: var(--w95-light) var(--w95-dark) var(--w95-dark) var(--w95-light);
+  box-shadow: inset -1px -1px 0 var(--w95-shadow), inset 1px 1px 0 #dfdfdf;
+}
+
 .sp-btn.on {
   background: #dfdfdf;
   font-weight: bold;
@@ -1062,7 +1076,8 @@ body.tv {
   flex: 1;
 }
 
-.sp-tile .sp-toggle {
+.sp-tile .sp-toggle,
+.sp-tile .sp-here {
   position: absolute;
   min-width: 11vh;
   min-height: 11vh;

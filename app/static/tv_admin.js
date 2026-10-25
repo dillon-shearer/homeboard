@@ -22,7 +22,7 @@
   var STEP_DEBOUNCE_MS = 400;
   var UP = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="6,2 11,9 1,9" fill="#000"/></svg>';
   var DOWN = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="1,3 11,3 6,10" fill="#000"/></svg>';
-  var RADIO_KEYS = ["clock_pos", "caption_pos", "clock_on_top", "date_pos", "date_on_top"];
+  var RADIO_KEYS = ["clock_pos", "caption_pos", "clock_on_top", "date_pos", "date_on_top", "cover_pos", "cover_on_top"];
 
   var screens = [];
   var shown = { channel: null, screen_id: null };
@@ -100,12 +100,14 @@
     $("clock-size").value = s.clock_size;
     $("caption-size").value = s.caption_size;
     $("date-size").value = s.date_size;
+    $("cover-size").value = s.cover_size;
     RADIO_KEYS.forEach(function (key) {
       var radios = document.querySelectorAll('input[name="' + key + '"]');
       for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s[key]);
     });
     $("stack-row").hidden = s.clock_pos !== s.caption_pos;
     $("date-stack-row").hidden = s.date_pos !== s.clock_pos && s.date_pos !== s.caption_pos;
+    $("cover-stack-row").hidden = [s.clock_pos, s.caption_pos, s.date_pos].indexOf(s.cover_pos) === -1;
     var checks = document.querySelectorAll(".checks input[data-key]");
     for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
   }
@@ -627,7 +629,7 @@
     var el = e.currentTarget;
     if (!el.checked) return;
     var name = el.getAttribute("name");
-    var flag = name === "clock_on_top" || name === "date_on_top";
+    var flag = name === "clock_on_top" || name === "date_on_top" || name === "cover_on_top";
     setSetting(name, flag ? el.value === "true" : el.value);
   }
 
@@ -730,6 +732,7 @@
     makeStepper("clock-size", "clock_size", 2, 12);
     makeStepper("caption-size", "caption_size", 2, 12);
     makeStepper("date-size", "date_size", 2, 12);
+    makeStepper("cover-size", "cover_size", 2, 12);
     RADIO_KEYS.forEach(function (key) {
       var radios = document.querySelectorAll('input[name="' + key + '"]');
       for (var j = 0; j < radios.length; j++) radios[j].addEventListener("change", onRadioChange);

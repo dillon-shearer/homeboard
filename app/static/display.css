@@ -2,6 +2,8 @@
   --clock-size: 5vh;
   --caption-size: 5vh;
   --date-size: 3vh;
+  --cover-size: 3;
+  --cover-px-at-3-on-600: 120;
 }
 
 html, body {
@@ -155,6 +157,14 @@ html, body {
   font-size: var(--date-size);
   text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   opacity: 0.85;
+}
+
+#cover {
+  width: calc(var(--cover-size) / 3 * var(--cover-px-at-3-on-600) / 600 * 100vh);
+  height: calc(var(--cover-size) / 3 * var(--cover-px-at-3-on-600) / 600 * 100vh);
+  object-fit: cover;
+  box-shadow: 0 0 1vh rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
 }
 
 #channel {

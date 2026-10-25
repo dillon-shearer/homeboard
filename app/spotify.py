@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import secrets
+import ssl
 import threading
 import time
 import urllib.error
@@ -45,12 +46,22 @@ class SpotifyError(Exception):
         self.detail = detail
 
 
+_tls = None
+
+
+def _context() -> ssl.SSLContext:
+    global _tls
+    if _tls is None:
+        _tls = ssl.create_default_context()
+    return _tls
+
+
 def fetch(method: str, url: str, headers=None, body: bytes | None = None):
     req = urllib.request.Request(
         url, data=body, method=method, headers={"User-Agent": "homeboard", **(headers or {})}
     )
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S, context=_context()) as resp:
             status, raw = resp.status, resp.read()
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read()
@@ -112,6 +123,11 @@ def forget(data_dir=None) -> None:
             token_path(data_dir).unlink(missing_ok=True)
         _token.clear()
         _profile.clear()
+    with _now_lock:
+        _now.clear()
+
+
+def clear_now() -> None:
     with _now_lock:
         _now.clear()
 
@@ -230,10 +246,36 @@ def api(data_dir, method: str, path: str, payload=None, query=None):
     return data
 
 
+def _board(data_dir) -> dict:
+    devices = (api(data_dir, "GET", "/me/player/devices") or {}).get("devices") or []
+    board = next((d for d in devices if d.get("name") == DEVICE_NAME), None)
+    if board is None:
+        raise SpotifyError(409, "Home Board speaker not found")
+    return board
+
+
+def _take_over(data_dir, play: bool) -> str:
+    board = _board(data_dir)
+    api(data_dir, "PUT", "/me/player", {"device_ids": [board["id"]], "play": play})
+    return board["id"]
+
+
 def control(data_dir, method: str, path: str, payload=None, query=None) -> dict:
-    api(data_dir, method, path, payload, query)
-    with _now_lock:
-        _now.clear()
+    try:
+        try:
+            api(data_dir, method, path, payload, query)
+        except SpotifyError as e:
+            if e.detail != "no active device":
+                raise
+            device = _take_over(data_dir, path == "/me/player/play")
+            try:
+                api(data_dir, method, path, payload, {**(query or {}), "device_id": device})
+            except SpotifyError:
+                if path != "/me/player/pause":
+                    raise
+    finally:
+        with _now_lock:
+            _now.clear()
     return {"linked": True, "ok": True}
 
 
@@ -283,9 +325,9 @@ def _shape(data) -> dict:
     }
 
 
-def now_playing(data_dir) -> dict:
+def now_playing(data_dir, fresh=False) -> dict:
     with _now_lock:
-        if _now.get("data") is not None and _clock() - _now["at"] < NOW_EVERY_S:
+        if not fresh and _now.get("data") is not None and _clock() - _now["at"] < NOW_EVERY_S:
             return _now["data"]
         _now["at"] = _clock()
         try:
@@ -331,10 +373,7 @@ def playlists(data_dir) -> list[dict]:
 
 
 def play_playlist(data_dir, playlist_id: str) -> dict:
-    devices = (api(data_dir, "GET", "/me/player/devices") or {}).get("devices") or []
-    board = next((d for d in devices if d.get("name") == DEVICE_NAME), None)
-    if board is None:
-        raise SpotifyError(409, "Home Board speaker not found")
+    board = _board(data_dir)
     if not board.get("is_active"):
         api(data_dir, "PUT", "/me/player", {"device_ids": [board["id"]], "play": False})
     return control(

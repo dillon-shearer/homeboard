@@ -22,12 +22,13 @@
   var TAP_SLOP_PX = 10;
   var SWIPE_CLICK_MS = 600;
   var SLIDE_MS = 250;
-  var SPOTIFY_POLL_MS = 3000;
+  var SPOTIFY_POLL_MS = 15000;
   var SPOTIFY_TICK_MS = 1000;
   var SPOTIFY_AFTER_TAP_MS = 1000;
-  var SPOTIFY_EXTRA_EVERY = 10;
+  var SPOTIFY_EXTRA_EVERY = 2;
   var SPOTIFY_NOTE_MS = 3000;
   var VOLUME_STEP = 5;
+  var VOLUME_CHAIN_MS = 1000;
   var SPOTIFY_LAYOUTS = { "2x2": "full", "2x1": "wide", "1x2": "tall", "1x1": "tile" };
   var NOT_LINKED_TEXT = "Spotify not linked";
   var IDLE_TEXT = "Nothing playing";
@@ -337,8 +338,8 @@
   }
 
   function volumeStep(volume, delta) {
-    var v = typeof volume === "number" ? volume : 50;
-    return Math.max(0, Math.min(100, v + delta));
+    if (typeof volume !== "number") return null;
+    return Math.max(0, Math.min(100, volume + delta));
   }
 
   function speakerOn(sound) {
@@ -725,6 +726,10 @@
     return kind === "playing" ? spotButton("toggle", "Pause", "pause") : spotButton("toggle", "Play", "play");
   }
 
+  function playHere() {
+    return spotButton("here", "Play here", "play", "Play here");
+  }
+
   function transport(kind) {
     var row = el("div", "sp-transport");
     row.appendChild(spotButton("previous", "Previous", "previous"));
@@ -765,14 +770,17 @@
       return box;
     }
     var live = kind !== "idle";
+    var here = !live && !!now && !now.device;
     var cover = spotImage("sp-cover", coverUrl(now));
-    box.appendChild(cover);
+    var left = layout === "full" ? box.appendChild(el("div", "sp-left")) : box;
+    left.appendChild(cover);
     if (layout === "tile") {
       if (live) cover.appendChild(toggleButton(kind));
+      if (here) cover.appendChild(playHere());
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
     } else {
       var info = el("div", "sp-info");
-      var head = info.appendChild(el("div", "sp-head"));
+      var head = (layout === "full" ? left : info).appendChild(el("div", "sp-head"));
       var controls = info.appendChild(el("div", "sp-controls"));
       head.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
       if (live && now.artist) head.appendChild(el("div", "sp-artist", now.artist));
@@ -784,13 +792,14 @@
         controls.appendChild(prog);
       }
       if (live) controls.appendChild(transport(kind));
+      if (here) controls.appendChild(el("div", "sp-transport")).appendChild(playHere());
       if (layout === "full") {
         if (live) {
           var known = typeof now.volume === "number";
           var vol = el("div", "sp-volume");
-          vol.appendChild(spotButton("vol-down", "Volume down", null, "-"));
+          vol.appendChild(spotButton("vol-down", "Volume down", null, "-")).disabled = !known;
           vol.appendChild(el("span", "sp-volbar")).appendChild(el("i")).style.width = (known ? now.volume : 0) + "%";
-          vol.appendChild(spotButton("vol-up", "Volume up", null, "+"));
+          vol.appendChild(spotButton("vol-up", "Volume up", null, "+")).disabled = !known;
           vol.appendChild(el("span", "sp-vol", known ? now.volume + "%" : "--%"));
           controls.appendChild(vol);
         }
@@ -815,7 +824,7 @@
     var layout = spotifyLayout(widget);
     var full = layout === "full";
     var sig = JSON.stringify([layout, kind, kind === "unlinked" || !now ? null : [now.track, now.artist, now.cover,
-      now.duration_ms, now.volume], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
+      now.duration_ms, now.volume, now.device], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
     var body = card.querySelector(".sp");
     if (!body || body.getAttribute("data-sig") !== sig) {
       var oldList = body && body.querySelector(".sp-pls");
@@ -975,7 +984,7 @@
   var drag = null;
   var sliding = false;
   var spot = { on: false, seq: 0, polls: 0, timer: null, tick: null, now: null, at: 0, shown: [], sound: null,
-    note: null, noteTimer: null, connecting: false };
+    note: null, noteTimer: null, connecting: false, vol: null };
 
   function context() {
     var now = new Date();
@@ -1135,6 +1144,10 @@
     });
   }
 
+  function onSpotifyChanged() {
+    if (spot.on) pollSpotify();
+  }
+
   function spotifyNote(text) {
     spot.note = text;
     clearTimeout(spot.noteTimer);
@@ -1188,6 +1201,35 @@
     });
   }
 
+  function freshVolume() {
+    spot.seq++;
+    clearTimeout(spot.timer);
+    return getJSON("/api/spotify/now?fresh=1").then(function (now) {
+      return now.volume;
+    }, function () {
+      spotifyNote(SPOTIFY_DOWN_TEXT);
+      return null;
+    });
+  }
+
+  function volumeTap(delta) {
+    var chained = spot.vol && Date.now() - spot.vol.at < VOLUME_CHAIN_MS;
+    var sent = (chained ? spot.vol.sent : freshVolume()).then(function (volume) {
+      var next = volumeStep(volume, delta);
+      if (next === null) {
+        clearTimeout(spot.timer);
+        if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
+        return null;
+      }
+      if (spot.now) spot.now.volume = next;
+      spotifyCall("PUT", "/api/spotify/volume", { percent: next });
+      return next;
+    });
+    spot.vol = { sent: sent, at: Date.now() };
+    spot.now.volume = volumeStep(spot.now.volume, delta);
+    renderSpotifyCards();
+  }
+
   function spotifyTap(btn) {
     var now = spot.now || {};
     if (btn.hasAttribute("data-playlist")) {
@@ -1203,11 +1245,13 @@
       now.playing = !playing;
       spot.at = Date.now();
       spotifyCall("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
+    } else if (action === "here") {
+      spotifyCall("POST", "/api/spotify/play");
     } else if (action === "previous" || action === "next") {
       spotifyCall("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {
-      now.volume = volumeStep(now.volume, action === "vol-up" ? VOLUME_STEP : -VOLUME_STEP);
-      spotifyCall("PUT", "/api/spotify/volume", { percent: now.volume });
+      if (btn.disabled || typeof now.volume !== "number") return;
+      volumeTap(action === "vol-up" ? VOLUME_STEP : -VOLUME_STEP);
     }
   }
 
@@ -1256,6 +1300,7 @@
     ["hello", "settings_changed", "lists_changed", "events_changed", "weather_changed"].forEach(function (name) {
       es.addEventListener(name, load);
     });
+    es.addEventListener("spotify_changed", onSpotifyChanged);
     es.onerror = function () {
       es.close();
       setTimeout(connect, backoff * 1000);

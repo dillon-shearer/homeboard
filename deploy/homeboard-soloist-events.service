@@ -1,6 +1,6 @@
 [Unit]
-Description=Home Board Spotify play and pause to the helper
-After=homeboard-soloist.service homeboard-helper.service
+Description=Home Board Spotify events to the helper and the board
+After=homeboard-soloist.service homeboard-helper.service homeboard-api.service
 BindsTo=homeboard-soloist.service
 
 [Service]
