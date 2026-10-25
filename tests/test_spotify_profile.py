@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlsplit
 from app import spotify
 from tests.chrome import needs_chrome
 from tests.test_lists_page import _wait
-from tests.test_sound_page import _fake, _open
+from tests.test_settings_sound import _fake, _open
 from tests.test_spotify import client, creds, data_dir, fake, linked  # noqa: F401
 
 
@@ -56,7 +56,7 @@ def test_unlinked_me_says_not_linked(client, creds, fake):  # noqa: F811
 
 
 @needs_chrome
-def test_sound_page_shows_linked_as_display_name(chrome, server, monkeypatch):
+def test_settings_shows_linked_as_display_name(chrome, server, monkeypatch):
     _fake(monkeypatch)
     calls = []
 

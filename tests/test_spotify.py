@@ -362,7 +362,7 @@ def test_login_redirects_and_callback_saves_token(linked, fake, data_dir, monkey
         params={"code": "abc", "state": q["state"]},
         follow_redirects=False,
     )
-    assert r.status_code == 303 and r.headers["location"] == "/admin/sound"
+    assert r.status_code == 303 and r.headers["location"] == "/admin/settings"
     form = parse_qs(fake.calls[-1][4].decode())
     assert form == {
         "grant_type": ["authorization_code"],
