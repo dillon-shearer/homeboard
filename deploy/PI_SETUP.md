@@ -124,6 +124,7 @@ Things that also run by themselves:
 
 - The browser restarts every day at 04:00 to stay fresh.
 - The photos and settings are backed up every night at 03:00. The settings database goes to `/var/backups/homeboard-db`, one file per night, and the newest 7 are kept. The photos are kept once in `/var/backups/homeboard-photos` and updated each night to match the board. See "Restore from a backup" below.
+- The helper (`homeboard-helper`) connects the soundbar when music starts and lets go of it when idle, and Spotify Soloist (`homeboard-soloist`) makes the board show up as "Home Board" in the Spotify app. See Parts 8 and 9.
 
 ## Part 6: Secure address for phones (https)
 
@@ -276,18 +277,59 @@ sudo systemctl disable --now homeboard-tunnel
 sudo rm /etc/homeboard/tunnel.env
 ```
 
-## Spotify
+## Part 8: Play music through the soundbar
 
-This links the board to your Spotify Premium account, so the board can show what is playing and control it. You do it once.
+The Pi plays sound on the soundbar over Bluetooth. First the two have to meet once. That is called Bluetooth pairing. After pairing, the Pi marks the soundbar as a trusted device, so it can connect again later without asking. A small program on the Pi, the helper, connects and disconnects the soundbar for the board.
 
-1. Open https://developer.spotify.com/dashboard and log in with the Spotify account.
-2. Click Create app. App name: Home Board. App description: anything. Redirect URI: https://homeboard.datawithdillon.com/api/spotify/callback (click Add). Under "Which API/SDKs are you planning to use?" tick Web API. Tick the terms box and click Save.
-   - **Website** is optional: leave it empty, or type `https://homeboard.datawithdillon.com`.
-   - **Redirect URIs** needs only `https://homeboard.datawithdillon.com/api/spotify/callback`, typed exactly, with no `/` at the end.
-   - Under **Which API/SDKs are you planning to use?** tick only **Web API**. Leave Web Playback SDK, Android, iOS and the others unticked.
-3. Click Settings. Copy the Client ID. Click View client secret and copy it.
-4. On the Pi: `sudo bash /opt/homeboard/deploy/install.sh --spotify`, paste the Client ID and then the secret when asked.
-5. On the phone, open the Sound window (Start > Sound, or `/admin/sound`) and tap Sign in to Spotify.
+30. Put the soundbar in Bluetooth pairing mode. On a Samsung B-series soundbar, press the **Source** button on the remote until the bar shows `BT`, or hold the Bluetooth button on the bar itself. Other soundbars: see their manual for "pairing mode".
+
+31. On your PC, connect with `ssh dillon@homeboard.local` and run:
+
+    ```
+    sudo bash /opt/homeboard/deploy/install.sh --pair-speaker
+    ```
+
+32. The installer looks for Bluetooth devices for 15 seconds, then prints a numbered list, for example:
+
+    ```
+      1) [AV] Samsung Soundbar B550
+      2) Someone's phone
+    ```
+
+    Type the number of the soundbar and press Enter. If it is not in the list, press Enter, put the soundbar in pairing mode again and run the command again.
+
+33. When it works, the installer prints `Connection successful` and the soundbar shows `BT`. The soundbar is now saved in `/etc/homeboard/speaker.env`. You only do this once.
+
+How the board uses the soundbar after that:
+
+- When music starts, the Pi connects to the soundbar by itself.
+- When nothing has played for a while, the Pi lets go of the soundbar, so the TV can use it again. The time is set on the phone in the Sound window (Start > Sound, or `/admin/sound`) under **Let go after N minutes idle**. It starts at 10 minutes.
+- To connect or let go by hand, use the **Connect** and **Disconnect** buttons in the Sound window, or the **Speaker** switch in the Control Panel.
+
+## Part 9: Spotify
+
+This links the board to your Spotify account, so you can play music on the soundbar from the Spotify app and see what is playing on the board. Spotify Premium is required. Song lyrics are not shown. You do it once.
+
+### Make a Spotify app
+
+34. On your PC, open https://developer.spotify.com/dashboard and log in with the Spotify account.
+
+35. Click **Create app** and fill it in:
+    - **App name**: `Home Board`. **App description**: anything.
+    - **Website** is optional: leave it empty, or type `https://homeboard.datawithdillon.com`.
+    - **Redirect URIs**: type exactly `https://homeboard.datawithdillon.com/api/spotify/callback`, with no `/` at the end, and click **Add**.
+    - Under **Which API/SDKs are you planning to use?** tick only **Web API**. Leave Web Playback SDK, Android, iOS and the others unticked.
+    - Tick the terms box and click **Save**.
+
+36. Click **Settings**. Copy the **Client ID**. Click **View client secret** and copy it too.
+
+37. Connect with `ssh dillon@homeboard.local` and run:
+
+    ```
+    sudo bash /opt/homeboard/deploy/install.sh --spotify
+    ```
+
+    Paste the Client ID and then the secret when asked.
 
 The installer saves the Client ID and secret in `/etc/homeboard/spotify.env`. Only the administrator (root) can read it. Later runs of the installer keep it. To paste a new Client ID and secret, run:
 
@@ -295,14 +337,27 @@ The installer saves the Client ID and secret in `/etc/homeboard/spotify.env`. On
 sudo bash /opt/homeboard/deploy/install.sh --new-spotify
 ```
 
+### Sign in
+
+38. On the phone, open the Sound window (Start > Sound, or `/admin/sound`) and tap **Sign in to Spotify**.
+
+39. Spotify asks if Home Board may use your account. Tap **Agree**. You come back to the Sound window and it says `Linked as` and your Spotify name.
+
 ### Home Board as a Spotify speaker
 
 The Pi shows up as "Home Board" in the Spotify app's device list through Spotify Soloist, Spotify's own Linux speaker. It needs its own key, made once:
 
-1. Open https://developer.spotify.com/dashboard/soloist and log in with the Spotify Premium account.
-2. Generate an API key and copy it.
-3. On the Pi: `sudo bash /opt/homeboard/deploy/install.sh --new-soloist-key` and paste the key when asked.
-4. In the Spotify app on the phone, tap the devices button and pick Home Board.
+40. Open https://developer.spotify.com/dashboard/soloist and log in with the Spotify Premium account. Generate an API key and copy it.
+
+41. On the Pi run:
+
+    ```
+    sudo bash /opt/homeboard/deploy/install.sh --new-soloist-key
+    ```
+
+    and paste the key when asked.
+
+42. In the Spotify app on the phone, tap the devices button, pick **Home Board** and press play. The soundbar wakes up and plays the music.
 
 The key is saved in `/etc/homeboard/soloist.env`, readable only by root. Each Soloist build stops working 90 days after it was made. The Pi fetches the newest build every Monday. If that fails, the Sound window shows a warning two weeks before the end. To fetch it by hand:
 
@@ -311,6 +366,14 @@ sudo bash /opt/homeboard/deploy/install.sh --update-soloist
 ```
 
 Logs: `journalctl -u homeboard-soloist -u homeboard-soloist-events -n 50`
+
+### Show music on the board
+
+43. In the Sound window, under **Playlists on the board**, tick the playlists you want to start from the board.
+
+44. On the phone, open the TV page and add a **Spotify** widget to a TV screen.
+
+While music plays, the album cover shows on top of the photos.
 
 ## Check the logs
 
@@ -502,3 +565,32 @@ Run `sudo systemctl restart homeboard-kiosk`. If it keeps happening, check both 
 That is expected. Dragging up or down on the left edge of the screen dims the page in software: a black layer is laid over it. The backlight itself stays the same.
 
 The HMTECH 10.1 inch panel does not accept brightness commands over the HDMI cable (DDC/CI). Tested on the Pi with `ddcutil` 1.4.1: the panel shows up on `/dev/i2c-20` with a generic Dell `TLD1280` EDID, but every command ends with `DDC communication failed`. To change the real backlight, use the OSD buttons on the back of the panel.
+
+### No sound from the soundbar
+
+1. Check that the helper and the Spotify speaker are running. Both should say `active (running)`:
+
+   ```
+   systemctl status homeboard-helper homeboard-soloist
+   ```
+
+2. Check that the soundbar is connected. Find its address with `cat /etc/homeboard/speaker.env` (run with `sudo`), then run `bluetoothctl info` with that address, for example `bluetoothctl info 12:34:56:78:9A:BC`. It should show `Connected: yes`. If not, tap **Connect** in the Sound window.
+3. If the soundbar forgot the Pi (for example after a reset), pair again as in Part 8: `sudo bash /opt/homeboard/deploy/install.sh --pair-speaker`.
+4. Check that the soundbar source is `BT`. Press **Source** on the remote until it shows.
+
+### Home Board is missing from the Spotify app device list
+
+1. Make sure the phone is on the home Wi-Fi.
+2. Look at the logs: `journalctl -u homeboard-soloist -n 50`
+3. Restart it: `sudo systemctl restart homeboard-soloist`
+4. If the Sound window shows a warning about Soloist, run `sudo bash /opt/homeboard/deploy/install.sh --update-soloist`.
+
+### Music stutters
+
+The Pi 4B uses one antenna for both Wi-Fi and Bluetooth, so busy Wi-Fi can break up the music. Plug a USB Bluetooth dongle into the Pi; the system uses it instead of the built-in one. Or move the Pi closer to the router.
+
+### The Sound window says Spotify is not set up or Not linked
+
+- `Spotify is not set up on the Pi yet`: run `sudo bash /opt/homeboard/deploy/install.sh --spotify` (Part 9, step 37).
+- `Not linked`: tap **Sign in to Spotify** again.
+- The sign-in page shows `INVALID_CLIENT: Invalid redirect URI`: the redirect URI in the Spotify developer dashboard must be exactly `https://homeboard.datawithdillon.com/api/spotify/callback` (Part 9, step 35).
