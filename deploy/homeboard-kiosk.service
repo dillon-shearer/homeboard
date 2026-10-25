@@ -1,8 +1,7 @@
 [Unit]
 Description=Home Board kiosk on the monitor
-After=homeboard-api.service nginx.service systemd-user-sessions.service systemd-logind.service getty@tty1.service plymouth-quit.service
-Wants=homeboard-api.service nginx.service plymouth-quit.service
-Before=plymouth-halt.service plymouth-poweroff.service plymouth-reboot.service plymouth-kexec.service
+After=systemd-user-sessions.service systemd-logind.service getty@tty1.service
+Wants=homeboard-api.service nginx.service
 Conflicts=getty@tty1.service
 
 [Service]

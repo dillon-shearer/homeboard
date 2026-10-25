@@ -429,33 +429,27 @@ Do not tell the system to ignore these inputs completely. With no input devices 
 
 ### The boot screen shows text instead of the Home Board picture
 
-A few seconds of text at the very start can be normal; the picture should cover the rest. If text scrolls the whole time, connect with `ssh dillon@homeboard.local` and run these checks:
+The screen stays black for the first few seconds after power on. Then the Home Board picture shows with the bar moving, and it stays until the first photo. If text scrolls instead, connect with `ssh dillon@homeboard.local` and run these checks:
 
-1. The theme should be `homeboard`:
-
-   ```
-   plymouth-set-default-theme
-   ```
-
-2. The boot settings should hold `quiet splash loglevel=0 logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles`, all on one line:
+1. The boot settings should hold `quiet loglevel=0 logo.nologo vt.global_cursor_default=0`, all on one line, and no `splash`:
 
    ```
    cat /boot/firmware/cmdline.txt
    ```
 
-3. This should print `disable_splash=1`:
+2. This should print `disable_splash=1`:
 
    ```
    grep disable_splash=1 /boot/firmware/config.txt
    ```
 
-4. The boot screen should start and stop with no errors:
+3. The moving start picture should exist:
 
    ```
-   journalctl -b -u plymouth-start -u plymouth-quit
+   ls -l /var/cache/homeboard/boot.gif
    ```
 
-5. The browser should be running; this prints `active`:
+4. The browser should be running; this prints `active`:
 
    ```
    systemctl is-active homeboard-kiosk
