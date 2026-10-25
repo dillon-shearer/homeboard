@@ -33,6 +33,9 @@
   const BRIGHTNESS_MIN = 10;
   const BRIGHTNESS_MAX = 100;
   const CHANNELS = ["photos", "screen"];
+  const INTERVAL_PRESETS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600];
+  const TIMEOUT_PRESETS = [0, 2, 5, 10, 30];
+  const IDLE_PRESETS = [1, 2, 5, 10, 15, 30, 60, 120];
   const POSITIONS = [
     "top-left", "top-center", "top-right",
     "middle-left", "middle-center", "middle-right",
@@ -207,6 +210,18 @@
     return Math.max(0, Math.min(100, volume + delta));
   }
 
+  function nearestPreset(presets, value) {
+    if (typeof value !== "number" || !isFinite(value)) return presets[0];
+    return presets.reduce(function (best, p) {
+      return Math.abs(p - value) < Math.abs(best - value) ? p : best;
+    });
+  }
+
+  function stepPreset(presets, value, step) {
+    const i = presets.indexOf(nearestPreset(presets, value)) + step;
+    return presets[Math.max(0, Math.min(presets.length - 1, i))];
+  }
+
   function shouldReturn(now, last, timeoutMin, channel) {
     return channel !== "photos" && timeoutMin > 0 && now - last > timeoutMin * 60000;
   }
@@ -315,6 +330,11 @@
     panelOffset: panelOffset,
     nowRow: nowRow,
     volumeStep: volumeStep,
+    INTERVAL_PRESETS: INTERVAL_PRESETS,
+    TIMEOUT_PRESETS: TIMEOUT_PRESETS,
+    IDLE_PRESETS: IDLE_PRESETS,
+    nearestPreset: nearestPreset,
+    stepPreset: stepPreset,
     shouldReturn: shouldReturn,
     focusPosition: focusPosition,
     clampBrightness: clampBrightness,
@@ -366,6 +386,13 @@
   const nowDownEl = document.getElementById("cp-now-down");
   const nowUpEl = document.getElementById("cp-now-up");
   const nowVolumeEl = document.getElementById("cp-now-volume");
+  const kioskEl = document.getElementById("cp-kiosk");
+  const kioskErrorEl = document.getElementById("cp-kiosk-error");
+  const KIOSK_PRESETS = {
+    interval_s: INTERVAL_PRESETS,
+    channel_timeout_min: TIMEOUT_PRESETS,
+    speaker_idle_minutes: IDLE_PRESETS,
+  };
 
   const state = {
     photos: [],
@@ -413,6 +440,9 @@
   let nowTimer = null;
   let nowSeq = 0;
   let nowVol = null;
+  let kioskData = null;
+  let kioskSeq = 0;
+  let kioskPending = 0;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -815,6 +845,7 @@
   function preparePanel() {
     if (!panelEl.hidden) return;
     confirmEl.hidden = true;
+    kioskEl.hidden = true;
     renderScreens();
     showSlider(state.settings.brightness);
     loadSpeaker();
@@ -836,6 +867,7 @@
     panelOpen = false;
     panelDrag = false;
     confirmEl.hidden = true;
+    kioskEl.hidden = true;
     if (!state.loading) schedule();
     slidePanel(-viewHeight(), function () {
       if (panelOpen) return;
@@ -1061,6 +1093,94 @@
     splashEl.hidden = false;
   }
 
+  function kioskLabel(field, v) {
+    if (field === "interval_s") return v + " s";
+    if (field === "channel_timeout_min" && v === 0) return "Never";
+    return v + " min";
+  }
+
+  function renderKiosk(data) {
+    kioskData = data;
+    Object.keys(KIOSK_PRESETS).forEach(function (field) {
+      document.getElementById("cp-kiosk-" + field).textContent =
+        kioskLabel(field, nearestPreset(KIOSK_PRESETS[field], data[field]));
+    });
+    kioskEl.querySelectorAll("input").forEach(function (input) {
+      const v = data[input.dataset.field];
+      input.checked = input.type === "radio" ? v === input.value : !!v;
+    });
+  }
+
+  function loadKiosk() {
+    return fetchJson("/api/settings").then(function (data) {
+      if (!kioskPending) renderKiosk(data);
+    }, function () {});
+  }
+
+  function openKiosk() {
+    markActivity();
+    kioskErrorEl.hidden = true;
+    kioskEl.hidden = false;
+    loadKiosk();
+  }
+
+  function closeKiosk() {
+    markActivity();
+    kioskEl.hidden = true;
+  }
+
+  function putKiosk(field, value) {
+    markActivity();
+    const body = {};
+    body[field] = value;
+    renderKiosk(Object.assign({}, kioskData, body));
+    const seq = ++kioskSeq;
+    kioskPending += 1;
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    }).then(function (data) {
+      kioskPending -= 1;
+      if (seq !== kioskSeq) return;
+      kioskErrorEl.hidden = true;
+      renderKiosk(data);
+    }, function () {
+      kioskPending -= 1;
+      kioskErrorEl.textContent = "Could not save that setting. Try again.";
+      kioskErrorEl.hidden = false;
+      loadKiosk();
+    });
+  }
+
+  function kioskStep(button) {
+    if (!kioskData) return;
+    const field = button.dataset.field;
+    const next = stepPreset(KIOSK_PRESETS[field], kioskData[field], Number(button.dataset.step));
+    if (next === kioskData[field]) return markActivity();
+    putKiosk(field, next);
+  }
+
+  function kioskChange(input) {
+    if (!kioskData) return;
+    putKiosk(input.dataset.field, input.type === "radio" ? input.value : input.checked);
+  }
+
+  function hookKiosk() {
+    document.getElementById("cp-settings").addEventListener("click", openKiosk);
+    document.getElementById("cp-kiosk-close").addEventListener("click", closeKiosk);
+    document.getElementById("cp-kiosk-done").addEventListener("click", closeKiosk);
+    kioskEl.querySelectorAll(".cp-rocker").forEach(function (b) {
+      b.addEventListener("click", function () { kioskStep(b); });
+    });
+    kioskEl.querySelectorAll("input").forEach(function (input) {
+      input.addEventListener("change", function () { kioskChange(input); });
+    });
+  }
+
   function hookPanel() {
     document.getElementById("cp-close").addEventListener("click", function () {
       markActivity();
@@ -1077,6 +1197,7 @@
     document.getElementById("cp-now-next").addEventListener("click", function () { nowTap("next"); });
     nowDownEl.addEventListener("click", function () { nowVolumeTap(-VOLUME_STEP); });
     nowUpEl.addEventListener("click", function () { nowVolumeTap(VOLUME_STEP); });
+    hookKiosk();
   }
 
   function hookFrame() {
@@ -1123,6 +1244,7 @@
     return fetchJson("/api/settings").then(function (data) {
       state.needSettings = false;
       setSettings(data);
+      if (kioskEl && !kioskEl.hidden && !kioskPending) renderKiosk(data);
     }, function () {
       state.needSettings = true;
     });
