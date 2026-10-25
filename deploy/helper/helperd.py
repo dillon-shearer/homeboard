@@ -10,8 +10,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = "127.0.0.1"
 PORT = 8002
 SETTINGS_URL = "http://127.0.0.1:8000/api/settings"
-NOW_URL = "http://127.0.0.1:8000/api/spotify/now"
 SOLOIST_EXPIRES = "/opt/soloist/expires"
+SOLOIST_NOW = ["/opt/soloist/soloist", "ctl", "-D", "/var/lib/soloist", "now", "--json"]
 DEFAULT_IDLE_MINUTES = 10
 CONNECT_TRIES = 5
 CONNECT_GAP_S = 3
@@ -128,23 +128,28 @@ def soloist_expires():
     return text if DATE_RE.match(text) else None
 
 
+def soloist_playing():
+    text = run_out(SOLOIST_NOW)
+    try:
+        now = json.loads(text) if text else None
+    except ValueError:
+        return None
+    if not isinstance(now, dict):
+        return None
+    status = now.get("status")
+    if status == "playing":
+        return now.get("is_active") is not False
+    if status in ("paused", "idle"):
+        return False
+    return None
+
+
 def read_setting(key):
     try:
         with urllib.request.urlopen(SETTINGS_URL, timeout=5) as resp:
             return json.loads(resp.read())[key]
     except (OSError, ValueError, KeyError, TypeError):
         return None
-
-
-def playing_here():
-    try:
-        with urllib.request.urlopen(NOW_URL, timeout=5) as resp:
-            now = json.loads(resp.read())
-    except (OSError, ValueError):
-        return None
-    if not isinstance(now, dict) or not now.get("linked") or now.get("stale"):
-        return None
-    return bool(now.get("playing") and now.get("on_board"))
 
 
 def idle_setting():
@@ -221,11 +226,15 @@ class Helper:
             action = self.state.set_playing(playing, time.monotonic(), minutes)
         if action == "connect" and self.mac:
             self.connect_ok = self.connect()
+            return self.connect_ok
+        return None
 
-    def reconcile(self):
-        playing = playing_here()
+    def reconcile(self, startup=False):
+        playing = soloist_playing()
+        if playing is None:
+            playing = False if startup else None
         with self.lock:
-            changed = playing is not None and playing != self.state.playing
+            changed = playing is not None and (startup or playing != self.state.playing)
         if changed:
             self.set_playing(playing)
 
@@ -236,12 +245,11 @@ class Helper:
             self.disconnect()
 
     def run_timer(self):
-        checked = None
+        checked = time.monotonic()
         while True:
             time.sleep(TICK_S)
-            now = time.monotonic()
-            if checked is None or now - checked >= RECONCILE_S:
-                checked = now
+            if time.monotonic() - checked >= RECONCILE_S:
+                checked = time.monotonic()
                 self.reconcile()
             self.tick()
 
@@ -285,8 +293,8 @@ def make_handler(helper):
                 playing = body.get("playing")
                 if not isinstance(playing, bool):
                     return self.reply(400, {"detail": "playing must be true or false"})
-                helper.set_playing(playing)
-                return self.reply(200, helper.status())
+                ok = helper.set_playing(playing)
+                return self.reply(503 if ok is False else 200, helper.status())
             if self.path not in ("/connect", "/disconnect", "/volume"):
                 return self.reply(404, {"detail": "not found"})
             if not helper.mac:
@@ -313,7 +321,7 @@ def make_handler(helper):
 def main():
     mac = os.environ.get("SPEAKER_MAC", "").strip().upper()
     helper = Helper(mac if MAC_RE.match(mac) else "")
-    helper.set_playing(False)
+    helper.reconcile(startup=True)
     threading.Thread(target=helper.run_timer, daemon=True).start()
     ThreadingHTTPServer((HOST, PORT), make_handler(helper)).serve_forever()
 

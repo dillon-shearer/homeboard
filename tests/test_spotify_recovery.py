@@ -105,40 +105,16 @@ def test_settle_ends_quietly_when_unlinked(tmp_path, monkeypatch):
     assert errors == []
 
 
-@pytest.mark.parametrize(
-    "now, playing",
-    [
-        ({"linked": True, "playing": True, "on_board": True}, True),
-        ({"linked": True, "playing": True, "on_board": False}, False),
-        ({"linked": True, "playing": True, "on_board": True, "stale": True}, None),
-        ({"linked": False}, None),
-    ],
-)
-def test_helper_reads_playing_here_from_the_api(monkeypatch, now, playing):
-    class Reply:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read(self):
-            return json.dumps(now).encode()
-
-    monkeypatch.setattr(helperd.urllib.request, "urlopen", lambda url, timeout: Reply())
-    assert helperd.playing_here() is playing
-
-
 def test_helper_reconciles_after_restart_and_reports_failed_connect(monkeypatch):
     actions = []
     monkeypatch.setattr(helperd, "idle_setting", lambda: 1)
     helper = helperd.Helper("AA:BB:CC:DD:EE:FF")
     monkeypatch.setattr(helper, "connect", lambda: actions.append("connect") or False)
     helper.set_playing(False)
-    monkeypatch.setattr(helperd, "playing_here", lambda: None)
+    monkeypatch.setattr(helperd, "soloist_playing", lambda: None)
     helper.reconcile()
     assert actions == [] and helper.state.deadline is not None
-    monkeypatch.setattr(helperd, "playing_here", lambda: True)
+    monkeypatch.setattr(helperd, "soloist_playing", lambda: True)
     helper.reconcile()
     helper.reconcile()
     assert actions == ["connect"]

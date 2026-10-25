@@ -137,6 +137,7 @@ def test_main_starts_the_idle_timer_so_a_boot_connection_is_let_go(monkeypatch):
 
     monkeypatch.setenv("SPEAKER_MAC", "aa:bb:cc:dd:ee:ff")
     monkeypatch.setattr(helperd, "idle_setting", lambda: 3)
+    monkeypatch.setattr(helperd, "soloist_playing", lambda: None)
     monkeypatch.setattr(helperd, "ThreadingHTTPServer", FakeServer)
     monkeypatch.setattr(
         helperd.threading, "Thread", lambda **kw: type("T", (), {"start": lambda self: None})()
