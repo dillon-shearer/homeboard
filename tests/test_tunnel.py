@@ -57,7 +57,7 @@ def test_lan_and_kiosk_need_no_password(client):
     assert client.get("/admin", headers={"X-Homeboard-Tunnel": ""}).status_code == 200
 
 
-@pytest.mark.parametrize("path", ["/admin", "/", "/static/admin.css"])
+@pytest.mark.parametrize("path", ["/admin", "/admin/settings", "/", "/static/admin.css"])
 def test_tunnel_pages_redirect_to_login(client, path):
     r = client.get(path, headers=TUNNEL, follow_redirects=False)
     assert r.status_code == 303

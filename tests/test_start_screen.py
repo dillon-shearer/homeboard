@@ -9,7 +9,14 @@ from app.main import create_app
 
 ROOT = Path(__file__).resolve().parent.parent / "app"
 WIN95 = (ROOT / "static" / "win95.css").read_text()
-PAGES = ["/admin", "/admin/photos", "/admin/lists", "/admin/calendar", "/admin/tv", "/admin/about"]
+PAGES = [
+    "/admin",
+    "/admin/photos",
+    "/admin/lists",
+    "/admin/calendar",
+    "/admin/settings",
+    "/admin/about",
+]
 TUNNEL = {"X-Homeboard-Tunnel": "1", "CF-Connecting-IP": "203.0.113.7"}
 
 
@@ -122,14 +129,15 @@ def test_start_has_five_icons_and_no_tv_controls(client):
         ("/admin/photos", "Photos"),
         ("/admin/calendar", "Calendar"),
         ("/admin/lists", "Lists"),
-        ("/admin/tv", "TV"),
+        ("/admin/settings", "Settings"),
         ("/admin/sound", "Sound"),
     ]
     assert page.count('class="w95-icon"') == 5
     for gone in ('id="channel-timeout"', 'id="weather-location"', 'id="clock-size"'):
         assert gone not in page
-    tv = re.search(r'<a class="w95-icon" href="/admin/tv">.*?</a>', page, re.DOTALL).group(0)
-    assert '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true">' in tv
+    gear = re.search(r'<a class="w95-icon" href="/admin/settings">.*?</a>', page, re.DOTALL)
+    assert '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true">' in gear.group(0)
+    assert ">TV<" not in page and 'href="/admin/tv"' not in page
 
 
 def test_start_js_is_only_the_status_poll():

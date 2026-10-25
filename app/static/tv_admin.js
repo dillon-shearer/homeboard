@@ -19,16 +19,13 @@
 
   var STATUS_MS = 10000;
   var MAX_BACKOFF_S = 30;
-  var STEP_DEBOUNCE_MS = 400;
   var UP = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="6,2 11,9 1,9" fill="#000"/></svg>';
   var DOWN = '<svg viewBox="0 0 12 12" aria-hidden="true"><polygon points="1,3 11,3 6,10" fill="#000"/></svg>';
-  var RADIO_KEYS = ["clock_pos", "caption_pos", "clock_on_top", "date_pos", "date_on_top", "cover_pos", "cover_on_top"];
 
   var screens = [];
   var shown = { channel: null, screen_id: null };
   var editing = false;
   var loaded = false;
-  var current = {};
   var win = null;
   var lists = [];
   var allowed = {};
@@ -83,33 +80,8 @@
     }
   }
 
-  function renderWeather(s) {
-    var input = $("weather-location");
-    if (document.activeElement !== input) input.value = s.weather_location || "";
-    var note = $("weather-name");
-    if (!s.weather_location) note.textContent = "";
-    else note.textContent = s.weather_name ? "Showing weather for " + s.weather_name : "Looking up...";
-  }
-
   function renderSettings(s) {
-    current = s;
     showChannel(s.channel, s.screen_id);
-    if (!$("channel-timeout")) return;
-    $("channel-timeout").value = String(s.channel_timeout_min);
-    renderWeather(s);
-    $("clock-size").value = s.clock_size;
-    $("caption-size").value = s.caption_size;
-    $("date-size").value = s.date_size;
-    $("cover-size").value = s.cover_size;
-    RADIO_KEYS.forEach(function (key) {
-      var radios = document.querySelectorAll('input[name="' + key + '"]');
-      for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === String(s[key]);
-    });
-    $("stack-row").hidden = s.clock_pos !== s.caption_pos;
-    $("date-stack-row").hidden = s.date_pos !== s.clock_pos && s.date_pos !== s.caption_pos;
-    $("cover-stack-row").hidden = [s.clock_pos, s.caption_pos, s.date_pos].indexOf(s.cover_pos) === -1;
-    var checks = document.querySelectorAll(".checks input[data-key]");
-    for (var n = 0; n < checks.length; n++) checks[n].checked = !!s[checks[n].getAttribute("data-key")];
   }
 
   function loadSettings() {
@@ -534,105 +506,6 @@
     });
   }
 
-  function saveWeather() {
-    var input = $("weather-location");
-    var text = input.value.trim();
-    if (!text || text === current.weather_location) {
-      input.value = current.weather_location || "";
-      return;
-    }
-    putSettings({ weather_location: text }).then(function (s) {
-      if (!s) return;
-      return getJSON("/api/weather").catch(function () {}).then(loadSettings);
-    }).catch(function () {});
-  }
-
-  function makeStepper(id, key, min, max) {
-    var input = $(id);
-    var timer = null;
-
-    function clamp(v) {
-      v = Math.round(Number(v));
-      if (!isFinite(v)) v = current[key] || min;
-      return Math.min(max, Math.max(min, v));
-    }
-
-    function put(v) {
-      var patch = {};
-      patch[key] = v;
-      putSettings(patch);
-    }
-
-    function step(delta) {
-      var v = clamp(Number(input.value) + delta);
-      input.value = v;
-      clearTimeout(timer);
-      timer = setTimeout(function () { put(v); }, STEP_DEBOUNCE_MS);
-    }
-
-    holdStep($(id + "-minus"), function () { step(-1); });
-    holdStep($(id + "-plus"), function () { step(1); });
-    input.addEventListener("input", function () {
-      var raw = input.value;
-      if (raw === "") return;
-      var v = clamp(raw);
-      clearTimeout(timer);
-      timer = setTimeout(function () {
-        input.value = v;
-        put(v);
-      }, STEP_DEBOUNCE_MS);
-    });
-    input.addEventListener("change", function () {
-      if (input.value === "") input.value = current[key];
-    });
-  }
-
-  function holdStep(btn, step) {
-    var delay = null;
-    var repeat = null;
-    function stop() {
-      clearTimeout(delay);
-      clearInterval(repeat);
-      delay = repeat = null;
-    }
-    btn.addEventListener("pointerdown", function (e) {
-      if (e.button !== 0) return;
-      stop();
-      step();
-      delay = setTimeout(function () {
-        repeat = setInterval(step, 80);
-      }, 400);
-    });
-    btn.addEventListener("pointerup", stop);
-    btn.addEventListener("pointerleave", stop);
-    btn.addEventListener("pointercancel", stop);
-    btn.addEventListener("click", function (e) {
-      if (e.detail === 0) step();
-    });
-  }
-
-  function setSetting(key, value) {
-    var patch = {};
-    patch[key] = value;
-    var next = {};
-    for (var k in current) next[k] = current[k];
-    next[key] = value;
-    renderSettings(next);
-    putSettings(patch);
-  }
-
-  function onCheckChange(e) {
-    setSetting(e.currentTarget.getAttribute("data-key"), e.currentTarget.checked);
-  }
-
-  function onRadioChange(e) {
-    var el = e.currentTarget;
-    if (!el.checked) return;
-    var name = el.getAttribute("name");
-    var flag = name === "clock_on_top" || name === "date_on_top" || name === "cover_on_top";
-    setSetting(name, flag ? el.value === "true" : el.value);
-  }
-
   function loadStatus() {
     getJSON("/api/status").then(function (s) {
       $("display-state").textContent = s.display_connected ? "Display online" : "Display offline";
@@ -677,7 +550,6 @@
 
   function init() {
     if ($("tv-stops")) initScreens();
-    if ($("channel-timeout")) initSettings();
     loadSettings().catch(function () {
       showSettingsError("Could not load settings");
     });
@@ -719,26 +591,6 @@
     });
     loadScreens();
     setInterval(loadScreens, STATUS_MS);
-  }
-
-  function initSettings() {
-    $("channel-timeout").addEventListener("change", function (e) {
-      putSettings({ channel_timeout_min: parseInt(e.target.value, 10) });
-    });
-    $("weather-location").addEventListener("change", saveWeather);
-    $("weather-location").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") e.target.blur();
-    });
-    makeStepper("clock-size", "clock_size", 2, 12);
-    makeStepper("caption-size", "caption_size", 2, 12);
-    makeStepper("date-size", "date_size", 2, 12);
-    makeStepper("cover-size", "cover_size", 2, 12);
-    RADIO_KEYS.forEach(function (key) {
-      var radios = document.querySelectorAll('input[name="' + key + '"]');
-      for (var j = 0; j < radios.length; j++) radios[j].addEventListener("change", onRadioChange);
-    });
-    var checks = document.querySelectorAll(".checks input[data-key]");
-    for (var n = 0; n < checks.length; n++) checks[n].addEventListener("change", onCheckChange);
   }
 
   init();

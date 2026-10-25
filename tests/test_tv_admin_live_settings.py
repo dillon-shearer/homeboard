@@ -1,7 +1,7 @@
 import json
 import subprocess
 
-from tests.test_tv_admin import TV_HARNESS, TV_JS, needs_node
+from tests.test_tv_admin import SETTINGS_JS, TV_HARNESS, needs_node
 
 EVENTS = r"""
 const sources = [];
@@ -20,7 +20,7 @@ globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.len
 
 def _tv(body):
     script = (
-        f"{TV_HARNESS}\n{EVENTS}\nrequire({json.dumps(str(TV_JS))});\n"
+        f"{TV_HARNESS}\n{EVENTS}\nrequire({json.dumps(str(SETTINGS_JS))});\n"
         f"(async () => {{\n{body}\n}})();"
     )
     out = subprocess.run(
@@ -30,24 +30,24 @@ def _tv(body):
 
 
 @needs_node
-def test_settings_changed_event_reloads_weather_clock_and_caption():
+def test_settings_changed_event_reloads_slideshow_weather_clock_and_caption():
     r = _tv(
         """
         await settle();
         const es = sources[0];
         server.settings = Object.assign({}, server.settings, {
-          weather_location: "30263", weather_name: "Newnan", clock_size: 7, caption_size: 3,
+          weather_location: "30263", weather_name: "Newnan", clock_size: 7, caption_size: 3, interval_s: 45,
         });
         es.listeners.hello();
         es.listeners.settings_changed();
         await settle();
         const after = [all["weather-location"].value, all["weather-name"].textContent,
-          all["clock-size"].value, all["caption-size"].value];
+          all["clock-size"].value, all["caption-size"].value, all["interval"].value];
         console.log(JSON.stringify({ url: es.url, count: sources.length, after }));
         """
     )
     assert r["url"] == "/api/events" and r["count"] == 1
-    assert r["after"] == ["30263", "Showing weather for Newnan", 7, 3]
+    assert r["after"] == ["30263", "Showing weather for Newnan", 7, 3, 45]
 
 
 @needs_node

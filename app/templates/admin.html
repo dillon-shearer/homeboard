@@ -47,27 +47,6 @@
 </div>
 <button type="button" id="show-more" class="w95-btn more" hidden>Show More</button>
 
-<section class="w95-group settings" aria-labelledby="group-slideshow">
-<h2 id="group-slideshow" class="w95-legend">Slideshow</h2>
-<div class="form">
-<label for="interval">Seconds per photo</label>
-<div class="stepper">
-<button type="button" id="interval-minus" class="w95-btn step" aria-label="Less time">&minus;</button>
-<input id="interval" type="number" min="5" max="600" step="1" inputmode="numeric" class="w95-input" aria-label="Seconds per photo">
-<button type="button" id="interval-plus" class="w95-btn step" aria-label="More time">+</button>
-</div>
-<span id="fit-label">Fit</span>
-<div class="choices" role="radiogroup" aria-labelledby="fit-label">
-<label class="w95-check w95-radio"><input type="radio" name="fit" value="contain"> Whole photo</label>
-<label class="w95-check w95-radio"><input type="radio" name="fit" value="cover"> Fill screen</label>
-</div>
-<div class="checks">
-<label class="w95-check"><input type="checkbox" data-key="transition"><span>Fade between photos<small class="hint">Off = hard cut</small></span></label>
-<label class="w95-check"><input type="checkbox" data-key="shuffle"><span>Random order<small class="hint">Off = the order on this page</small></span></label>
-</div>
-</div>
-</section>
-<p id="settings-error" class="error" hidden></p>
 </div>
 <div class="w95-statusbar" role="status">
 <span id="photo-count">0 photos</span>

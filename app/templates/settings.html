@@ -9,7 +9,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Home Board">
-<title>TV - Home Board</title>
+<title>Settings - Home Board</title>
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-512.png">
 <link rel="icon" type="image/png" href="/static/icon-512.png">
@@ -20,30 +20,27 @@
 <main class="w95-window">
 <div class="w95-titlebar">
 <a class="w95-back" href="/admin">Start</a>
-<span class="w95-title-text">TV</span>
+<span class="w95-title-text">Settings</span>
 <a class="title-close" href="/admin" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></a>
 </div>
 <div class="w95-body">
-<section class="w95-group settings" aria-labelledby="group-timeout">
-<h2 id="group-timeout" class="w95-legend">Back to Photos after</h2>
-<div class="w95-row">
-<select id="channel-timeout" class="w95-input" aria-label="Back to Photos after">
-<option value="0">Never</option>
-<option value="2">2 minutes</option>
-<option value="5" selected>5 minutes</option>
-<option value="10">10 minutes</option>
-<option value="30">30 minutes</option>
-</select>
-<span class="w95-note">of no touches on the TV and no edits from a phone</span>
-</div>
-</section>
-<section class="w95-group settings" aria-labelledby="group-weather">
-<h2 id="group-weather" class="w95-legend">Weather</h2>
+<section class="w95-group settings" aria-labelledby="group-slideshow">
+<h2 id="group-slideshow" class="w95-legend">Photos</h2>
 <div class="form">
-<label for="weather-location">Location (zip or town)</label>
-<div class="weather-field">
-<input id="weather-location" class="w95-input" type="text" maxlength="40" enterkeyhint="done" autocomplete="off">
-<span id="weather-name" class="w95-note"></span>
+<label for="interval">Seconds per photo</label>
+<div class="stepper">
+<button type="button" id="interval-minus" class="w95-btn step" aria-label="Less time">&minus;</button>
+<input id="interval" type="number" min="5" max="600" step="1" inputmode="numeric" class="w95-input" aria-label="Seconds per photo">
+<button type="button" id="interval-plus" class="w95-btn step" aria-label="More time">+</button>
+</div>
+<span id="fit-label">Fit</span>
+<div class="choices" role="radiogroup" aria-labelledby="fit-label">
+<label class="w95-check w95-radio"><input type="radio" name="fit" value="contain"> Whole photo</label>
+<label class="w95-check w95-radio"><input type="radio" name="fit" value="cover"> Fill screen</label>
+</div>
+<div class="checks">
+<label class="w95-check"><input type="checkbox" data-key="transition"><span>Fade between photos<small class="hint">Off = hard cut</small></span></label>
+<label class="w95-check"><input type="checkbox" data-key="shuffle"><span>Random order<small class="hint">Off = the order on the Photos page</small></span></label>
 </div>
 </div>
 </section>
@@ -115,6 +112,40 @@
 </div>
 </div>
 </section>
+<section class="w95-group settings" aria-labelledby="group-screens">
+<h2 id="group-screens" class="w95-legend">Screens</h2>
+<div class="form">
+<label for="channel-timeout">Back to Photos after</label>
+<div class="weather-field">
+<select id="channel-timeout" class="w95-input">
+<option value="0">Never</option>
+<option value="2">2 minutes</option>
+<option value="5" selected>5 minutes</option>
+<option value="10">10 minutes</option>
+<option value="30">30 minutes</option>
+</select>
+<span class="w95-note">of no touches on the TV and no edits from a phone</span>
+</div>
+<label for="weather-location">Weather location (zip or town)</label>
+<div class="weather-field">
+<input id="weather-location" class="w95-input" type="text" maxlength="40" enterkeyhint="done" autocomplete="off">
+<span id="weather-name" class="w95-note"></span>
+</div>
+</div>
+</section>
+<section class="w95-group settings" aria-labelledby="group-board">
+<h2 id="group-board" class="w95-legend">Board</h2>
+<div class="form">
+<label for="brightness">Brightness</label>
+<div class="volume-row">
+<input id="brightness" class="volume-slider" type="range" min="10" max="100" step="1">
+<span id="brightness-value" class="volume-value">--%</span>
+</div>
+<div class="checks">
+<div><button type="button" id="restart" class="w95-btn">Restart board</button></div>
+</div>
+</div>
+</section>
 <p id="settings-error" class="error" hidden></p>
 </div>
 <div class="w95-statusbar" role="status">
@@ -122,6 +153,27 @@
 </div>
 </main>
 
-<script src="{{ static_url('tv_admin.js') }}"></script>
+<div id="restart-dialog" class="modal" hidden>
+<div id="restart-backdrop" class="modal-backdrop"></div>
+<div class="w95-window dialog" role="alertdialog" aria-modal="true" aria-labelledby="restart-title" aria-describedby="restart-text">
+<div class="w95-titlebar">
+<span id="restart-title" class="w95-title-text">Restart board</span>
+<button type="button" id="restart-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="confirm">
+<svg class="confirm-icon" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,2 31,29 1,29" fill="#000"/><polygon points="16,5 28,27 4,27" fill="#ffff00"/><rect x="14.5" y="11" width="3" height="9" fill="#000"/><rect x="14.5" y="22" width="3" height="3" fill="#000"/></svg>
+<p id="restart-text">Restart the board? It takes about a minute.</p>
+</div>
+<p id="restart-error" class="error" role="alert" hidden></p>
+<div class="buttons">
+<button type="button" id="restart-yes" class="w95-btn default">Restart</button>
+<button type="button" id="restart-no" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
+
+<script src="{{ static_url('settings.js') }}"></script>
 </body>
 </html>

@@ -14,6 +14,7 @@ from tests.test_clock_caption_form import _node as _form_node
 
 ROOT = Path(__file__).resolve().parent.parent / "app"
 TV_JS = ROOT / "static" / "tv_admin.js"
+SETTINGS_JS = ROOT / "static" / "settings.js"
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
 
@@ -23,20 +24,20 @@ def client(tmp_path):
         yield c
 
 
-def test_tv_page_loads_its_assets_in_the_admin_shell(client):
-    r = client.get("/admin/tv")
+def test_settings_page_loads_its_assets_in_the_admin_shell(client):
+    r = client.get("/admin/settings")
     assert r.status_code == 200
     assets = re.findall(r'"(/static/[^"]+\?v=\d+)"', r.text)
-    assert any("tv_admin.js" in a for a in assets)
+    assert any("/static/settings.js" in a for a in assets)
+    assert not any("/static/tv_admin.js" in a or "/static/admin.js" in a for a in assets)
     for url in assets:
         assert client.get(url).status_code == 200, url
 
 
-def test_tv_page_groups_in_order(client):
-    page = client.get("/admin/tv").text
-    legends = re.findall(r'class="w95-legend">([^<]+)</h2>', page)
-    assert legends == ["Back to Photos after", "Weather", "Clock, date and caption"]
-    assert ">Location (zip or town)</label>" in page
+def test_settings_page_has_timeout_and_weather_fields(client):
+    page = client.get("/admin/settings").text
+    assert ">Back to Photos after</label>" in page
+    assert ">Weather location (zip or town)</label>" in page
 
 
 def test_start_page_shows_the_tv_row_last(client):
@@ -46,9 +47,10 @@ def test_start_page_shows_the_tv_row_last(client):
 
 
 def test_tv_js_has_no_native_dialogs():
-    js = TV_JS.read_text()
-    for name in ("prompt(", "confirm(", "alert("):
-        assert name not in js
+    for path in (TV_JS, SETTINGS_JS):
+        js = path.read_text()
+        for name in ("prompt(", "confirm(", "alert("):
+            assert name not in js, path
 
 
 TV_HARNESS = r"""
@@ -107,7 +109,9 @@ for (const id of ["display-state", "channel-timeout", "name-dialog", "name-form"
   "screens-hint", "screen-delete", "screen-delete-dialog", "screen-delete-text",
   "screen-confirm-delete", "screen-confirm-cancel", "screen-delete-close",
   "screen-delete-backdrop", "widget-row", "widget-add", "widget-size", "widget-list-field",
-  "widget-list", "widget-remove"]) {
+  "widget-list", "widget-remove", "interval", "interval-minus", "interval-plus", "brightness",
+  "brightness-value", "restart", "restart-dialog", "restart-error", "restart-yes", "restart-no",
+  "restart-close", "restart-backdrop"]) {
   body.appendChild(make("x", id));
 }
 const row = body.appendChild(make("span", "tv-stops"));
@@ -174,8 +178,8 @@ const byText = (text) => walk(row, []).find((e) => e.textContent === text);
 """
 
 
-def _tv(body):
-    script = f"{TV_HARNESS}\nrequire({json.dumps(str(TV_JS))});\n(async () => {{\n{body}\n}})();"
+def _tv(body, js=TV_JS):
+    script = f"{TV_HARNESS}\nrequire({json.dumps(str(js))});\n(async () => {{\n{body}\n}})();"
     out = subprocess.run(
         ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
     )
@@ -307,7 +311,8 @@ def test_weather_location_change_puts_it_and_shows_looking_up():
         field.fire("change");
         await settle();
         console.log(JSON.stringify({ calls, note: all["weather-name"].textContent }));
-        """
+        """,
+        SETTINGS_JS,
     )
     assert r["calls"] == [
         {"method": "PUT", "url": "/api/settings", "body": {"weather_location": "Atlanta"}}
@@ -342,7 +347,7 @@ def test_tv_new_screen_button_posts_a_name_and_opens_the_screen_window():
 
 
 def test_tv_date_controls_offer_every_spot(client):
-    page = client.get("/admin/tv").text
+    page = client.get("/admin/settings").text
     assert re.findall(r'name="date_pos" value="([a-z-]+)"', page) == list(POSITIONS)
     for label in ("Date spot", "Date above", "Date below", "Show the date"):
         assert label in page

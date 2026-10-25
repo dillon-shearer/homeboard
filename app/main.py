@@ -7,7 +7,7 @@ from pathlib import Path
 
 import segno
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -147,9 +147,13 @@ def create_app(data_dir=None) -> FastAPI:
     def admin_calendar(request: Request):
         return templates.TemplateResponse(request, "calendar.html")
 
-    @app.get("/admin/tv", response_class=HTMLResponse)
-    def admin_tv(request: Request):
-        return templates.TemplateResponse(request, "tv.html")
+    @app.get("/admin/settings", response_class=HTMLResponse)
+    def admin_settings(request: Request):
+        return templates.TemplateResponse(request, "settings.html")
+
+    @app.get("/admin/tv")
+    def admin_tv():
+        return RedirectResponse("/admin/settings", status_code=307)
 
     @app.get("/admin/sound", response_class=HTMLResponse)
     def admin_sound(request: Request):

@@ -1,8 +1,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "app"
-JS = (ROOT / "static" / "admin.js").read_text()
-HTML = (ROOT / "templates" / "admin.html").read_text()
+JS = (ROOT / "static" / "settings.js").read_text()
+HTML = (ROOT / "templates" / "settings.html").read_text()
 
 
 def test_interval_input_steps_by_one():
