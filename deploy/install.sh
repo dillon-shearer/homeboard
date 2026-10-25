@@ -124,6 +124,14 @@ if dpkg -s raspotify >/dev/null 2>&1; then
 fi
 rm -f /etc/apt/sources.list.d/raspotify.list /usr/share/keyrings/raspotify_key.asc
 rm -rf /etc/systemd/system/raspotify.service.d /etc/raspotify
+if ! command -v cc >/dev/null 2>&1     || ! printf '#include <dlfcn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+'         | cc -x c -fsyntax-only - >/dev/null 2>&1; then
+    echo "No working C compiler or libc headers for soloist-key.so; run: sudo apt-get install gcc libc6-dev" >&2
+    exit 1
+fi
 
 echo "== Creating the homeboard user"
 if ! id homeboard >/dev/null 2>&1; then
@@ -386,7 +394,7 @@ if id "$KIOSK_USER" >/dev/null 2>&1; then
 fi
 
 echo "== Spotify Connect speaker"
-if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ]; then
+if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ] || [ ! -s /opt/soloist/lib/.complete ]; then
     bash "$APP_DIR"/deploy/soloist-update.sh
 fi
 cc -O2 -shared -fPIC -o /opt/soloist/soloist-key.so.new "$APP_DIR"/deploy/soloist-key.c

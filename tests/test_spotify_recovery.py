@@ -139,6 +139,8 @@ def _update(tmp_path, built, same):
     soloist = tmp_path / "soloist"
     (soloist / "lib").mkdir(parents=True)
     _stub(soloist / "lib", "ld-linux-aarch64.so.1", "exit 0\n")
+    sha = UPDATE.read_text(encoding="utf-8").split("GLIBC_SHA256=", 1)[1].split("\n", 1)[0]
+    (soloist / "lib" / ".complete").write_text(sha + "\n", newline="\n")
     version = f"echo 'soloist 1.0 ({built}) arm64'\n"
     if same:
         _stub(soloist, "soloist", version)
