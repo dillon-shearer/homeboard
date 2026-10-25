@@ -704,3 +704,20 @@ def delete_event(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:
         with conn:
             conn.execute("DELETE FROM events WHERE id = ?", (id,))
     return row
+
+
+def list_spotify_playlists(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, name, cover FROM spotify_playlists ORDER BY position"
+    ).fetchall()
+
+
+def set_spotify_playlists(conn: sqlite3.Connection, playlists) -> list[sqlite3.Row]:
+    rows = list({p["id"]: p for p in playlists}.values())
+    with conn:
+        conn.execute("DELETE FROM spotify_playlists")
+        conn.executemany(
+            "INSERT INTO spotify_playlists (id, name, cover, position) VALUES (?, ?, ?, ?)",
+            [(p["id"], p.get("name"), p.get("cover"), n) for n, p in enumerate(rows)],
+        )
+    return list_spotify_playlists(conn)
