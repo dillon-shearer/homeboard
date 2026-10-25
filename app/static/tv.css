@@ -1062,7 +1062,8 @@ body.tv {
   flex: 1;
 }
 
-.sp-tile .sp-toggle {
+.sp-tile .sp-toggle,
+.sp-tile .sp-here {
   position: absolute;
   min-width: 11vh;
   min-height: 11vh;

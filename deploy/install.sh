@@ -498,7 +498,17 @@ if [ "$PAIR_SPEAKER" -eq 1 ]; then
     echo "Speaker volume: $(curl -sS -m 5 127.0.0.1:8002/volume 2>/dev/null || echo unknown)"
 fi
 if [ -s "$SOLOIST_ENV" ]; then
-    systemctl restart homeboard-soloist.service
+    SOLOIST_SUM="$(cat /etc/systemd/system/homeboard-soloist.service "$SOLOIST_ENV"         "$APP_DIR"/deploy/soloist.sh /opt/soloist/soloist 2>/dev/null | sha256sum | cut -d' ' -f1)"
+    EVENTS_SUM="$(cat /etc/systemd/system/homeboard-soloist-events.service         "$APP_DIR"/deploy/soloist-event.sh 2>/dev/null | sha256sum | cut -d' ' -f1)"
+    if [ "$SOLOIST_SUM" != "$(cat /opt/soloist/service.sum 2>/dev/null)" ]         || ! systemctl is-active --quiet homeboard-soloist.service; then
+        echo "Restarting Spotify Soloist (its files changed or it was not running)"
+        systemctl restart homeboard-soloist.service
+        echo "$EVENTS_SUM" > /opt/soloist/events.sum
+    elif [ "$EVENTS_SUM" != "$(cat /opt/soloist/events.sum 2>/dev/null)" ]         || ! systemctl is-active --quiet homeboard-soloist-events.service; then
+        systemctl restart homeboard-soloist-events.service
+        echo "$EVENTS_SUM" > /opt/soloist/events.sum
+    fi
+    echo "$SOLOIST_SUM" > /opt/soloist/service.sum
 fi
 
 echo

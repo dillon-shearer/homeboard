@@ -725,6 +725,10 @@
     return kind === "playing" ? spotButton("toggle", "Pause", "pause") : spotButton("toggle", "Play", "play");
   }
 
+  function playHere() {
+    return spotButton("here", "Play here", "play", "Play here");
+  }
+
   function transport(kind) {
     var row = el("div", "sp-transport");
     row.appendChild(spotButton("previous", "Previous", "previous"));
@@ -765,10 +769,12 @@
       return box;
     }
     var live = kind !== "idle";
+    var here = !live && !!now && !now.device;
     var cover = spotImage("sp-cover", coverUrl(now));
     box.appendChild(cover);
     if (layout === "tile") {
       if (live) cover.appendChild(toggleButton(kind));
+      if (here) cover.appendChild(playHere());
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
     } else {
       var info = el("div", "sp-info");
@@ -784,6 +790,7 @@
         controls.appendChild(prog);
       }
       if (live) controls.appendChild(transport(kind));
+      if (here) controls.appendChild(el("div", "sp-transport")).appendChild(playHere());
       if (layout === "full") {
         if (live) {
           var known = typeof now.volume === "number";
@@ -815,7 +822,7 @@
     var layout = spotifyLayout(widget);
     var full = layout === "full";
     var sig = JSON.stringify([layout, kind, kind === "unlinked" || !now ? null : [now.track, now.artist, now.cover,
-      now.duration_ms, now.volume], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
+      now.duration_ms, now.volume, now.device], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
     var body = card.querySelector(".sp");
     if (!body || body.getAttribute("data-sig") !== sig) {
       var oldList = body && body.querySelector(".sp-pls");
@@ -1203,6 +1210,8 @@
       now.playing = !playing;
       spot.at = Date.now();
       spotifyCall("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
+    } else if (action === "here") {
+      spotifyCall("POST", "/api/spotify/play");
     } else if (action === "previous" || action === "next") {
       spotifyCall("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {
