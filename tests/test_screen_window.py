@@ -97,7 +97,7 @@ def test_screen_window_in_headless_chrome(chrome, server):
         "document.getElementById('screen-save').click()"
     )
     _wait(lambda: _screen(server, "Test 2"))
-    assert chrome.eval(shown.format(_js("screen-dialog"))) is False
+    _wait(lambda: chrome.eval(shown.format(_js("screen-dialog"))) is False)
     sid = _screen(server, "Test 2")["id"]
     name_button = f"{q}('[data-edit-screen=\"{sid}\"] .w95-btn:nth-child(2)')"
     _wait(lambda: chrome.eval(f"{name_button} && {name_button}.textContent") == "Test 2")
