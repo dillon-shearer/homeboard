@@ -964,6 +964,17 @@ body.tv {
   text-overflow: ellipsis;
 }
 
+.sp-device {
+  font-size: 2.6vh;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-tile .sp-device {
+  text-align: center;
+}
+
 .sp-progress {
   display: flex;
   align-items: center;

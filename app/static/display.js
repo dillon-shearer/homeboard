@@ -201,6 +201,7 @@
       shown: true,
       line: now.artist ? now.track + " - " + now.artist : String(now.track),
       toggle: now.playing ? "Pause" : "Play",
+      device: now.on_board ? null : "On " + (now.device || "another device"),
       known: known,
       volume: known ? now.volume + "%" : "--%",
     };
@@ -390,6 +391,8 @@
   const rebootEl = document.getElementById("cp-restart-yes");
   const nowEl = document.getElementById("cp-now");
   const nowLineEl = document.getElementById("cp-now-line");
+  const nowDeviceEl = document.getElementById("cp-now-device");
+  const nowHereEl = document.getElementById("cp-now-here");
   const nowToggleEl = document.getElementById("cp-now-toggle");
   const nowDownEl = document.getElementById("cp-now-down");
   const nowUpEl = document.getElementById("cp-now-up");
@@ -1000,6 +1003,9 @@
     if (!row.shown) return;
     nowLineEl.textContent = row.line;
     nowLineEl.title = row.line;
+    nowDeviceEl.textContent = row.device || "";
+    nowDeviceEl.hidden = !row.device;
+    nowHereEl.hidden = !row.device;
     nowToggleEl.textContent = row.toggle;
     nowDownEl.disabled = !row.known;
     nowUpEl.disabled = !row.known;
@@ -1231,6 +1237,7 @@
     document.getElementById("cp-now-prev").addEventListener("click", function () { nowTap("previous"); });
     nowToggleEl.addEventListener("click", function () { nowTap("toggle"); });
     document.getElementById("cp-now-next").addEventListener("click", function () { nowTap("next"); });
+    nowHereEl.addEventListener("click", function () { nowTap("here"); });
     nowDownEl.addEventListener("click", function () { nowVolumeTap(-VOLUME_STEP); });
     nowUpEl.addEventListener("click", function () { nowVolumeTap(VOLUME_STEP); });
     hookKiosk();

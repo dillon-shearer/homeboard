@@ -406,7 +406,6 @@ def test_quick_volume_taps_wait_for_previous_write(chrome, server, surface_playe
 
 @needs_chrome
 @pytest.mark.parametrize("surface", ["phone", "tv", "panel"])
-@pytest.mark.xfail(strict=True, reason="Now-playing surfaces omit the active device name")
 def test_other_device_is_named_on_every_control_surface(chrome, server, surface_player, surface):
     surface_player.now = _playing(device="Review Phone", on_board=False)
     _open_surface(chrome, server, surface)

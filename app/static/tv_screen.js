@@ -778,19 +778,23 @@
     }
     var live = kind !== "idle";
     var here = !live && !!now && !now.device;
+    var away = live && !now.on_board;
+    var where = away ? el("div", "sp-device", "On " + (now.device || "another device")) : null;
     var cover = spotImage("sp-cover", coverUrl(now));
     var left = layout === "full" ? box.appendChild(el("div", "sp-left")) : box;
     left.appendChild(cover);
     if (layout === "tile") {
-      if (live) cover.appendChild(toggleButton(kind));
-      if (here) cover.appendChild(playHere());
+      if (live && !away) cover.appendChild(toggleButton(kind));
+      if (here || away) cover.appendChild(playHere());
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
+      if (where) box.appendChild(where);
     } else {
       var info = el("div", "sp-info");
       var head = (layout === "full" ? left : info).appendChild(el("div", "sp-head"));
       var controls = info.appendChild(el("div", "sp-controls"));
       head.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
       if (live && now.artist) head.appendChild(el("div", "sp-artist", now.artist));
+      if (where) head.appendChild(where);
       if (live && layout === "full") {
         var prog = el("div", "sp-progress");
         prog.appendChild(el("span", "sp-elapsed", "0:00"));
@@ -799,6 +803,7 @@
         controls.appendChild(prog);
       }
       if (live) controls.appendChild(transport(kind));
+      if (away) controls.lastChild.appendChild(playHere());
       if (here) controls.appendChild(el("div", "sp-transport")).appendChild(playHere());
       if (layout === "full") {
         if (live) {
@@ -831,7 +836,7 @@
     var layout = spotifyLayout(widget);
     var full = layout === "full";
     var sig = JSON.stringify([layout, kind, kind === "unlinked" || !now ? null : [now.track, now.artist, now.cover,
-      now.duration_ms, now.volume, now.device], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
+      now.duration_ms, now.volume, now.device, now.on_board], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
     var body = card.querySelector(".sp");
     if (!body || body.getAttribute("data-sig") !== sig) {
       var oldList = body && body.querySelector(".sp-pls");

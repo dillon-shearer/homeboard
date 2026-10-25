@@ -105,6 +105,7 @@
     ui.img.alt = "";
     ui.track = box.appendChild(el("div", "player-track", IDLE_TEXT));
     ui.artist = box.appendChild(el("div", "player-artist"));
+    ui.device = box.appendChild(el("div", "player-device"));
     ui.progress = box.appendChild(el("div", "player-progress"));
     ui.elapsed = ui.progress.appendChild(el("span", "player-time", "0:00"));
     ui.bar = ui.progress.appendChild(el("span", "player-bar")).appendChild(el("i"));
@@ -157,6 +158,9 @@
     ui.track.textContent = on ? now.track : IDLE_TEXT;
     ui.artist.textContent = on && now.artist ? now.artist : "";
     ui.artist.hidden = !(on && now.artist);
+    var away = on && !now.on_board;
+    ui.device.textContent = away ? "On " + (now.device || "another device") : "";
+    ui.device.hidden = !away;
     ui.progress.hidden = !on;
     ui.transport.hidden = !on;
     var label = on && now.playing ? "Pause" : "Play";
