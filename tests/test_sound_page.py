@@ -49,6 +49,14 @@ def _open(chrome, server):
     chrome.send("Page.navigate", {"url": f"{server}/admin/sound"})
 
 
+SAVED = """(() => {{
+  const x = new XMLHttpRequest();
+  x.open('GET', '/api/spotify/shown', false);
+  x.send();
+  return JSON.parse(x.responseText).map(r => r.id).join(',') === '{}';
+}})()"""
+
+
 def _sent(chrome):
     return json.loads(chrome.eval("JSON.stringify(window.__sent)"))
 
@@ -79,11 +87,11 @@ def test_ticking_two_playlists_puts_them_in_page_order(chrome, server, monkeypat
     state = chrome.eval("document.getElementById('spotify-state').textContent")
     track = chrome.eval("document.getElementById('spotify-track').textContent")
     chrome.eval("document.querySelector('#playlists input[data-id=\"p3\"]').click()")
-    _wait(chrome, "window.__sent.length === 1 && window.__inflight === 0")
     chrome.eval("document.querySelector('#playlists input[data-id=\"p1\"]').click()")
     count = chrome.eval("document.getElementById('shown-count').textContent")
     _wait(chrome, "window.__sent.length === 2 && window.__inflight === 0")
     sent = _sent(chrome)
+    _wait(chrome, SAVED.format("p1,p3"))
     chrome.eval("window.__old = true")
     chrome.send("Page.reload")
     _wait(chrome, "!window.__old && document.querySelectorAll('#playlists input').length === 3")

@@ -1,4 +1,6 @@
+import base64
 import json
+import os
 import re
 import subprocess
 import time
@@ -6,11 +8,14 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from app import weather
+from app import routes_sound, spotify, weather
 from app.main import create_app
 from tests.chrome import api, api_at, needs_chrome, needs_node
+from tests.test_tv_spotify import SIZES as SP_SIZES
+from tests.test_tv_spotify import _playing, _png
 from tests.test_tv_weather import _seed_cache
 
 STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
@@ -88,7 +93,7 @@ def test_current_screen_and_needs():
     assert result["needsA"] == ["events", "lists"]
     assert result["needsB"] == []
     assert result["needsNull"] == []
-    assert result["kinds"] == ["calendar", "clock", "lists", "weather"]
+    assert result["kinds"] == ["calendar", "clock", "lists", "spotify", "weather"]
     assert result["label"] == "Screen 2 of 2"
 
 
@@ -1149,3 +1154,262 @@ def test_left_edge_drag_dims_and_saves(chrome, server):
     assert faded["readout"] == 0
     assert swiped["brightness"] == saved["brightness"]
     assert reloaded["dim"] == pytest.approx(0.6, abs=0.02)
+
+
+class FakeSpotify:
+    def __init__(self):
+        self.now = _playing()
+        self.calls = []
+        self.fail = {}
+        self.connected = False
+
+    def now_playing(self, data_dir):
+        self.calls.append(("GET", "/api/spotify/now"))
+        return self.now
+
+    def control(self, data_dir, method, path, payload=None, query=None):
+        name = {
+            "/me/player/play": "play",
+            "/me/player/pause": "pause",
+            "/me/player/next": "next",
+            "/me/player/previous": "previous",
+            "/me/player/volume": "volume",
+        }[path]
+        self.calls.append(("POST" if name != "volume" else "PUT", f"/api/spotify/{name}", query))
+        if name in self.fail:
+            raise spotify.SpotifyError(409, self.fail[name])
+        return {"linked": True, "ok": True}
+
+    def play_playlist(self, data_dir, playlist_id):
+        self.calls.append(("POST", "/api/spotify/play-playlist", playlist_id))
+        return {"linked": True, "ok": True}
+
+    def helper(self, method, path, timeout=None):
+        self.calls.append((method, "/api/sound" + path))
+        if path == "/connect":
+            self.connected = True
+        elif path == "/disconnect":
+            self.connected = False
+        if path == "/status":
+            return JSONResponse(
+                {"speaker": {"mac": "AA", "connected": self.connected, "name": "Bar"}}
+            )
+        return JSONResponse({"connected": self.connected})
+
+    def sent(self, method, url):
+        return [c for c in self.calls if c[0] == method and c[1] == url]
+
+
+@pytest.fixture
+def fake(monkeypatch):
+    fake_api = FakeSpotify()
+    monkeypatch.setattr(spotify, "now_playing", fake_api.now_playing)
+    monkeypatch.setattr(spotify, "control", fake_api.control)
+    monkeypatch.setattr(spotify, "play_playlist", fake_api.play_playlist)
+    monkeypatch.setattr(routes_sound, "helper", fake_api.helper)
+    return fake_api
+
+
+SP_SHOWN = [
+    {"id": "pl-road", "name": "Road trip", "cover": _png((40, 140, 70))},
+    {"id": "pl-dinner", "name": "Dinner jazz", "cover": _png((40, 70, 160))},
+    {"id": "pl-kids", "name": "Kids songs", "cover": None},
+    {"id": "pl-focus", "name": "Focus", "cover": _png((150, 40, 120))},
+    {"id": "pl-80s", "name": "Eighties", "cover": _png((220, 200, 40))},
+    {"id": "pl-rain", "name": "Rainy day", "cover": _png((90, 90, 90))},
+]
+
+SP_CARD = """JSON.stringify((() => {
+  const c = document.querySelector('#screen .tv-card[data-kind="spotify"]');
+  if (!c) return null;
+  const q = s => c.querySelector(s) ? c.querySelector(s).textContent : null;
+  const box = c.getBoundingClientRect();
+  const out = [...c.querySelectorAll('.sp-cover, .sp-info, .sp-btn, .sp-track')].filter(n => {
+    const r = n.getBoundingClientRect();
+    return r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1;
+  }).map(n => n.className);
+  const small = [...c.querySelectorAll('.sp-btn, .sp-pl')].filter(b => {
+    const r = b.getBoundingClientRect();
+    return r.height < 48 || r.width < 48;
+  }).map(b => b.className);
+  return {title: document.getElementById('title').textContent, size: c.getAttribute('data-size'),
+    h2: q('h2'), layout: c.querySelector('.sp') ? c.querySelector('.sp').className : null,
+    track: q('.sp-track'), artist: q('.sp-artist'), elapsed: q('.sp-elapsed'), total: q('.sp-total'),
+    vol: q('.sp-vol'), speaker: q('.sp-speaker'), msg: q('.sp-msg'), text: q('.tv-msg'),
+    toggle: c.querySelector('.sp-toggle') ? c.querySelector('.sp-toggle').getAttribute('aria-label') : null,
+    toggleOnCover: !!c.querySelector('.sp-cover .sp-toggle'),
+    transport: [...c.querySelectorAll('.sp-transport .sp-btn')].map(b => b.getAttribute('data-sp')),
+    rows: [...c.querySelectorAll('[data-playlist]')].map(b => [b.getAttribute('data-playlist'), b.textContent]),
+    coverImg: !!c.querySelector('.sp-cover img'), coverNone: !!c.querySelector('.sp-cover.none'),
+    out, small};
+})())"""
+
+SP_HIDE = """Object.defineProperty(document, 'visibilityState', {get: () => '%s', configurable: true});
+document.dispatchEvent(new Event('visibilitychange'))"""
+
+
+def _sp_setup(base, sizes=SP_SIZES):
+    api.put(f"{base}/api/spotify/shown", json=SP_SHOWN).raise_for_status()
+    widget = {"kind": "spotify", "col": 0, "row": 0}
+    return {
+        (w, h): _new_screen(base, f"Music {w}x{h}", [{**widget, "w": w, "h": h}]) for w, h in sizes
+    }
+
+
+def _sp_card(chrome, title, ready):
+    out = _until(lambda: _json(chrome, SP_CARD), lambda o: o and o["title"] == title and ready(o))
+    assert out and out["title"] == title and ready(out), out
+    return out
+
+
+def _sp_tap(chrome, selector):
+    assert chrome.eval(f"!!document.querySelector({json.dumps(selector)})"), selector
+    chrome.eval(f"document.querySelector({json.dumps(selector)}).click()")
+
+
+def _sp_until(check, what):
+    assert _until(check, bool), f"timed out waiting for {what}"
+
+
+@needs_chrome
+def test_spotify_card_layout_per_size(chrome, server, fake):
+    ids = _sp_setup(server)
+    chrome.size(1024, 600)
+    _show_screen(server, ids[(2, 2)])
+    chrome.send("Page.navigate", {"url": f"{server}/tv"})
+    full = _sp_card(chrome, "Music 2x2", lambda o: o["rows"] and o["speaker"] and o["coverImg"])
+    assert full["h2"] == "Spotify" and "sp-full" in full["layout"] and "playing" in full["layout"]
+    assert full["track"] == "Here Comes the Sun" and full["artist"] == "The Beatles"
+    assert full["elapsed"] in ("1:05", "1:06", "1:07") and full["total"] == "3:05"
+    assert full["transport"] == ["previous", "toggle", "next"] and full["toggle"] == "Pause"
+    assert full["vol"] == "40%" and full["speaker"] == "Speaker not connected"
+    assert [r[0] for r in full["rows"]] == [p["id"] for p in SP_SHOWN]
+    assert full["rows"][0][1] == "Road trip"
+    assert full["out"] == [] and full["small"] == []
+
+    for (w, h), title in [((2, 1), "Music 2x1"), ((1, 2), "Music 1x2")]:
+        _show_screen(server, ids[(w, h)])
+        out = _sp_card(chrome, title, lambda o: o["track"] == "Here Comes the Sun")
+        assert out["size"] == f"{w}x{h}" and out["artist"] == "The Beatles"
+        assert out["transport"] == ["previous", "toggle", "next"] and out["coverImg"]
+        assert out["rows"] == [] and out["vol"] is None and out["speaker"] is None
+        assert out["elapsed"] is None
+        assert out["out"] == [] and out["small"] == [], title
+
+    _show_screen(server, ids[(1, 1)])
+    tile = _sp_card(chrome, "Music 1x1", lambda o: o["track"] == "Here Comes the Sun")
+    assert tile["toggleOnCover"] and tile["toggle"] == "Pause" and tile["coverImg"]
+    assert tile["transport"] == [] and tile["rows"] == [] and tile["artist"] is None
+    assert tile["out"] == [] and tile["small"] == []
+
+
+@needs_chrome
+def test_spotify_nothing_playing_and_not_linked(chrome, server, fake):
+    ids = _sp_setup(server)
+    fake.now = spotify._empty()
+    chrome.size(1024, 600)
+    _show_screen(server, ids[(2, 2)])
+    chrome.send("Page.navigate", {"url": f"{server}/tv"})
+    full = _sp_card(chrome, "Music 2x2", lambda o: o["rows"] and o["speaker"])
+    assert full["track"] == "Nothing playing" and full["coverNone"] and not full["coverImg"]
+    assert "idle" in full["layout"] and full["transport"] == [] and full["vol"] is None
+    assert len(full["rows"]) == len(SP_SHOWN)
+    _sp_tap(chrome, '[data-playlist="pl-dinner"]')
+    _sp_until(lambda: fake.sent("POST", "/api/spotify/play-playlist"), "the playlist call")
+    assert fake.sent("POST", "/api/spotify/play-playlist") == [
+        ("POST", "/api/spotify/play-playlist", "pl-dinner")
+    ]
+
+    fake.now = {"linked": False, "reason": "not linked"}
+    for (w, h), screen in ids.items():
+        _show_screen(server, screen)
+        out = _sp_card(chrome, f"Music {w}x{h}", lambda o: o["text"] == "Spotify not linked")
+        assert out["track"] is None and out["rows"] == [] and out["transport"] == []
+
+
+@needs_chrome
+def test_spotify_taps_send_controls(chrome, server, fake, tmp_path):
+    ids = _sp_setup(server, [(2, 2)])
+    shots = Path(os.environ.get("TV_SHOTS_DIR") or tmp_path)
+    shots.mkdir(parents=True, exist_ok=True)
+    chrome.size(1024, 600)
+    _show_screen(server, ids[(2, 2)])
+    chrome.send("Page.navigate", {"url": f"{server}/tv"})
+    _sp_card(chrome, "Music 2x2", lambda o: o["rows"] and o["speaker"] and o["toggle"] == "Pause")
+    chrome.wait(
+        "[...document.querySelectorAll('.tv-card img')].every(i => i.complete && i.naturalWidth)"
+    )
+    png = chrome.send("Page.captureScreenshot", {"format": "png"})["data"]
+    (shots / "tv_spotify_playing.png").write_bytes(base64.b64decode(png))
+
+    _sp_tap(chrome, '[data-sp="toggle"]')
+    _sp_until(lambda: fake.sent("POST", "/api/spotify/pause"), "the pause call")
+    assert not fake.sent("POST", "/api/spotify/play")
+
+    fake.now = _playing(playing=False)
+    _sp_card(chrome, "Music 2x2", lambda o: o["toggle"] == "Play")
+    _sp_tap(chrome, '[data-sp="toggle"]')
+    _sp_until(lambda: fake.sent("POST", "/api/spotify/play"), "the play call")
+    fake.now = _playing()
+
+    _sp_tap(chrome, '[data-playlist="pl-kids"]')
+    _sp_until(lambda: fake.sent("POST", "/api/spotify/play-playlist"), "the playlist call")
+    assert fake.sent("POST", "/api/spotify/play-playlist")[0][2] == "pl-kids"
+
+    _sp_tap(chrome, '[data-sp="vol-up"]')
+    _sp_until(lambda: fake.sent("PUT", "/api/spotify/volume"), "the volume call")
+    assert fake.sent("PUT", "/api/spotify/volume")[0][2] == {"volume_percent": 45}
+
+    assert not fake.connected
+    _sp_tap(chrome, '[data-sp="speaker"]')
+    _sp_until(lambda: fake.sent("POST", "/api/sound/connect"), "the connect call")
+    _sp_card(chrome, "Music 2x2", lambda o: o["speaker"] == "Speaker connected")
+    assert not fake.sent("POST", "/api/sound/disconnect")
+    _sp_tap(chrome, '[data-sp="speaker"]')
+    _sp_until(lambda: fake.sent("POST", "/api/sound/disconnect"), "the disconnect call")
+
+    fake.fail["next"] = "no active device"
+    _sp_tap(chrome, '[data-sp="next"]')
+    _sp_card(chrome, "Music 2x2", lambda o: o["msg"] == "no active device")
+    chrome.wait("__test.waiting(3000) > 0")
+    chrome.eval("__test.fire(3000)")
+    _sp_card(chrome, "Music 2x2", lambda o: o["msg"] is None)
+
+
+@needs_chrome
+def test_spotify_polls_only_while_shown_and_visible(chrome, server, fake):
+    ids = _sp_setup(server, [(2, 1)])
+    brief = _screens(server)["Daily Brief"]
+    idle = "__test.waiting(3000) === 0 && window.__inflight === 0"
+
+    def polls():
+        return len(fake.sent("GET", "/api/spotify/now"))
+
+    chrome.size(1024, 600)
+    _show_screen(server, ids[(2, 1)])
+    chrome.send("Page.navigate", {"url": f"{server}/tv"})
+    _sp_card(chrome, "Music 2x1", lambda o: o["track"] == "Here Comes the Sun")
+    chrome.wait("__test.waiting(3000) > 0 && window.__inflight === 0")
+    first = polls()
+    chrome.eval("__test.fire(3000)")
+    _sp_until(lambda: polls() > first, "the next poll")
+
+    _show_screen(server, brief)
+    chrome.wait("document.getElementById('title').textContent === 'Daily Brief'")
+    chrome.wait(idle)
+    stopped = polls()
+    chrome.eval("__test.fire(3000)")
+    chrome.wait("window.__inflight === 0")
+    assert polls() == stopped
+
+    _show_screen(server, ids[(2, 1)])
+    _sp_card(chrome, "Music 2x1", lambda o: True)
+    _sp_until(lambda: polls() > stopped, "polling to restart")
+    chrome.eval(SP_HIDE % "hidden")
+    chrome.wait(idle)
+    hidden = polls()
+    chrome.eval("__test.fire(3000)")
+    chrome.wait("window.__inflight === 0")
+    assert polls() == hidden
+    chrome.eval(SP_HIDE % "visible")
+    _sp_until(lambda: polls() > hidden, "polling to resume")

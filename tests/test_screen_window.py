@@ -154,7 +154,7 @@ def test_screen_window_adds_at_a_cell_moves_and_swaps(chrome, server):
     assert chrome.eval("!document.getElementById('widget-add').hidden") is False
     chrome.eval(f"{q}('[data-cell=\"0,1\"]').click()")
     assert chrome.eval("!document.getElementById('widget-add').hidden") is True
-    assert chrome.eval(kinds) == ["clock", "weather", "calendar", "lists"]
+    assert chrome.eval(kinds) == ["clock", "weather", "calendar", "lists", "spotify"]
     chrome.eval(f"{q}('[data-kind=weather]').click()")
     _wait(lambda: _widgets(server, "Grid") == [("clock", 0, 0, 1, 1), ("weather", 0, 1, 2, 1)])
     _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Weather")
@@ -181,3 +181,20 @@ def test_screen_window_adds_at_a_cell_moves_and_swaps(chrome, server):
     chrome.eval(f"{q}('[data-widget-id=\"{weather}\"]').click()")
     _wait(lambda: _widgets(server, "Grid") == [("clock", 0, 1, 1, 1), ("weather", 1, 0, 1, 1)])
     assert chrome.eval("document.getElementById('screen-error').hidden") is True
+
+
+@needs_chrome
+def test_phone_screen_window_adds_spotify_with_all_sizes(chrome, server):
+    sid = api.post(f"{server}/api/screens", json={"name": "Tunes"}).json()["id"]
+    chrome.size(412, 900)
+    q = "document.querySelector"
+    sizes = "[...document.getElementById('widget-size').options].map((o) => o.value)"
+    _open_window(chrome, server, sid)
+    _wait(lambda: chrome.eval("document.querySelectorAll('#screen-layout .empty').length") == 4)
+    chrome.eval(f"{q}('[data-cell=\"0,0\"]').click()")
+    assert chrome.eval(f"!{q}('#widget-add [data-kind=spotify]').hidden") is True
+    assert chrome.eval(f"{q}('#widget-add [data-kind=spotify]').textContent") == "Spotify"
+    chrome.eval(f"{q}('#widget-add [data-kind=spotify]').click()")
+    _wait(lambda: _widgets(server, "Tunes") == [("spotify", 0, 0, 2, 2)])
+    _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Spotify")
+    assert chrome.eval(sizes) == ["2x2", "2x1", "1x2", "1x1"]

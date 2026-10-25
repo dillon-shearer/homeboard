@@ -64,6 +64,7 @@ def test_widget_sizes_lists_allowed_sizes_per_kind(client):
         "weather": [[2, 2], [2, 1], [1, 2], [1, 1]],
         "calendar": [[2, 2], [2, 1], [1, 2], [1, 1]],
         "lists": [[2, 2], [2, 1], [1, 2], [1, 1]],
+        "spotify": [[2, 2], [2, 1], [1, 2], [1, 1]],
     }
 
 
