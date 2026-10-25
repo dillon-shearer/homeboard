@@ -17,6 +17,7 @@ ProtectSystem=strict
 ReadWritePaths=/var/lib/homeboard
 ProtectHome=yes
 PrivateDevices=yes
+ProtectProc=invisible
 
 [Install]
 WantedBy=multi-user.target

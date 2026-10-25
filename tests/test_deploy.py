@@ -168,6 +168,7 @@ def test_api_service_is_sandboxed():
     assert s["ReadWritePaths"] == "/var/lib/homeboard"
     assert s["ProtectHome"] == "yes"
     assert s["PrivateDevices"] == "yes"
+    assert s["ProtectProc"] == "invisible"
 
 
 def test_install_restarts_api_when_it_fails_after_the_stop():
