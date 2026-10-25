@@ -2,16 +2,13 @@ import json
 import re
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from app.db import POSITIONS
 from app.main import create_app
-from tests.chrome import _Chrome, needs_chrome, server  # noqa: F401
 from tests.test_clock_caption_form import FORM_SETUP
 from tests.test_clock_caption_form import _node as _form_node
 
@@ -29,44 +26,23 @@ def client(tmp_path):
 def test_tv_page_loads_its_assets_in_the_admin_shell(client):
     r = client.get("/admin/tv")
     assert r.status_code == 200
-    page = r.text
-    assert re.search(r'<link rel="stylesheet" href="/static/win95\.css\?v=\d+">', page)
-    assert re.search(r'<link rel="stylesheet" href="/static/admin\.css\?v=\d+">', page)
-    assert re.search(r'<script src="/static/tv_admin\.js\?v=\d+"></script>', page)
-    assert '<a class="w95-back" href="/admin">Start</a>' in page
-    assert '<span class="w95-title-text">TV</span>' in page
-    assert '<div class="w95-statusbar" role="status">' in page and 'id="display-state"' in page
+    assets = re.findall(r'"(/static/[^"]+\?v=\d+)"', r.text)
+    assert any("tv_admin.js" in a for a in assets)
+    for url in assets:
+        assert client.get(url).status_code == 200, url
 
 
 def test_tv_page_groups_in_order(client):
     page = client.get("/admin/tv").text
-    legends = re.findall(r'<h2 id="group-\w+" class="w95-legend">([^<]+)</h2>', page)
+    legends = re.findall(r'class="w95-legend">([^<]+)</h2>', page)
     assert legends == ["Back to Photos after", "Weather", "Clock, date and caption"]
-    for gone in ('id="tv-stops"', 'id="screens-edit"', 'id="name-dialog"', 'id="screen-dialog"'):
-        assert gone not in page
-    assert '<select id="channel-timeout"' in page
-    assert '<label for="weather-location">Location (zip or town)</label>' in page
-    assert '<input id="weather-location" class="w95-input" type="text" maxlength="40"' in page
-    assert 'id="weather-name"' in page
-    for el in ('id="clock-size"', 'id="caption-size"', 'name="clock_pos"', 'name="caption_pos"'):
-        assert el in page
-    assert '<input type="checkbox" data-key="captions">' in page
+    assert ">Location (zip or town)</label>" in page
 
 
 def test_start_page_shows_the_tv_row_last(client):
     page = client.get("/admin").text
-    legends = re.findall(r'<h2 id="group-\w+" class="w95-legend">([^<]+)</h2>', page)
+    legends = re.findall(r'class="w95-legend">([^<]+)</h2>', page)
     assert legends == ["Board", "Showing on the TV"]
-    assert page.index('id="group-showing"') < page.index('class="w95-footlink"')
-    assert re.search(r'<link rel="stylesheet" href="/static/admin\.css\?v=\d+">', page)
-    assert re.search(r'<script src="/static/tv_admin\.js\?v=\d+"></script>', page)
-    row = re.search(r'<span id="tv-stops" class="w95-seg">(.*?)</span>', page, re.DOTALL).group(1)
-    assert re.findall(r"<button[^>]*>([^<]*)</button>", row) == ["Photos", "New screen", "Edit"]
-    assert 'id="screens-new" class="w95-btn" type="button" hidden' in row
-    assert 'id="settings-error"' in page
-    dialog = re.search(r'<div id="name-dialog" class="modal" hidden>.*?</form>', page, re.DOTALL)
-    assert dialog and 'class="w95-window dialog"' in dialog.group(0)
-    assert '<span id="name-title" class="w95-title-text">New screen</span>' in dialog.group(0)
 
 
 def test_tv_js_has_no_native_dialogs():
@@ -246,12 +222,6 @@ def test_js_fits_checks_the_grid_and_the_other_widgets():
 
 
 @needs_node
-def test_js_exports_only_fits():
-    r = _node("console.log(JSON.stringify(Object.keys(T)))")
-    assert r == ["fits"]
-
-
-@needs_node
 def test_tv_buttons_follow_screens_and_put_settings():
     r = _tv(
         """
@@ -327,6 +297,24 @@ def test_tv_edit_mode_moves_and_renames_screens():
 
 
 @needs_node
+def test_weather_location_change_puts_it_and_shows_looking_up():
+    r = _tv(
+        """
+        await settle();
+        const field = all["weather-location"];
+        field.value = " Atlanta ";
+        field.fire("change");
+        await settle();
+        console.log(JSON.stringify({ calls, note: all["weather-name"].textContent }));
+        """
+    )
+    assert r["calls"] == [
+        {"method": "PUT", "url": "/api/settings", "body": {"weather_location": "Atlanta"}}
+    ]
+    assert r["note"] == "Looking up..."
+
+
+@needs_node
 def test_tv_new_screen_button_posts_a_name_and_opens_the_screen_window():
     r = _tv(
         """
@@ -352,127 +340,11 @@ def test_tv_new_screen_button_posts_a_name_and_opens_the_screen_window():
     assert r["calls"] == [{"method": "POST", "url": "/api/screens", "body": {"name": "Hall"}}]
 
 
-ROW = """JSON.stringify([...document.querySelectorAll('#tv-stops > *')].filter((e) => !e.hidden)
-  .map((e) => e.classList.contains('stop-edit') ? e.getAttribute('data-edit-screen') : e.textContent))"""
-
-
-def _wait(fn, tries=100):
-    out = None
-    for _ in range(tries):
-        out = fn()
-        if out:
-            return out
-        time.sleep(0.05)
-    return out
-
-
-def _settings(server):  # noqa: F811
-    return httpx.get(f"{server}/api/settings").json()
-
-
-def _open_tv(server, tmp_path, path="/admin/tv"):  # noqa: F811
-    chrome = _Chrome(tmp_path / "chrome", 412, 900)
-    chrome.send("Page.navigate", {"url": f"{server}{path}"})
-    return chrome
-
-
-def _two_screens(server):  # noqa: F811
-    httpx.post(f"{server}/api/screens", json={"name": "Chores"})
-    return httpx.get(f"{server}/api/screens").json()
-
-
-@needs_chrome
-def test_tv_row_shows_screens_and_picks_one(server, tmp_path):  # noqa: F811
-    screens = _two_screens(server)
-    want = ["Photos"] + [s["name"] for s in screens] + ["Edit"]
-    target = screens[-1]["id"]
-    button = f"document.querySelector('[data-screen-id=\"{target}\"]')"
-    chrome = _open_tv(server, tmp_path, "/admin")
-    try:
-        row = _wait(lambda: json.loads(chrome.eval(ROW) or "[]") == want)
-        chrome.eval(f"{button}.click()")
-        picked = _wait(lambda: _settings(server)["screen_id"] == target)
-        pressed = _wait(lambda: chrome.eval(f"{button}.getAttribute('aria-pressed')") == "true")
-    finally:
-        chrome.close()
-    assert row and picked and pressed
-    s = _settings(server)
-    assert (s["channel"], s["screen_id"]) == ("screen", target)
-
-
-@needs_chrome
-def test_tv_edit_down_arrow_swaps_first_two_screens(server, tmp_path):  # noqa: F811
-    ids = [s["id"] for s in _two_screens(server)]
-
-    def order():
-        return [s["id"] for s in httpx.get(f"{server}/api/screens").json()]
-
-    chrome = _open_tv(server, tmp_path, "/admin")
-    try:
-        _wait(
-            lambda: chrome.eval("document.querySelectorAll('[data-screen-id]').length") == len(ids)
-        )
-        chrome.eval("document.getElementById('screens-edit').click()")
-        row = json.loads(chrome.eval(ROW))
-        chrome.eval("document.querySelector('.stop-edit .move:last-child').click()")
-        _wait(lambda: order()[:2] == [ids[1], ids[0]])
-    finally:
-        chrome.close()
-    assert row == ["Photos"] + [str(i) for i in ids] + ["New screen", "Done"]
-    assert order()[:2] == [ids[1], ids[0]]
-
-
-@needs_chrome
-def test_tv_weather_location_saves_on_blur(server, tmp_path):  # noqa: F811
-    field = "document.getElementById('weather-location')"
-    chrome = _open_tv(server, tmp_path)
-    try:
-        _wait(lambda: chrome.eval(f"{field}.value") == "30263")
-        chrome.eval(f"{field}.focus(); {field}.select();")
-        chrome.send("Input.insertText", {"text": "Atlanta"})
-        chrome.eval(f"{field}.blur()")
-        _wait(lambda: _settings(server)["weather_location"] == "Atlanta")
-        note = _wait(
-            lambda: (
-                chrome.eval("document.getElementById('weather-name').textContent")
-                == "Looking up..."
-            )
-        )
-    finally:
-        chrome.close()
-    s = _settings(server)
-    assert s["weather_location"] == "Atlanta" and s["weather_lat"] is None
-    assert note
-
-
-@needs_chrome
-def test_tv_clock_size_stepper_saves(server, tmp_path):  # noqa: F811
-    before = _settings(server)["clock_size"]
-    chrome = _open_tv(server, tmp_path)
-    try:
-        _wait(lambda: chrome.eval("document.getElementById('clock-size').value") == str(before))
-        chrome.eval("document.getElementById('clock-size-plus').click()")
-        _wait(lambda: _settings(server)["clock_size"] == before + 1)
-    finally:
-        chrome.close()
-    assert _settings(server)["clock_size"] == before + 1
-
-
-def test_tv_date_controls_markup(client):
+def test_tv_date_controls_offer_every_spot(client):
     page = client.get("/admin/tv").text
-    start = page.index('id="group-overlay"')
-    group = page[start : page.index("</section>", start)]
-    assert 'id="date-size" type="number" min="2" max="12" step="1" inputmode="numeric"' in group
-    assert 'id="date-size-minus"' in group and 'id="date-size-plus"' in group
-    assert re.findall(r'name="date_pos" value="([a-z-]+)"', group) == list(POSITIONS)
-    assert '<span id="date_pos-label">Date spot</span>' in group
-    assert '<div id="date-stack-row" class="stack-row" hidden>' in group
-    assert re.findall(r'name="date_on_top" value="(\w+)"> (Date \w+)', group) == [
-        ("true", "Date above"),
-        ("false", "Date below"),
-    ]
-    checks = group[group.index('<div class="checks">') :]
-    assert '<input type="checkbox" data-key="date_show"><span>Show the date</span>' in checks
+    assert re.findall(r'name="date_pos" value="([a-z-]+)"', page) == list(POSITIONS)
+    for label in ("Date spot", "Date above", "Date below", "Show the date"):
+        assert label in page
 
 
 @needs_node

@@ -6,3 +6,6 @@ requires-python = ">=3.11"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.pytest.ini_options]
+addopts = "--dist=loadscope"

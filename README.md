@@ -15,7 +15,7 @@ python -m pip install -r requirements-dev.txt
 Run the tests:
 
 ```
-python -m pytest -q
+python -m pytest -q -n auto
 ```
 
 ### When to write a test

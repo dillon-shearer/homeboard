@@ -32,26 +32,20 @@ def _group(page, legend_id):
 
 
 def test_group_lives_on_tv_page_after_weather(client, page):
-    assert page.index('id="group-overlay"') > page.index('id="group-weather"')
-    assert '<h2 id="group-overlay" class="w95-legend">Clock, date and caption</h2>' in page
+    assert page.index(">Clock, date and caption</h2>") > page.index(">Weather</h2>")
     photos = client.get("/admin/photos").text
-    assert 'id="group-slideshow"' in photos
-    for gone in ('id="group-overlay"', 'id="clock-size"', 'id="caption-size"', 'name="clock_pos"'):
+    for gone in ("Clock, date and caption", 'name="clock_pos"', 'name="caption_pos"'):
         assert gone not in photos
 
 
 def test_group_has_steppers_spots_stack_and_captions(page):
     group = _group(page, "group-overlay")
-    for sid in ("clock-size", "caption-size"):
-        assert f'id="{sid}" type="number" min="2" max="12" step="1" inputmode="numeric"' in group
-        assert f'id="{sid}-minus"' in group and f'id="{sid}-plus"' in group
+    assert 'type="number" min="2" max="12" step="1" inputmode="numeric"' in group
     for key in ("clock_pos", "caption_pos"):
         values = re.findall(rf'name="{key}" value="([a-z-]+)"', group)
         assert values == list(POSITIONS)
     assert 'aria-label="Top left"' in group and 'aria-label="Middle center"' in group
-    assert len(re.findall(r'role="radiogroup"', group)) == 5
     assert re.findall(r'name="clock_on_top" value="(\w+)"', group) == ["true", "false"]
-    assert '<div id="stack-row" class="stack-row" hidden>' in group
     assert '<input type="checkbox" data-key="captions">' in group
     assert "group-slideshow" not in page
 

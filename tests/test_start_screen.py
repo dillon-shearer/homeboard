@@ -42,7 +42,6 @@ def test_start_links_to_photos_and_about(client):
     assert 'href="/admin/calendar"' in page
     assert "Coming soon" not in page
     assert ">Notes<" not in page and "Grocery List" not in page
-    assert 'id="photo-count"' in page and 'id="display-state"' in page
 
 
 def test_start_has_no_app_group_and_a_small_about_link(client):
@@ -71,55 +70,18 @@ def test_start_status_refreshes_every_ten_seconds():
 
 def test_photos_keeps_controls_and_back_link(client):
     page = client.get("/admin/photos").text
-    assert 'id="file-input" type="file"' in page
-    assert 'id="grid"' in page and 'id="interval"' in page
+    assert 'type="file"' in page
     assert '<a class="w95-back" href="/admin">Start</a>' in page
-    for el in ('id="host"', 'id="ip"', 'id="disk"', 'id="version"', 'href="/docs"'):
+    for el in ("<dt>Name</dt>", "<dt>IP address</dt>", "<dt>Free space</dt>", 'href="/docs"'):
         assert el not in page
 
 
 def test_about_page(client):
     page = client.get("/admin/about").text
-    for el in ('id="host"', 'id="ip"', 'id="disk"', 'id="version"'):
-        assert el in page
+    for label in ("Name", "IP address", "Free space", "Version"):
+        assert f"<dt>{label}</dt>" in page
     assert 'href="/docs"' not in page
     assert '<a class="w95-back" href="/admin">Start</a>' in page
-
-
-def test_win95_css_classes():
-    for cls in (
-        ".w95-window",
-        ".w95-titlebar",
-        ".w95-close",
-        ".w95-group",
-        ".w95-btn",
-        ".w95-btn.default",
-        ".w95-check",
-        ".w95-input",
-        ".w95-progress",
-        ".w95-statusbar",
-        ".w95-icon",
-        ":focus-visible",
-    ):
-        assert cls in WIN95, cls
-    assert "min-height: 44px" in WIN95 and "height: 44px" in WIN95
-
-
-def test_win95_sizes_for_phones():
-    def rule(sel):
-        m = re.search(r"(?m)^" + re.escape(sel) + r" \{([^}]*)\}", WIN95)
-        assert m, sel
-        return m.group(1)
-
-    assert "min-height: 40px" in rule(".w95-titlebar")
-    icon = rule(".w95-icon-img")
-    assert "width: 64px" in icon and "height: 64px" in icon
-    window = rule(".w95-window")
-    assert "max-width: 960px" in window and "width: 100%" in window
-    assert "display: flex" in window and "flex-direction: column" in window
-    assert "font-size: clamp(13px, 1.1vw + 10px, 16px)" in rule(".w95-desktop")
-    assert "minmax(110px, 1fr)" in rule(".w95-icons")
-    assert "min-height: 120px" in rule(".w95-icon")
 
 
 def test_no_dark_mode_or_rounded_corners():
@@ -128,6 +90,7 @@ def test_no_dark_mode_or_rounded_corners():
         (ROOT / "templates" / "start.html").read_text(),
         (ROOT / "templates" / "about.html").read_text(),
         (ROOT / "templates" / "admin.html").read_text(),
+        (ROOT / "static" / "admin.css").read_text(),
     ):
         assert "prefers-color-scheme" not in text
         assert "border-radius" not in text

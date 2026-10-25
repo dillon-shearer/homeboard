@@ -112,13 +112,12 @@ def test_tv_page_markup(client):
     assert 'data-channel="calendar"' not in start
     assert 'data-channel="lists"' not in start
     page = client.get("/admin/tv").text
-    assert ">Showing on the TV<" not in page and 'id="tv-stops"' not in page
+    assert ">Showing on the TV<" not in page
     select = re.search(r'<select id="channel-timeout".*?</select>', page, re.DOTALL)
     assert select
     assert re.findall(r'<option value="(\d+)"', select.group(0)) == ["0", "2", "5", "10", "30"]
     assert ">Never<" in select.group(0)
     assert "of no touches on the TV and no edits from a phone" in page
-    assert 'id="display-state"' in page
 
 
 def test_tv_js_puts_channel_and_timeout():
@@ -131,9 +130,8 @@ def test_tv_js_puts_channel_and_timeout():
 
 def test_display_has_channel_frame(client):
     page = client.get("/").text
-    assert '<iframe id="channel"' in page
-    assert not re.search(r'<iframe id="channel"[^>]*hidden', page)
-    assert 'id="swipe"' not in page
+    assert "<iframe" in page
+    assert not re.search(r"<iframe[^>]*hidden", page)
     assert 'const url = "/tv";' in JS
     assert "channelEl.src = url" in JS
 

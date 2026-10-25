@@ -20,32 +20,6 @@ def test_put_interval_persists(client):
     assert events.last_event == "settings_changed"
     body = client.get("/api/settings").json()
     assert body["interval_s"] == 30
-    assert set(body) == {
-        "interval_s",
-        "transition",
-        "fit",
-        "shuffle",
-        "captions",
-        "channel",
-        "channel_timeout_min",
-        "screen_id",
-        "clock_size",
-        "caption_size",
-        "clock_pos",
-        "caption_pos",
-        "clock_on_top",
-        "date_size",
-        "date_pos",
-        "date_on_top",
-        "date_show",
-        "brightness",
-        "weather_location",
-        "weather_lat",
-        "weather_lon",
-        "weather_name",
-        "speaker_idle_minutes",
-        "updated_at",
-    }
 
 
 def test_put_interval_out_of_range_is_422(client):

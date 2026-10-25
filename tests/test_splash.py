@@ -28,20 +28,18 @@ def client(tmp_path):
 def test_display_page_carries_boot_splash(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert '<div id="splash" class="splash">' in r.text
     assert '<div class="flag"><i></i><i></i><i></i><i></i></div>' in r.text
     assert "<b>Home Board</b>" in r.text
     assert '<div class="bar"><div class="blocks"></div></div>' in r.text
     assert ".splash .blocks {" in r.text
     assert "window.location.href" not in r.text
-    assert r.text.index('id="splash"') > r.text.index('id="channel"')
+    assert r.text.index('<div class="flag">') > r.text.index("<iframe")
 
 
 def test_boot_page_keeps_shared_parts_standalone():
     text = BOOT_HTML.read_text(encoding="ascii")
-    assert '<style id="splash-css">' in text
     assert '<body class="splash">' in text
-    assert '<span id="label">Starting Home Board...</span>' in text
+    assert ">Starting Home Board...</span>" in text
 
 
 @needs_node

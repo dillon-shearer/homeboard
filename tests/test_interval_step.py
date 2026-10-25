@@ -6,7 +6,7 @@ HTML = (ROOT / "templates" / "admin.html").read_text()
 
 
 def test_interval_input_steps_by_one():
-    assert 'id="interval" type="number" min="5" max="600" step="1"' in HTML
+    assert 'type="number" min="5" max="600" step="1"' in HTML
     assert 'step="5"' not in HTML
 
 
