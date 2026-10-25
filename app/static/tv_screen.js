@@ -772,28 +772,37 @@
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
     } else {
       var info = el("div", "sp-info");
-      info.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
-      if (live && now.artist) info.appendChild(el("div", "sp-artist", now.artist));
+      var head = info.appendChild(el("div", "sp-head"));
+      var controls = info.appendChild(el("div", "sp-controls"));
+      head.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
+      if (live && now.artist) head.appendChild(el("div", "sp-artist", now.artist));
       if (live && layout === "full") {
         var prog = el("div", "sp-progress");
         prog.appendChild(el("span", "sp-elapsed", "0:00"));
         prog.appendChild(el("span", "sp-bar")).appendChild(el("i"));
         prog.appendChild(el("span", "sp-total", formatMs(now.duration_ms)));
-        info.appendChild(prog);
+        controls.appendChild(prog);
       }
-      if (live) info.appendChild(transport(kind));
+      if (live) controls.appendChild(transport(kind));
       if (layout === "full") {
         if (live) {
+          var known = typeof now.volume === "number";
           var vol = el("div", "sp-volume");
           vol.appendChild(spotButton("vol-down", "Volume down", null, "-"));
-          vol.appendChild(el("span", "sp-vol", typeof now.volume === "number" ? now.volume + "%" : "--%"));
+          vol.appendChild(el("span", "sp-volbar")).appendChild(el("i")).style.width = (known ? now.volume : 0) + "%";
           vol.appendChild(spotButton("vol-up", "Volume up", null, "+"));
-          info.appendChild(vol);
+          vol.appendChild(el("span", "sp-vol", known ? now.volume + "%" : "--%"));
+          controls.appendChild(vol);
         }
-        info.appendChild(speakerButton(sp));
+        controls.appendChild(speakerButton(sp));
       }
       box.appendChild(info);
-      if (layout === "full") box.appendChild(playlistRows(sp.shown));
+      if (layout === "full") {
+        var side = el("div", "sp-side");
+        side.appendChild(el("div", "sp-label", "Playlists"));
+        side.appendChild(playlistRows(sp.shown));
+        box.appendChild(side);
+      }
     }
     if (sp.note) box.appendChild(el("p", "sp-msg", sp.note));
     return box;
