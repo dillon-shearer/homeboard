@@ -74,6 +74,9 @@
 <div class="cp-row">
 <button type="button" id="cp-restart" class="w95-btn">Restart board</button>
 </div>
+<div class="cp-row">
+<button type="button" id="cp-settings" class="w95-btn">Settings...</button>
+</div>
 </section>
 </div>
 </div>
@@ -88,6 +91,65 @@
 <div class="buttons">
 <button type="button" id="cp-restart-yes" class="w95-btn default">Restart</button>
 <button type="button" id="cp-restart-no" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
+<div id="cp-kiosk" class="cp-modal" hidden>
+<div class="w95-window dialog cp-dialog cp-kiosk" role="dialog" aria-labelledby="cp-kiosk-title">
+<div class="w95-titlebar">
+<span id="cp-kiosk-title" class="w95-title-text">Settings</span>
+<button type="button" id="cp-kiosk-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body">
+<div class="cp-kiosk-grid">
+<section class="w95-group cp-kiosk-photos" aria-labelledby="cp-kiosk-photos-title">
+<h2 id="cp-kiosk-photos-title" class="w95-legend">Photos</h2>
+<div class="cp-row">
+<span class="cp-rocker-label">Seconds per photo</span>
+<button type="button" class="w95-btn cp-rocker" data-field="interval_s" data-step="-1" aria-label="Fewer seconds">-</button>
+<span id="cp-kiosk-interval_s" class="cp-rocker-value"></span>
+<button type="button" class="w95-btn cp-rocker" data-field="interval_s" data-step="1" aria-label="More seconds">+</button>
+</div>
+<div class="cp-row">
+<label class="w95-check w95-radio"><input type="radio" name="cp-kiosk-fit" data-field="fit" value="contain"> Whole photo</label>
+<label class="w95-check w95-radio"><input type="radio" name="cp-kiosk-fit" data-field="fit" value="cover"> Fill screen</label>
+</div>
+<div class="cp-row">
+<label class="w95-check"><input type="checkbox" data-field="transition"> Fade between photos</label>
+<label class="w95-check"><input type="checkbox" data-field="shuffle"> Random order</label>
+</div>
+</section>
+<section class="w95-group cp-kiosk-screens" aria-labelledby="cp-kiosk-screens-title">
+<h2 id="cp-kiosk-screens-title" class="w95-legend">Screens</h2>
+<div class="cp-row">
+<span class="cp-rocker-label">Back to Photos after</span>
+<button type="button" class="w95-btn cp-rocker" data-field="channel_timeout_min" data-step="-1" aria-label="Sooner">-</button>
+<span id="cp-kiosk-channel_timeout_min" class="cp-rocker-value"></span>
+<button type="button" class="w95-btn cp-rocker" data-field="channel_timeout_min" data-step="1" aria-label="Later">+</button>
+</div>
+</section>
+<section class="w95-group cp-kiosk-sound" aria-labelledby="cp-kiosk-sound-title">
+<h2 id="cp-kiosk-sound-title" class="w95-legend">Sound</h2>
+<div class="cp-row">
+<span class="cp-rocker-label">Let go after idle</span>
+<button type="button" class="w95-btn cp-rocker" data-field="speaker_idle_minutes" data-step="-1" aria-label="Sooner">-</button>
+<span id="cp-kiosk-speaker_idle_minutes" class="cp-rocker-value"></span>
+<button type="button" class="w95-btn cp-rocker" data-field="speaker_idle_minutes" data-step="1" aria-label="Later">+</button>
+</div>
+</section>
+<section class="w95-group cp-kiosk-show" aria-labelledby="cp-kiosk-show-title">
+<h2 id="cp-kiosk-show-title" class="w95-legend">Show</h2>
+<div class="cp-row">
+<label class="w95-check"><input type="checkbox" data-field="captions"> Captions</label>
+<label class="w95-check"><input type="checkbox" data-field="date_show"> Date</label>
+<label class="w95-check"><input type="checkbox" data-field="cover_show"> Now playing cover</label>
+</div>
+</section>
+</div>
+<p id="cp-kiosk-error" class="cp-error" hidden></p>
+<div class="buttons">
+<button type="button" id="cp-kiosk-done" class="w95-btn default">Done</button>
 </div>
 </div>
 </div>

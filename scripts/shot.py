@@ -319,6 +319,23 @@ def shoot_panel(chrome: str, base: str, out: Path, profile: Path) -> None:
             if img.size != (width, height):
                 sys.exit(f"{out} is {img.size}, expected {width}x{height}")
         print(f"wrote {out}")
+        cdp.eval("document.getElementById('cp-settings').click()")
+        cdp.wait(
+            "!document.getElementById('cp-kiosk').hidden && "
+            "document.getElementById('cp-kiosk-interval_s').textContent !== ''",
+            "the open Settings dialog",
+        )
+        time.sleep(0.2)
+        over = cdp.eval(
+            "(d => d.scrollHeight > d.clientHeight || d.getBoundingClientRect().bottom > "
+            f"{height})(document.querySelector('#cp-kiosk .cp-dialog'))"
+        )
+        if over:
+            sys.exit(f"Settings dialog overflows at {width}x{height}")
+        dialog = out.with_name(out.stem + "-settings.png")
+        shot = cdp.call("Page.captureScreenshot", format="png")
+        dialog.write_bytes(base64.b64decode(shot["data"]))
+        print(f"wrote {dialog}")
 
 
 def panel_main(out_dir: Path) -> None:
