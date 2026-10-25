@@ -43,7 +43,7 @@ def test_settings_page_has_timeout_and_weather_fields(client):
 def test_start_page_shows_the_tv_row_last(client):
     page = client.get("/admin").text
     legends = re.findall(r'class="w95-legend">([^<]+)</h2>', page)
-    assert legends == ["Board", "Volume", "Showing on the TV"]
+    assert legends == ["Board", "Showing on the TV"]
 
 
 def test_tv_js_has_no_native_dialogs():

@@ -18,14 +18,20 @@ def _open(chrome, server):
     chrome.send("Page.navigate", {"url": f"{server}/admin/sound"})
 
 
-def test_sound_page_shows_only_the_state_lines(client):
+def test_sound_page_has_player_groups_and_no_settings(client):
     r = client.get("/admin/sound")
     assert r.status_code == 200
     page = r.text
     assert 'id="spotify-state"' in page and 'id="speaker-state"' in page
-    assert ">Spotify<" in page and ">Speaker<" in page
+    assert ">Spotify<" in page and ">Speaker<" in page and ">Playlists<" in page
     assert "/static/sound.js?v=" in page and "/static/sound.css?v=" in page
-    for gone in ("idle-minutes", "playlists", "spotify-unlink", "spotify-login", "speaker-connect"):
+    for gone in (
+        "idle-minutes",
+        'id="playlists"',
+        "spotify-unlink",
+        "spotify-login",
+        "speaker-connect",
+    ):
         assert gone not in page, gone
 
 
@@ -41,7 +47,7 @@ def test_sound_page_shows_spotify_and_speaker_state(chrome, server, monkeypatch)
     _open(chrome, server)
     state = _wait(
         chrome,
-        "(t => t === 'Linked to Spotify' && t)(document.getElementById('spotify-state').textContent)",
+        "(t => t === 'Song' && t)(document.querySelector('.player-track')?.textContent)",
     )
     speaker = _wait(
         chrome,
@@ -49,7 +55,7 @@ def test_sound_page_shows_spotify_and_speaker_state(chrome, server, monkeypatch)
         "(document.getElementById('speaker-state').textContent)",
     )
     errors = chrome.eval("window.__errors")
-    assert state == "Linked to Spotify"
+    assert state == "Song"
     assert speaker == "Connected to Soundbar"
     assert errors == []
 
@@ -63,8 +69,8 @@ def test_sound_page_says_helper_not_running(chrome, server, monkeypatch):
         "(t => t === 'Helper not running' && t)"
         "(document.getElementById('speaker-state').textContent)",
     )
-    state = chrome.eval("document.getElementById('spotify-state').textContent")
+    state = _wait(chrome, "!document.getElementById('not-linked').hidden")
     errors = chrome.eval("window.__errors")
     assert speaker == "Helper not running"
-    assert state == "Not linked"
+    assert state is True
     assert errors == []
