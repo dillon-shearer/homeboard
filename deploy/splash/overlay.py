@@ -315,7 +315,7 @@ class Overlay:
                 if self.pixels is None or self.pixels[1:3] != (fmt, stride):
                     pool = Pool(self.wl, self.shm, stride * height)
                     self.pixels = (pool.buffer(0, width, height, stride, fmt), fmt, stride, pool)
-                self.wl.send(frame, 2, u(self.pixels[0]))
+                self.wl.send(frame, 0, u(self.pixels[0]))
             elif op == 2:
                 raw = self.pixels[3].map
                 order = (0, 1, 2) if self.pixels[1] in (XBGR8888, ABGR8888) else (2, 1, 0)
