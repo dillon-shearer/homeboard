@@ -100,14 +100,16 @@ def test_newer_settle_stops_the_older_one(setup, monkeypatch):
         ("/api/spotify/previous", None),
         ("/api/spotify/play", None),
         ("/api/spotify/pause", None),
+        ("/api/spotify/play-here", None),
     ],
 )
 def test_player_routes_start_settle(setup, monkeypatch, path, body):
     data_dir, use = setup
     use(FakeSpotify())
     started = []
-    monkeypatch.setattr(spotify, "settle", lambda d, publish: started.append(publish))
+    monkeypatch.setattr(spotify, "settle", lambda d, publish, last=None: started.append(publish))
     monkeypatch.setattr(spotify, "play_playlist", lambda d, pid: {"linked": True, "ok": True})
+    monkeypatch.setattr(spotify, "play_here", lambda d: {"linked": True, "ok": True})
     with TestClient(create_app(data_dir)) as c:
         c.post(path, json=body)
     assert started == [events.publish]

@@ -31,7 +31,6 @@ def test_now_row_and_volume_step():
         "shown": True,
         "line": "A - B",
         "toggle": "Play",
-        "device": "On another device",
         "known": True,
         "volume": "30%",
     }

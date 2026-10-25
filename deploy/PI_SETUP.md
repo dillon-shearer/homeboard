@@ -574,7 +574,7 @@ The HMTECH 10.1 inch panel does not accept brightness commands over the HDMI cab
    systemctl status homeboard-helper homeboard-soloist
    ```
 
-2. Check that the soundbar is connected. Find its address with `cat /etc/homeboard/speaker.env` (run with `sudo`), then run `bluetoothctl info` with that address, for example `bluetoothctl info 12:34:56:78:9A:BC`. It should show `Connected: yes`. If not, tap **Connect** in the Sound group of Settings.
+2. Check that the soundbar is connected. Find its address with `cat /etc/homeboard/speaker.env` (run with `sudo`), then run `bluetoothctl info` with that address, for example `bluetoothctl info 12:34:56:78:9A:BC`. It should show `Connected: yes`. If not, tap **Connect** in the Sound group of the Settings window, or turn on the **Speaker** switch in the Control Panel.
 3. If the soundbar forgot the Pi (for example after a reset), pair again as in Part 8: `sudo bash /opt/homeboard/deploy/install.sh --pair-speaker`.
 4. Check that the soundbar source is `BT`. Press **Source** on the remote until it shows.
 
@@ -583,13 +583,13 @@ The HMTECH 10.1 inch panel does not accept brightness commands over the HDMI cab
 1. Make sure the phone is on the home Wi-Fi.
 2. Look at the logs: `journalctl -u homeboard-soloist -n 50`
 3. Restart it: `sudo systemctl restart homeboard-soloist`
-4. If the Sound group of Settings shows a warning about Soloist, run `sudo bash /opt/homeboard/deploy/install.sh --update-soloist`.
+4. If the Sound group of the Settings window shows a warning about Soloist, run `sudo bash /opt/homeboard/deploy/install.sh --update-soloist`.
 
 ### Music stutters
 
 The Pi 4B uses one antenna for both Wi-Fi and Bluetooth, so busy Wi-Fi can break up the music. Plug a USB Bluetooth dongle into the Pi; the system uses it instead of the built-in one. Or move the Pi closer to the router.
 
-### The Sound group of Settings says Spotify is not set up or Not linked
+### The Settings window says Spotify is not set up or Not linked
 
 - `Spotify is not set up on the Pi yet`: run `sudo bash /opt/homeboard/deploy/install.sh --spotify` (Part 9, step 37).
 - `Not linked`: tap **Sign in to Spotify** again.

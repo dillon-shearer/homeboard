@@ -12,6 +12,7 @@
   var STEP = 5;
   var CHAIN_MS = 1000;
   var MAX_BACKOFF_S = 30;
+  var MAX_POLL_MS = 60000;
   var IDLE_TEXT = "Nothing playing";
   var SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
   var SPEAKER_DOWN_TEXT = "Could not reach the speaker";
@@ -30,6 +31,8 @@
   var busy = false;
   var ui = null;
   var backoff = 1;
+  var fails = 0;
+  var queue = Promise.resolve();
 
   function $(id) {
     return document.getElementById(id);
@@ -62,7 +65,7 @@
 
   function progressAt(n, sinceMs) {
     if (!n || typeof n.progress_ms !== "number") return 0;
-    var ms = n.progress_ms + (n.playing ? Math.max(0, sinceMs || 0) : 0);
+    var ms = n.progress_ms + (n.playing && !n.stale ? Math.max(0, sinceMs || 0) : 0);
     return n.duration_ms ? Math.min(ms, n.duration_ms) : ms;
   }
 
@@ -70,6 +73,22 @@
     if (!n || !n.playing || typeof n.progress_ms !== "number" || !n.duration_ms) return POLL_MS;
     var left = n.duration_ms - n.progress_ms + END_MS;
     return Math.max(END_MS, Math.min(POLL_MS, left));
+  }
+
+  function backoffMs(n) {
+    if (!fails) return nextPollMs(n);
+    return Math.min(MAX_POLL_MS, POLL_MS * Math.pow(2, fails - 1));
+  }
+
+  function staleText(n) {
+    if (!n || !n.stale) return "";
+    var why = n.reason === "rate limited" ? "Could not reach Spotify (too many requests)." : "Could not reach Spotify.";
+    return n.track ? why + " Showing the last known song." : why;
+  }
+
+  function deviceText(n) {
+    if (!n || !n.device) return "";
+    return n.on_board ? "Playing on Home Board" : "Playing on " + n.device;
   }
 
   function volumeStep(volume, delta) {
@@ -106,6 +125,7 @@
     ui.track = box.appendChild(el("div", "player-track", IDLE_TEXT));
     ui.artist = box.appendChild(el("div", "player-artist"));
     ui.device = box.appendChild(el("div", "player-device"));
+    ui.status = box.appendChild(el("div", "player-status"));
     ui.progress = box.appendChild(el("div", "player-progress"));
     ui.elapsed = ui.progress.appendChild(el("span", "player-time", "0:00"));
     ui.bar = ui.progress.appendChild(el("span", "player-bar")).appendChild(el("i"));
@@ -158,9 +178,10 @@
     ui.track.textContent = on ? now.track : IDLE_TEXT;
     ui.artist.textContent = on && now.artist ? now.artist : "";
     ui.artist.hidden = !(on && now.artist);
-    var away = on && !now.on_board;
-    ui.device.textContent = away ? "On " + (now.device || "another device") : "";
-    ui.device.hidden = !away;
+    ui.device.textContent = deviceText(now);
+    ui.device.hidden = !ui.device.textContent;
+    ui.status.textContent = staleText(now);
+    ui.status.hidden = !ui.status.textContent;
     ui.progress.hidden = !on;
     ui.transport.hidden = !on;
     var label = on && now.playing ? "Pause" : "Play";
@@ -219,12 +240,20 @@
     if (document.visibilityState === "hidden") return;
     if (linked && ++polls % EXTRA_EVERY === 0) loadExtras();
     getJSON("/api/spotify/now").then(function (n) {
-      if (mine === seq) apply(n);
+      if (mine !== seq) return;
+      fails = n.stale ? fails + 1 : 0;
+      apply(n);
     }, function () {
-      if (mine !== seq || linked !== null) return;
-      $("spotify-state").textContent = "Spotify not reachable";
+      if (mine !== seq) return;
+      fails++;
+      if (linked === null) {
+        $("spotify-state").textContent = "Spotify not reachable";
+        return;
+      }
+      if (!now || now.linked === false) return;
+      apply(Object.assign({}, now, { progress_ms: progressAt(now, Date.now() - at), stale: true, reason: "unreachable" }));
     }).then(function () {
-      if (mine === seq) schedule(nextPollMs(now));
+      if (mine === seq) schedule(backoffMs(now));
     });
   }
 
@@ -236,17 +265,21 @@
       opts.headers = { "Content-Type": "application/json" };
       opts.body = JSON.stringify(body);
     }
-    return fetch(url, opts).then(function (r) {
-      if (!r.ok) {
-        return r.json().catch(function () { return {}; }).then(function (out) {
-          note(r.status === 409 && typeof out.detail === "string" ? out.detail : SPOTIFY_DOWN_TEXT);
-        });
-      }
-    }, function () {
-      note(SPOTIFY_DOWN_TEXT);
+    queue = queue.then(function () {
+      return fetch(url, opts).then(function (r) {
+        if (!r.ok) {
+          return r.json().catch(function () { return {}; }).then(function (out) {
+            var said = (r.status === 409 || r.status === 429) && typeof out.detail === "string";
+            note(said ? out.detail : SPOTIFY_DOWN_TEXT);
+          });
+        }
+      }, function () {
+        note(SPOTIFY_DOWN_TEXT);
+      });
     }).then(function () {
       schedule(AFTER_TAP_MS);
     });
+    return queue;
   }
 
   function sendSlider() {
@@ -304,7 +337,7 @@
       render();
       call("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
     } else if (action === "here") {
-      call("POST", "/api/spotify/here");
+      call("POST", "/api/spotify/play-here");
     } else if (action === "previous" || action === "next") {
       call("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {

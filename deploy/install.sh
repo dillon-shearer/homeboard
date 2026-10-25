@@ -107,7 +107,7 @@ trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg patchelf \
-    bluez pipewire pipewire-pulse wireplumber libspa-0.2-bluetooth
+    bluez pipewire pipewire-pulse wireplumber libspa-0.2-bluetooth gcc libc6-dev
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
 fi
@@ -365,7 +365,7 @@ nginx -t
 
 echo "== Sound"
 WP_CONF="/etc/wireplumber/bluetooth.lua.d/80-homeboard.lua /etc/wireplumber/wireplumber.conf.d/80-homeboard.conf"
-WP_OLD_SUM="$({ cat $WP_CONF 2>/dev/null || true; } | sha256sum | cut -d' ' -f1)"
+WP_OLD_SUM="$(for f in $WP_CONF; do if [ -e "$f" ]; then cat "$f"; fi; done | sha256sum | cut -d' ' -f1)"
 WP_RESTARTED=0
 install -d -m 755 /etc/wireplumber/bluetooth.lua.d /etc/wireplumber/wireplumber.conf.d
 printf 'bluez_monitor.properties["with-logind"] = false\n' \

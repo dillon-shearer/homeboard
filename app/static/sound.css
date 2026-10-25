@@ -71,11 +71,15 @@
   overflow-wrap: anywhere;
 }
 
-.player-device {
+.player-device,
+.player-status {
   margin-top: 2px;
   text-align: center;
-  color: #404040;
   overflow-wrap: anywhere;
+}
+
+.player-status {
+  color: #800000;
 }
 
 .player-progress {
