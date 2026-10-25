@@ -251,10 +251,14 @@ def test_controls_call_the_right_endpoints(linked, fake):
 def test_no_active_device_is_409(linked, fake):
     fake.routes[("PUT", "/me/player/pause")] = NO_DEVICE
     fake.routes[("POST", "/me/player/next")] = NO_DEVICE
-    for path in ("/pause", "/next"):
-        r = linked.post("/api/spotify" + path)
-        assert r.status_code == 409
-        assert r.json() == {"detail": "no active device"}
+    fake.routes[("GET", "/me/player/devices")] = (
+        200,
+        {"devices": [{"id": "hb", "name": "Home Board", "is_active": True}]},
+    )
+    r = linked.post("/api/spotify/next")
+    assert r.status_code == 409
+    assert r.json() == {"detail": "no active device"}
+    assert fake.count("POST", "/me/player/next") == 2
 
 
 def test_playlists_follow_pagination(linked, fake):

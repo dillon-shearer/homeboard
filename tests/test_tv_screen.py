@@ -1312,7 +1312,7 @@ def test_spotify_nothing_playing_and_not_linked(chrome, server, fake):
     chrome.send("Page.navigate", {"url": f"{server}/tv"})
     full = _sp_card(chrome, "Music 2x2", lambda o: o["rows"] and o["speaker"])
     assert full["track"] == "Nothing playing" and full["coverNone"] and not full["coverImg"]
-    assert "idle" in full["layout"] and full["transport"] == [] and full["vol"] is None
+    assert "idle" in full["layout"] and full["transport"] == ["here"] and full["vol"] is None
     assert len(full["rows"]) == len(SP_SHOWN)
     _sp_tap(chrome, '[data-playlist="pl-dinner"]')
     _sp_until(lambda: fake.sent("POST", "/api/spotify/play-playlist"), "the playlist call")

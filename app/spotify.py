@@ -238,10 +238,36 @@ def api(data_dir, method: str, path: str, payload=None, query=None):
     return data
 
 
+def _board(data_dir) -> dict:
+    devices = (api(data_dir, "GET", "/me/player/devices") or {}).get("devices") or []
+    board = next((d for d in devices if d.get("name") == DEVICE_NAME), None)
+    if board is None:
+        raise SpotifyError(409, "Home Board speaker not found")
+    return board
+
+
+def _take_over(data_dir, play: bool) -> str:
+    board = _board(data_dir)
+    api(data_dir, "PUT", "/me/player", {"device_ids": [board["id"]], "play": play})
+    return board["id"]
+
+
 def control(data_dir, method: str, path: str, payload=None, query=None) -> dict:
-    api(data_dir, method, path, payload, query)
-    with _now_lock:
-        _now.clear()
+    try:
+        try:
+            api(data_dir, method, path, payload, query)
+        except SpotifyError as e:
+            if e.detail != "no active device":
+                raise
+            device = _take_over(data_dir, path == "/me/player/play")
+            try:
+                api(data_dir, method, path, payload, {**(query or {}), "device_id": device})
+            except SpotifyError:
+                if path != "/me/player/pause":
+                    raise
+    finally:
+        with _now_lock:
+            _now.clear()
     return {"linked": True, "ok": True}
 
 
@@ -328,10 +354,7 @@ def playlists(data_dir) -> list[dict]:
 
 
 def play_playlist(data_dir, playlist_id: str) -> dict:
-    devices = (api(data_dir, "GET", "/me/player/devices") or {}).get("devices") or []
-    board = next((d for d in devices if d.get("name") == DEVICE_NAME), None)
-    if board is None:
-        raise SpotifyError(409, "Home Board speaker not found")
+    board = _board(data_dir)
     if not board.get("is_active"):
         api(data_dir, "PUT", "/me/player", {"device_ids": [board["id"]], "play": False})
     return control(
