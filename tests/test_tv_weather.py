@@ -37,6 +37,10 @@ def _days(today):
                 (78, 55, 20, "Partly cloudy", "cloud-sun"),
                 (70, 52, 80, "Rain", "rain"),
                 (66, 50, None, "Thunderstorms", "thunder"),
+                (74, 51, 0, "Sunny", "sun"),
+                (69, 50, 10, "Cloudy", "cloud"),
+                (40, 30, 60, "Snow", "snow"),
+                (61, 48, 5, "Fog", "fog"),
             ]
         )
     ]
@@ -61,8 +65,9 @@ def test_weather_helpers():
     assert result["hiLo"] == "H 78 L 55"
     assert result["rain"] == ["Rain 20%", "Rain --%"]
     assert result["next"] == [
-        {"name": "Sat", "icon": "rain", "hiLo": "H 70 L 52"},
-        {"name": "Sun", "icon": "thunder", "hiLo": "H -- L 49"},
+        {"name": "Fri", "icon": "cloud-sun", "hiLo": "H 78 L 55", "rain": "20%", "today": True},
+        {"name": "Sat", "icon": "rain", "hiLo": "H 70 L 52", "rain": "80%", "today": False},
+        {"name": "Sun", "icon": "thunder", "hiLo": "H -- L 49", "rain": "--%", "today": False},
     ]
     assert result["sun"] == "6:55 pm"
     assert result["asOf"] == "as of 3:10 pm" and result["bad"] == ""
@@ -109,6 +114,8 @@ CARD = """JSON.stringify((() => {
     label: q('.wx-label'), hilo: q('.wx-hilo'), rain: q('.wx-rain'), asof: q('.wx-asof'),
     where: q('.wx-where'), hint: q('.wx-hint'), sun: q('.wx-sun'), svg: c.querySelectorAll('svg').length,
     days: [...c.querySelectorAll('.wx-day')].map(d => d.innerText.replace(/\\s+/g, ' ').trim()),
+    strip: c.querySelectorAll('.wx-strip .wx-day').length, rows: c.querySelectorAll('.wx-rows .wx-day').length,
+    bold: [...c.querySelectorAll('.wx-dname')].map(n => getComputedStyle(n).fontWeight === '700'),
     fits: inner.bottom <= r.bottom && inner.right <= r.right, text: c.innerText};
 })())"""
 
@@ -171,19 +178,73 @@ def test_weather_card_without_forecast_says_so(server, tmp_path):  # noqa: F811
     assert out["temp"] is None
 
 
-@needs_chrome
-def test_full_size_weather_adds_next_days_and_sun_times(server, tmp_path):  # noqa: F811
-    weather._last_fail.clear()
-    _seed_cache(server, _data_dir(tmp_path), datetime.now(UTC))
-    screen = httpx.post(f"{server}/api/screens", json={"name": "Sky"}).json()
+def _sized_screen(base, name, w, h):
+    screen = httpx.post(f"{base}/api/screens", json={"name": name}).json()
     r = httpx.post(
-        f"{server}/api/screens/{screen['id']}/widgets", json={"kind": "weather", "col": 0, "row": 0}
+        f"{base}/api/screens/{screen['id']}/widgets",
+        json={"kind": "weather", "col": 0, "row": 0, "w": w, "h": h},
     )
     assert r.status_code == 201, r.text
-    out = _show(server, tmp_path, "Sky", lambda o: o["temp"])
+
+
+def _week():
     today = date.today()
-    names = [(today + timedelta(days=i)).strftime("%a") for i in (1, 2)]
-    assert out["temp"] == "71°" and out["hilo"] == "H 78 L 55"
-    assert out["days"] == [f"{names[0]} H 70 L 52", f"{names[1]} H 66 L 50"]
+    names = [(today + timedelta(days=i)).strftime("%a") for i in range(7)]
+    cells = [
+        "H 78 L 55 20%",
+        "H 70 L 52 80%",
+        "H 66 L 50 --%",
+        "H 74 L 51 0%",
+        "H 69 L 50 10%",
+        "H 40 L 30 60%",
+        "H 61 L 48 5%",
+    ]
+    return [f"{n} {c}" for n, c in zip(names, cells, strict=True)]
+
+
+@needs_chrome
+def test_full_size_weather_adds_week_and_sun_times(server, tmp_path):  # noqa: F811
+    weather._last_fail.clear()
+    _seed_cache(server, _data_dir(tmp_path), datetime.now(UTC))
+    _sized_screen(server, "Sky", 2, 2)
+    out = _show(server, tmp_path, "Sky", lambda o: o["temp"])
+    assert out["temp"] == "71°" and out["label"] == "Sunny" and out["hilo"] == "H 78 L 55"
+    assert out["days"] == _week() and out["strip"] == 7 and out["rows"] == 0
+    assert out["bold"] == [True] + [False] * 6
     assert out["sun"] and "Sunrise 7:50 am" in out["sun"] and "Sunset 6:50 pm" in out["sun"]
-    assert out["svg"] == 3 and out["fits"]
+    assert out["svg"] == 8 and out["fits"]
+
+
+@needs_chrome
+def test_wide_weather_shows_week_strip(server, tmp_path):  # noqa: F811
+    weather._last_fail.clear()
+    _seed_cache(server, _data_dir(tmp_path), datetime.now(UTC))
+    _sized_screen(server, "Wide sky", 2, 1)
+    out = _show(server, tmp_path, "Wide sky", lambda o: o["temp"])
+    assert out["temp"] == "71°" and out["label"] == "Sunny"
+    assert out["hilo"] == "H 78 L 55" and out["rain"] == "Rain 20%"
+    assert out["days"] == _week() and out["strip"] == 7 and out["rows"] == 0
+    assert out["bold"] == [True] + [False] * 6
+    assert out["sun"] is None and out["svg"] == 8 and out["fits"]
+
+
+@needs_chrome
+def test_tall_weather_shows_week_rows(server, tmp_path):  # noqa: F811
+    weather._last_fail.clear()
+    _seed_cache(server, _data_dir(tmp_path), datetime.now(UTC))
+    _sized_screen(server, "Tall sky", 1, 2)
+    out = _show(server, tmp_path, "Tall sky", lambda o: o["temp"])
+    assert out["temp"] == "71°" and out["label"] == "Sunny"
+    assert out["hilo"] == "H 78 L 55" and out["rain"] == "Rain 20%"
+    assert out["days"] == _week() and out["rows"] == 7 and out["strip"] == 0
+    assert out["sun"] is None and out["svg"] == 8 and out["fits"]
+
+
+@needs_chrome
+def test_small_weather_shows_only_current_block(server, tmp_path):  # noqa: F811
+    weather._last_fail.clear()
+    _seed_cache(server, _data_dir(tmp_path), datetime.now(UTC))
+    _sized_screen(server, "Small sky", 1, 1)
+    out = _show(server, tmp_path, "Small sky", lambda o: o["temp"])
+    assert out["temp"] == "71°" and out["hilo"] == "H 78 L 55" and out["rain"] == "Rain 20%"
+    assert out["days"] == [] and out["sun"] is None and out["svg"] == 1 and out["fits"]

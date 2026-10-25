@@ -4,6 +4,7 @@
   var C = root.Calendar || require("./calendar_util.js");
   var MAX_BACKOFF_S = 30;
   var UPCOMING_DAYS = 7;
+  var FORECAST_DAYS = 7;
   var MAX_UPCOMING = 10;
   var SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -251,8 +252,14 @@
   function nextDays(weather, today) {
     var i = weatherToday(weather, today);
     if (i < 0) return [];
-    return weather.days.slice(i + 1, i + 3).map(function (d) {
-      return { name: SHORT_DAYS[C.parseIso(d.date).getUTCDay()], icon: d.icon, hiLo: hiLo(d) };
+    return weather.days.slice(i, i + FORECAST_DAYS).map(function (d, n) {
+      return {
+        name: SHORT_DAYS[C.parseIso(d.date).getUTCDay()],
+        icon: d.icon,
+        hiLo: hiLo(d),
+        rain: num(d.rain) + "%",
+        today: n === 0,
+      };
     });
   }
 
@@ -531,25 +538,29 @@
     }
     if (w.stale) main.appendChild(el("div", "wx-asof", asOf(w.fetched_at)));
     wx.appendChild(main);
-    if (sizeOf(widget) === "1x1") return;
+    var size = sizeOf(widget);
+    if (size === "1x1") return;
     var next = nextDays(w, ctx.today);
-    if (next.length) {
-      var days = el("div", "wx-days");
-      next.forEach(function (d) {
-        var box = el("div", "wx-day");
-        box.appendChild(el("b", "", d.name));
-        box.appendChild(weatherIcon(d.icon));
-        box.appendChild(el("span", "", d.hiLo));
-        days.appendChild(box);
-      });
-      wx.appendChild(days);
-    }
-    if (isFull(widget) && today) {
+    if (next.length) wx.appendChild(forecastDays(next, size === "1x2" ? "wx-rows" : "wx-strip"));
+    if (size === "2x2" && today) {
       var sun = el("div", "wx-sun");
       sun.appendChild(el("span", "", "Sunrise " + clockAt(today.sunrise)));
       sun.appendChild(el("span", "", "Sunset " + clockAt(today.sunset)));
       wx.appendChild(sun);
     }
+  }
+
+  function forecastDays(next, cls) {
+    var days = el("div", "wx-days " + cls);
+    next.forEach(function (d) {
+      var box = el("div", d.today ? "wx-day today" : "wx-day");
+      box.appendChild(el("span", "wx-dname", d.name));
+      box.appendChild(weatherIcon(d.icon));
+      box.appendChild(el("span", "wx-dhilo", d.hiLo));
+      box.appendChild(el("span", "wx-drain", d.rain));
+      days.appendChild(box);
+    });
+    return days;
   }
 
   var WIDGETS = {
