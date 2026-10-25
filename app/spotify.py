@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import secrets
+import ssl
 import threading
 import time
 import urllib.error
@@ -44,12 +45,22 @@ class SpotifyError(Exception):
         self.detail = detail
 
 
+_tls = None
+
+
+def _context() -> ssl.SSLContext:
+    global _tls
+    if _tls is None:
+        _tls = ssl.create_default_context()
+    return _tls
+
+
 def fetch(method: str, url: str, headers=None, body: bytes | None = None):
     req = urllib.request.Request(
         url, data=body, method=method, headers={"User-Agent": "homeboard", **(headers or {})}
     )
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S, context=_context()) as resp:
             status, raw = resp.status, resp.read()
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read()
