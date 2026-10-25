@@ -310,7 +310,10 @@ def test_install_sets_up_soloist():
     speaker = text.split('echo "== Spotify Connect speaker"', 1)[1].split(
         'echo "== Enabling services"', 1
     )[0]
-    assert 'if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ]; then' in speaker
+    assert (
+        'if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ]'
+        " || [ ! -s /opt/soloist/lib/.complete ]; then" in speaker
+    )
     assert 'bash "$APP_DIR"/deploy/soloist-update.sh' in speaker
     assert 'printf \'SOLOIST_API_KEY=%s\\n\' "$SOLOIST_KEY" > "$SOLOIST_ENV"' in speaker
     assert 'chown root:root "$SOLOIST_ENV"' in speaker and 'chmod 600 "$SOLOIST_ENV"' in speaker

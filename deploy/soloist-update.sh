@@ -16,12 +16,26 @@ start_if_stopped() {
     fi
 }
 
-install -d -m 755 "$DIR" "$DIR/lib"
-if [ ! -x "$DIR/lib/ld-linux-aarch64.so.1" ]; then
+install -d -m 755 "$DIR"
+if [ "$(cat "$DIR/lib/.complete" 2>/dev/null)" != "$GLIBC_SHA256" ]; then
     curl -fsSL -o "$TMP/libc6.deb" "$GLIBC_URL"
     echo "$GLIBC_SHA256  $TMP/libc6.deb" | sha256sum -c --quiet -
     dpkg-deb -x "$TMP/libc6.deb" "$TMP/libc6"
-    cp -a "$TMP/libc6/usr/lib/aarch64-linux-gnu/." "$DIR/lib/"
+    rm -rf "$DIR/lib.new" "$DIR/lib.old"
+    install -d -m 755 "$DIR/lib.new"
+    cp -a "$TMP/libc6/usr/lib/aarch64-linux-gnu/." "$DIR/lib.new/"
+    if [ ! -e "$DIR/lib.new/ld-linux-aarch64.so.1" ]; then
+        echo "The glibc package has no ld-linux-aarch64.so.1" >&2
+        exit 1
+    fi
+    sync
+    echo "$GLIBC_SHA256" > "$DIR/lib.new/.complete"
+    if [ -e "$DIR/lib" ]; then
+        mv "$DIR/lib" "$DIR/lib.old"
+    fi
+    mv "$DIR/lib.new" "$DIR/lib"
+    sync
+    rm -rf "$DIR/lib.old"
 fi
 
 curl -fsSL -o "$TMP/soloist.tar.gz" "$SOLOIST_URL"
