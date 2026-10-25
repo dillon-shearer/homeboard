@@ -367,6 +367,13 @@ html, body {
   text-overflow: ellipsis;
 }
 
+.cp-now-info {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #404040;
+}
+
 .cp-row .cp-now-vol {
   min-width: 56px;
   padding-left: 8px;

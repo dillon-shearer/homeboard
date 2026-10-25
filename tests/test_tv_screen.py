@@ -1168,6 +1168,10 @@ class FakeSpotify:
         self.calls.append(("POST", "/api/spotify/play-playlist", playlist_id))
         return {"linked": True, "ok": True}
 
+    def play_here(self, data_dir):
+        self.calls.append(("POST", "/api/spotify/play-here", None))
+        return {"linked": True, "ok": True}
+
     def helper(self, method, path, timeout=None):
         self.calls.append((method, "/api/sound" + path))
         if path == "/connect":
@@ -1190,6 +1194,7 @@ def fake(monkeypatch):
     monkeypatch.setattr(spotify, "now_playing", fake_api.now_playing)
     monkeypatch.setattr(spotify, "control", fake_api.control)
     monkeypatch.setattr(spotify, "play_playlist", fake_api.play_playlist)
+    monkeypatch.setattr(spotify, "play_here", fake_api.play_here)
     monkeypatch.setattr(routes_sound, "helper", fake_api.helper)
     return fake_api
 

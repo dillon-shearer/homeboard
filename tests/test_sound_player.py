@@ -75,7 +75,8 @@ def test_play_here_when_playing_elsewhere(chrome, server, fake):
     _playing_page(chrome, server, fake, on_board=False, device="Phone")
     chrome.wait("!document.querySelector('[data-sp=\"here\"]').parentNode.hidden")
     chrome.eval("document.querySelector('[data-sp=\"here\"]').click()")
-    _sp_until(lambda: fake.sent("POST", "/api/spotify/play"), "the play call")
+    _sp_until(lambda: fake.sent("POST", "/api/spotify/play-here"), "the play here call")
+    assert not fake.sent("POST", "/api/spotify/play")
 
 
 @needs_chrome

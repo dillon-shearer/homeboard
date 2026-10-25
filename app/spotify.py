@@ -26,6 +26,8 @@ TOKEN_MARGIN_S = 60
 NOW_EVERY_S = 3
 SETTLE_S = (0.5, 1.5, 3, 6)
 STATE_TTL_S = 600
+LIMIT_S = 30
+LIMIT_MAX_S = 600
 
 log = logging.getLogger(__name__)
 _lock = threading.Lock()
@@ -35,6 +37,7 @@ _now: dict = {}
 _profile: dict = {}
 _settle = {"gen": 0}
 _states: dict[str, float] = {}
+_limit: dict = {}
 
 
 class NotLinked(Exception):
@@ -67,14 +70,28 @@ def fetch(method: str, url: str, headers=None, body: bytes | None = None):
             status, raw = resp.status, resp.read()
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read()
+        if status == 429:
+            _limit["after"] = _retry_after(e.headers)
     try:
         return status, json.loads(raw) if raw else None
     except ValueError:
         return status, None
 
 
+def _retry_after(headers) -> float:
+    try:
+        value = float((headers or {}).get("Retry-After") or LIMIT_S)
+    except (TypeError, ValueError):
+        value = LIMIT_S
+    return min(max(value, 1.0), LIMIT_MAX_S)
+
+
 def _clock() -> float:
     return time.monotonic()
+
+
+def limited_for() -> float:
+    return max(0.0, _limit.get("until", 0.0) - _clock())
 
 
 def credentials() -> tuple[str, str] | None:
@@ -125,6 +142,7 @@ def forget(data_dir=None) -> None:
             token_path(data_dir).unlink(missing_ok=True)
         _token.clear()
         _profile.clear()
+        _limit.clear()
     with _now_lock:
         _now.clear()
 
@@ -227,6 +245,9 @@ def api(data_dir, method: str, path: str, payload=None, query=None):
     body = json.dumps(payload).encode() if payload is not None else None
     if body is None and method != "GET":
         body = b""
+    wait = limited_for()
+    if wait > 0:
+        raise SpotifyError(429, f"spotify rate limited, retry in {int(wait) + 1} s")
     for attempt in (1, 2):
         headers = {"Authorization": f"Bearer {access_token(data_dir)}"}
         if payload is not None:
@@ -237,6 +258,10 @@ def api(data_dir, method: str, path: str, payload=None, query=None):
                 _token.clear()
             continue
         break
+    if status == 429:
+        wait = _limit.pop("after", LIMIT_S)
+        _limit["until"] = max(_limit.get("until", 0.0), _clock() + wait)
+        raise SpotifyError(429, f"spotify rate limited, retry in {int(wait)} s")
     if status == 404 and path.startswith("/me/player"):
         raise SpotifyError(409, "no active device")
     if status >= 400:
@@ -273,9 +298,20 @@ def control(data_dir, method: str, path: str, payload=None, query=None) -> dict:
             device = _take_over(data_dir, play)
             try:
                 api(data_dir, method, path, payload, {**(query or {}), "device_id": device})
-            except SpotifyError:
-                if path != "/me/player/pause" and not (play and payload is None):
+            except SpotifyError as retry:
+                redundant = path == "/me/player/pause" or (play and payload is None)
+                if not (redundant and retry.status == 409):
                     raise
+    finally:
+        with _now_lock:
+            _now.clear()
+    return {"linked": True, "ok": True}
+
+
+def play_here(data_dir) -> dict:
+    try:
+        board = _board(data_dir)
+        api(data_dir, "PUT", "/me/player", {"device_ids": [board["id"]], "play": True})
     finally:
         with _now_lock:
             _now.clear()
@@ -335,24 +371,48 @@ def now_playing(data_dir, fresh=False) -> dict:
         _now["at"] = _clock()
         try:
             _now["data"] = _shape(api(data_dir, "GET", "/me/player"))
+            _now["ok"] = time.time()
         except (OSError, SpotifyError) as e:
             log.warning("spotify now playing failed: %s", e)
             last = _now.get("data") or _empty()
-            _now["data"] = {**last, "stale": True}
+            _now["data"] = {
+                **last,
+                "stale": True,
+                "reason": _reason(e),
+                "retry_s": int(limited_for()) + 1 if limited_for() else None,
+                "updated": _now.get("ok"),
+            }
         return _now["data"]
+
+
+def _reason(error) -> str:
+    if isinstance(error, SpotifyError) and error.status == 429:
+        return "rate limited"
+    if isinstance(error, SpotifyError):
+        return "spotify error"
+    return "unreachable"
 
 
 def _seen(now) -> tuple:
     now = now or {}
-    return (now.get("track"), now.get("cover"), now.get("playing"), now.get("device"))
+    return tuple(
+        now.get(k)
+        for k in ("track", "artist", "album", "cover", "duration_ms", "playing", "device")
+    )
 
 
-def settle(data_dir, publish) -> None:
+def seen_now() -> tuple:
+    with _now_lock:
+        return _seen(_now.get("data"))
+
+
+def settle(data_dir, publish, last=None) -> None:
     delays = tuple(SETTLE_S)
     with _now_lock:
         _settle["gen"] += 1
         gen = _settle["gen"]
-        last = _seen(_now.get("data"))
+        if last is None:
+            last = _seen(_now.get("data"))
     if not delays:
         return
 
@@ -364,7 +424,10 @@ def settle(data_dir, publish) -> None:
             waited = at
             if _settle["gen"] != gen:
                 return
-            now = now_playing(data_dir, True)
+            try:
+                now = now_playing(data_dir, True)
+            except NotLinked:
+                return
             if now.get("stale"):
                 continue
             seen = _seen(now)

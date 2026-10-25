@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = "127.0.0.1"
 PORT = 8002
 SETTINGS_URL = "http://127.0.0.1:8000/api/settings"
+NOW_URL = "http://127.0.0.1:8000/api/spotify/now"
 SOLOIST_EXPIRES = "/opt/soloist/expires"
 DEFAULT_IDLE_MINUTES = 10
 CONNECT_TRIES = 5
@@ -20,6 +21,7 @@ DEFAULT_VOLUME = 100
 SINK_WAIT_S = 20
 SINK_POLL_S = 1
 TICK_S = 5
+RECONCILE_S = 60
 MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VOLUME_RE = re.compile(r"^Volume: (\d+(?:\.\d+)?)")
@@ -134,6 +136,17 @@ def read_setting(key):
         return None
 
 
+def playing_here():
+    try:
+        with urllib.request.urlopen(NOW_URL, timeout=5) as resp:
+            now = json.loads(resp.read())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(now, dict) or not now.get("linked") or now.get("stale"):
+        return None
+    return bool(now.get("playing") and now.get("on_board"))
+
+
 def idle_setting():
     v = read_setting("speaker_idle_minutes")
     return v if isinstance(v, int) and v > 0 else DEFAULT_IDLE_MINUTES
@@ -151,6 +164,7 @@ class Helper:
         self.state = IdleState()
         self.lock = threading.Lock()
         self.bt_lock = threading.Lock()
+        self.connect_ok = None
 
     def connected(self):
         return speaker_info(self.mac)["connected"]
@@ -198,6 +212,7 @@ class Helper:
             "playing": playing,
             "idle_minutes": idle,
             "soloist_expires": soloist_expires(),
+            "connect_ok": self.connect_ok,
         }
 
     def set_playing(self, playing):
@@ -205,7 +220,14 @@ class Helper:
         with self.lock:
             action = self.state.set_playing(playing, time.monotonic(), minutes)
         if action == "connect" and self.mac:
-            self.connect()
+            self.connect_ok = self.connect()
+
+    def reconcile(self):
+        playing = playing_here()
+        with self.lock:
+            changed = playing is not None and playing != self.state.playing
+        if changed:
+            self.set_playing(playing)
 
     def tick(self):
         with self.lock:
@@ -214,8 +236,13 @@ class Helper:
             self.disconnect()
 
     def run_timer(self):
+        checked = None
         while True:
             time.sleep(TICK_S)
+            now = time.monotonic()
+            if checked is None or now - checked >= RECONCILE_S:
+                checked = now
+                self.reconcile()
             self.tick()
 
 

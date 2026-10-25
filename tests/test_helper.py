@@ -107,6 +107,7 @@ def test_status_endpoint_shape(server):
         "playing": False,
         "idle_minutes": 0,
         "soloist_expires": None,
+        "connect_ok": None,
     }
 
 

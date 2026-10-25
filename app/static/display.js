@@ -113,7 +113,7 @@
   }
 
   function coverVisible(now, screens) {
-    if (!now || now.linked !== true || now.playing !== true || now.on_board !== true) return false;
+    if (!now || now.linked !== true || now.playing !== true || now.on_board !== true || now.stale) return false;
     if (typeof now.cover !== "string" || !now.cover) return false;
     return spotifyScreenId(screens) !== null;
   }
@@ -204,6 +204,16 @@
       known: known,
       volume: known ? now.volume + "%" : "--%",
     };
+  }
+
+  function nowInfo(now) {
+    if (!now || now.linked === false) return null;
+    if (now.stale) {
+      const why = now.reason === "rate limited" ? "Could not reach Spotify (too many requests)." : "Could not reach Spotify.";
+      return now.track ? why + " Showing the last known song." : why;
+    }
+    if (!now.device) return null;
+    return now.on_board ? "Playing on Home Board" : "Playing on " + now.device;
   }
 
   function volumeStep(volume, delta) {
@@ -314,6 +324,7 @@
     applySettings: applySettings,
     overlayLayout: overlayLayout,
     spotifyScreenId: spotifyScreenId,
+    nowInfo: nowInfo,
     coverVisible: coverVisible,
     POSITIONS: POSITIONS,
     shuffleIds: shuffleIds,
@@ -364,6 +375,8 @@
   const COVER_END_MS = 1000;
   const NOW_POLL_MS = 15000;
   const NOW_AFTER_TAP_MS = 1000;
+  const NOW_NOTE_MS = 3000;
+  const SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
   const VOLUME_STEP = 5;
   const VOLUME_CHAIN_MS = 1000;
   const PHOTOS_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="22" fill="#000"/><rect x="3" y="6" width="26" height="20" fill="#c0c0c0"/><rect x="5" y="8" width="22" height="16" fill="#00ffff"/><polygon points="5,24 13,14 19,21 22,18 27,24" fill="#008000"/><rect x="21" y="10" width="4" height="4" fill="#ffff00"/></svg>';
@@ -390,6 +403,10 @@
   const rebootEl = document.getElementById("cp-restart-yes");
   const nowEl = document.getElementById("cp-now");
   const nowLineEl = document.getElementById("cp-now-line");
+  const nowInfoEl = document.getElementById("cp-now-info");
+  const nowHereEl = document.getElementById("cp-now-here");
+  const nowPlayEls = ["cp-now-prev", "cp-now-toggle", "cp-now-next", "cp-now-down", "cp-now-up", "cp-now-volume"]
+    .map(function (id) { return document.getElementById(id); });
   const nowToggleEl = document.getElementById("cp-now-toggle");
   const nowDownEl = document.getElementById("cp-now-down");
   const nowUpEl = document.getElementById("cp-now-up");
@@ -448,6 +465,12 @@
   let nowTimer = null;
   let nowSeq = 0;
   let nowVol = null;
+  let nowLast = null;
+  let nowNote = null;
+  let nowNoteTimer = null;
+  let nowQueue = Promise.resolve();
+  let speakerSeq = 0;
+  let coverSeq = 0;
   let kioskData = null;
   let kioskSeq = 0;
   let kioskPending = 0;
@@ -549,6 +572,7 @@
   }
 
   function pollCover() {
+    const mine = ++coverSeq;
     if (state.settings.channel !== "photos") return;
     if (!state.settings.cover_show || spotifyScreenId(state.screens) === null) {
       state.now = null;
@@ -556,11 +580,15 @@
       return;
     }
     return fetchJson("/api/spotify/now").then(function (now) {
+      if (mine !== coverSeq) return;
       state.now = now;
       coverAtEnd(now);
+      showCover();
     }, function () {
+      if (mine !== coverSeq) return;
       state.now = null;
-    }).then(showCover);
+      showCover();
+    });
   }
 
   function coverAtEnd(now) {
@@ -857,7 +885,6 @@
     kioskEl.hidden = true;
     renderScreens();
     showSlider(state.settings.brightness);
-    loadSpeaker();
     renderNow(nowData);
     movePanel(-viewHeight());
     panelEl.hidden = false;
@@ -953,10 +980,14 @@
   }
 
   function loadSpeaker() {
+    const mine = ++speakerSeq;
     return fetchJson("/api/sound/status").then(function (s) {
+      if (mine !== speakerSeq) return;
       const on = !!(s && s.speaker && s.speaker.connected);
       renderSpeaker(on ? "Connected" : "Off", on);
-    }, speakerError);
+    }, function (err) {
+      if (mine === speakerSeq) speakerError(err);
+    });
   }
 
   function postJson(url) {
@@ -971,6 +1002,7 @@
     speakerBusy = true;
     speakerEl.disabled = true;
     const on = speakerOn;
+    speakerSeq++;
     renderSpeaker(on ? "Disconnecting..." : "Connecting...", !on);
     postJson(on ? "/api/sound/disconnect" : "/api/sound/connect").then(loadSpeaker, function (err) {
       if (err.message === "503") speakerError(err);
@@ -983,8 +1015,15 @@
 
   function renderNow(now) {
     const row = nowRow(now);
+    const info = nowNote || nowInfo(now);
+    nowLast = now;
     nowData = row.shown ? now : null;
-    nowEl.hidden = !row.shown;
+    nowEl.hidden = !row.shown && !info;
+    nowInfoEl.textContent = info || "";
+    nowInfoEl.hidden = !info;
+    nowHereEl.hidden = !(now && now.linked !== false && now.device && !now.on_board);
+    nowPlayEls.forEach(function (el) { el.hidden = !row.shown; });
+    nowLineEl.hidden = !row.shown;
     if (!row.shown) return;
     nowLineEl.textContent = row.line;
     nowLineEl.title = row.line;
@@ -1004,27 +1043,60 @@
     clearTimeout(nowTimer);
     nowTimer = null;
     const mine = ++nowSeq;
+    if (!speakerBusy) loadSpeaker();
     return fetchJson("/api/spotify/now").then(function (now) {
       if (mine === nowSeq) renderNow(now);
     }, function () {
-      if (mine === nowSeq) renderNow(null);
+      if (mine !== nowSeq) return;
+      renderNow(nowLast && nowLast.linked !== false ? Object.assign({}, nowLast, { stale: true, reason: "unreachable" })
+        : { linked: true, stale: true, reason: "unreachable" });
     }).then(function () {
       if (mine === nowSeq) nowLater(NOW_POLL_MS);
     });
   }
 
+  function showNowNote(text) {
+    nowNote = text;
+    clearTimeout(nowNoteTimer);
+    nowNoteTimer = setTimeout(function () {
+      nowNote = null;
+      if (!panelEl.hidden) renderNow(nowLast);
+    }, NOW_NOTE_MS);
+    renderNow(nowLast);
+  }
+
+  function nowSend(method, url, body) {
+    const opts = { method: method };
+    if (body) {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    nowQueue = nowQueue.then(function () {
+      return fetch(url, opts).then(function (r) {
+        if (r.ok) return;
+        return r.json().catch(function () { return {}; }).then(function (out) {
+          const said = (r.status === 409 || r.status === 429) && typeof out.detail === "string";
+          showNowNote(said ? out.detail : SPOTIFY_DOWN_TEXT);
+        });
+      }, function () {
+        showNowNote(SPOTIFY_DOWN_TEXT);
+      });
+    }).then(function () {
+      nowLater(NOW_AFTER_TAP_MS);
+    });
+    return nowQueue;
+  }
+
   function nowTap(action) {
     markActivity();
-    if (!nowData) return;
+    if (!nowData && action !== "play-here") return;
     if (action === "toggle") {
       action = nowData.playing ? "pause" : "play";
       nowData.playing = !nowData.playing;
       renderNow(nowData);
     }
     nowSeq++;
-    postJson("/api/spotify/" + action).catch(function () {}).then(function () {
-      nowLater(NOW_AFTER_TAP_MS);
-    });
+    nowSend("POST", "/api/spotify/" + action);
   }
 
   function freshVolume() {
@@ -1038,13 +1110,7 @@
   }
 
   function putVolume(percent) {
-    return fetch("/api/spotify/volume", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ percent: percent }),
-    }).catch(function () {}).then(function () {
-      nowLater(NOW_AFTER_TAP_MS);
-    });
+    return nowSend("PUT", "/api/spotify/volume", { percent: percent });
   }
 
   function nowVolumeTap(delta) {
@@ -1058,8 +1124,9 @@
         return null;
       }
       if (nowData) nowData.volume = next;
-      putVolume(next);
-      return next;
+      return putVolume(next).then(function () {
+        return next;
+      });
     });
     nowVol = { sent: sent, at: Date.now() };
     nowData.volume = volumeStep(nowData.volume, delta);
@@ -1212,6 +1279,7 @@
     rebootEl.addEventListener("click", restartBoard);
     document.getElementById("cp-now-prev").addEventListener("click", function () { nowTap("previous"); });
     nowToggleEl.addEventListener("click", function () { nowTap("toggle"); });
+    nowHereEl.addEventListener("click", function () { nowTap("play-here"); });
     document.getElementById("cp-now-next").addEventListener("click", function () { nowTap("next"); });
     nowDownEl.addEventListener("click", function () { nowVolumeTap(-VOLUME_STEP); });
     nowUpEl.addEventListener("click", function () { nowVolumeTap(VOLUME_STEP); });
@@ -1530,6 +1598,8 @@
       loadScreens();
       onSettingsChanged();
       onPhotosChanged();
+      pollCover();
+      loadNow();
     });
     es.addEventListener("photos_changed", function () {
       markActivity();

@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-DIR=/opt/soloist
+DIR="${SOLOIST_DIR:-/opt/soloist}"
 SOLOIST_URL=https://soloist-builds.spotifycdn.com/soloist_release_arm64.tar.gz
 GLIBC_URL=https://snapshot.debian.org/archive/debian/20261020T000000Z/pool/main/g/glibc/libc6_2.41-12+deb13u4_arm64.deb
 GLIBC_SHA256=8784eda966b189c777a384dac5ce009e8fc9b52d006926c5a013e7fa8aa688cc
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+start_if_stopped() {
+    if [[ "$(cat "$DIR/expires")" > "$(date +%F)" ]] \
+        && systemctl is-enabled --quiet homeboard-soloist.service 2>/dev/null \
+        && ! systemctl is-active --quiet homeboard-soloist.service; then
+        echo "Starting Spotify Soloist again with the current build"
+        systemctl restart homeboard-soloist.service
+    fi
+}
 
 install -d -m 755 "$DIR" "$DIR/lib"
 if [ ! -x "$DIR/lib/ld-linux-aarch64.so.1" ]; then
@@ -27,6 +36,7 @@ fi
 if [ -x "$DIR/soloist" ] && cmp -s "$TMP/soloist" "$DIR/soloist"; then
     date -d "$BUILT + 90 days" +%F > "$DIR/expires"
     echo "Spotify Soloist is up to date: $VERSION, runs out on $(cat "$DIR/expires")"
+    start_if_stopped
     exit 0
 fi
 install -m 755 "$TMP/soloist" "$DIR/soloist.new"
@@ -34,3 +44,4 @@ mv -f "$DIR/soloist.new" "$DIR/soloist"
 date -d "$BUILT + 90 days" +%F > "$DIR/expires"
 echo "Installed $VERSION, runs out on $(cat "$DIR/expires")"
 systemctl try-restart homeboard-soloist.service
+start_if_stopped

@@ -2,6 +2,7 @@
   "use strict";
 
   var NOW_MS = 5000;
+  var SPEAKER_MS = 10000;
   var STEP_DEBOUNCE_MS = 400;
   var IDLE_MIN = 1;
   var IDLE_MAX = 120;
@@ -14,6 +15,7 @@
   var playlists = [];
   var idle = null;
   var busy = false;
+  var speakerSeq = 0;
   var saving = Promise.resolve();
 
   function $(id) {
@@ -114,7 +116,12 @@
   }
 
   function loadSpeaker() {
-    return getJSON("/api/sound/status").then(renderSpeaker).catch(speakerError);
+    var mine = ++speakerSeq;
+    return getJSON("/api/sound/status").then(function (s) {
+      if (mine === speakerSeq && !busy) renderSpeaker(s);
+    }, function (err) {
+      if (mine === speakerSeq && !busy) speakerError(err);
+    });
   }
 
   function speakerAction(path, label) {
@@ -125,10 +132,11 @@
     $("speaker-state").textContent = label;
     send("POST", path).catch(function (err) {
       if (err.status !== 503) showError("Could not reach the speaker. Try again.");
-    }).then(loadSpeaker).then(function () {
+    }).then(function () {
       busy = false;
       $("speaker-connect").disabled = false;
       $("speaker-disconnect").disabled = false;
+      return loadSpeaker();
     });
   }
 
@@ -338,6 +346,9 @@
   setInterval(function () {
     if (document.visibilityState === "visible") loadNow();
   }, NOW_MS);
+  setInterval(function () {
+    if (document.visibilityState === "visible") loadSpeaker();
+  }, SPEAKER_MS);
 
   loadSettings();
   loadSpeaker();

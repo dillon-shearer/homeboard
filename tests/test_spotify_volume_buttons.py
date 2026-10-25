@@ -51,6 +51,7 @@ def sp(monkeypatch):
     monkeypatch.setattr(spotify, "now_playing", fake_api.now_playing)
     monkeypatch.setattr(spotify, "control", fake_api.control)
     monkeypatch.setattr(spotify, "play_playlist", fake_api.play_playlist)
+    monkeypatch.setattr(spotify, "play_here", fake_api.play_here)
     monkeypatch.setattr(routes_sound, "helper", fake_api.helper)
     return fake_api
 
