@@ -76,13 +76,16 @@ var byId = {};
 globalThis.window = globalThis;
 globalThis.addEventListener = function () {};
 globalThis.setInterval = function () { return 0; };
+var documentEvents = new EventTarget();
 globalThis.document = {
   body: { contains: function () { return true; } },
   createElement: function (t) { return new El(t); },
   createElementNS: function (ns, t) { return new El(t); },
   getElementById: function (id) { return byId[id] || (byId[id] = new El("div", id)); },
   querySelectorAll: function () { return []; },
-  addEventListener: function () {},
+  addEventListener: documentEvents.addEventListener.bind(documentEvents),
+  removeEventListener: documentEvents.removeEventListener.bind(documentEvents),
+  dispatchEvent: documentEvents.dispatchEvent.bind(documentEvents),
 };
 ["upload-dialog", "photo-dialog", "grid-empty", "grid-error", "show-more"].forEach(function (id) {
   document.getElementById(id).hidden = true;
