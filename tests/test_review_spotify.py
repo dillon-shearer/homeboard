@@ -29,25 +29,34 @@ HTTP_FETCH = spotify.fetch
 
 
 @needs_node
-@pytest.mark.parametrize("scenario", ["clock", "date", "cover"])
-def test_settings_baseline_scenarios_with_document_events(monkeypatch, scenario):
+def test_settings_events_publish_loaded_and_saved_values():
     from tests import test_clock_caption_form as form
-    from tests import test_now_playing_cover as cover
-    from tests import test_tv_admin as tv
 
-    monkeypatch.setattr(
-        form,
-        "PAGE_STUB",
-        form.PAGE_STUB + "\nconst reviewDocumentEvents = new EventTarget();"
-        "document.addEventListener = reviewDocumentEvents.addEventListener.bind(reviewDocumentEvents);"
-        "document.dispatchEvent = reviewDocumentEvents.dispatchEvent.bind(reviewDocumentEvents);",
+    result = form._node(
+        """
+        await flush();
+        const cell = radio("caption_pos", "bottom-right");
+        cell.checked = true;
+        cell.fire("change");
+        await flush();
+        console.log(JSON.stringify({ events: settingsEvents, puts: puts }));
+        """,
+        form.FORM_SETUP
+        + """
+        var settingsEvents = [];
+        document.addEventListener("homeboard:settings", function (event) {
+          settingsEvents.push({ caption_pos: event.detail.caption_pos });
+        });
+        """,
     )
-    cases = {
-        "clock": form.test_stack_row_shows_only_when_spots_match,
-        "date": tv.test_tv_date_stack_row_and_date_radios_put_one_field,
-        "cover": cover.test_cover_controls_put_cover_keys,
+    assert result == {
+        "events": [
+            {"caption_pos": "bottom-left"},
+            {"caption_pos": "bottom-right"},
+            {"caption_pos": "bottom-right"},
+        ],
+        "puts": [{"caption_pos": "bottom-right"}],
     }
-    cases[scenario]()
 
 
 @needs_chrome
