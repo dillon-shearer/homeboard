@@ -77,7 +77,7 @@ systemctl stop homeboard-api.service 2>/dev/null || true
 trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync plymouth plymouth-themes swayimg
+    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
 fi
@@ -149,20 +149,19 @@ else
 fi
 
 echo "== Boot screen"
-install -d "$THEME_DIR"
-install -m 644 "$APP_DIR"/deploy/plymouth/homeboard/* "$THEME_DIR"/
-install -d /etc/systemd/system/plymouth-quit.service.d
-install -m 644 "$APP_DIR"/deploy/plymouth/plymouth-quit.conf /etc/systemd/system/plymouth-quit.service.d/homeboard.conf
-for unit in plymouth-halt plymouth-poweroff plymouth-reboot; do
-    install -d "/etc/systemd/system/$unit.service.d"
-    install -m 644 "$APP_DIR"/deploy/plymouth/plymouth-shutdown.conf "/etc/systemd/system/$unit.service.d/homeboard.conf"
+for unit in plymouth-quit plymouth-halt plymouth-poweroff plymouth-reboot; do
+    rm -f "/etc/systemd/system/$unit.service.d/homeboard.conf"
+    rmdir "/etc/systemd/system/$unit.service.d" 2>/dev/null || true
 done
-plymouth-set-default-theme -R homeboard
+if [ -d "$THEME_DIR" ]; then
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y plymouth plymouth-themes
+    rm -rf "$THEME_DIR"
+fi
 if [ -f "$CMDLINE_TXT" ]; then
     if [ ! -e "$CMDLINE_TXT.homeboard.bak" ]; then
         cp "$CMDLINE_TXT" "$CMDLINE_TXT.homeboard.bak"
     fi
-    SPLASH_WORDS=(quiet splash loglevel=0 logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles)
+    SPLASH_WORDS=(quiet loglevel=0 logo.nologo vt.global_cursor_default=0)
     read -r -a OLD_WORDS < "$CMDLINE_TXT" || true
     NEW_WORDS=()
     for word in "${OLD_WORDS[@]}"; do
@@ -170,7 +169,7 @@ if [ -f "$CMDLINE_TXT" ]; then
             *" $word "*) continue ;;
         esac
         case "$word" in
-            loglevel=*) continue ;;
+            loglevel=* | splash | plymouth.*) continue ;;
         esac
         NEW_WORDS+=("$word")
     done
@@ -185,7 +184,8 @@ fi
 
 echo "== Kiosk start screen"
 install -d -m 755 /var/cache/homeboard
-if ! "$APP_DIR/.venv/bin/python" "$APP_DIR/deploy/splash/still.py" /var/cache/homeboard/boot.png; then
+rm -f /var/cache/homeboard/boot.png
+if ! "$APP_DIR/.venv/bin/python" "$APP_DIR/deploy/splash/still.py" /var/cache/homeboard/boot.gif; then
     echo "Warning: could not draw the kiosk start screen; the screen stays black until Chromium is up" >&2
 fi
 

@@ -12,13 +12,8 @@ from shot import ROOT, SHOTS, Cdp, find_chrome, free_port, open_page
 from websockets.sync.client import connect
 
 BOOT = ROOT / "deploy" / "splash" / "boot.html"
-THEME = ROOT / "deploy" / "plymouth" / "homeboard"
+COVER = ROOT / "deploy" / "splash" / "cover"
 WIDTH, HEIGHT = 1920, 1080
-LABELS = {
-    "boot": "Starting Home Board...",
-    "reboot": "Home Board is restarting...",
-    "shutdown": "Home Board is shutting down...",
-}
 STILL = (
     "var s = document.createElement('style');"
     "s.textContent = '.blocks { animation: none !important; transform: none !important; }"
@@ -68,7 +63,7 @@ def set_classes(cdp: Cdp, clear: bool, hide: list[str], show: list[str]) -> None
     time.sleep(0.2)
 
 
-def export_plymouth(chrome: str, profile: Path) -> None:
+def export_cover(chrome: str, profile: Path) -> None:
     port = free_port()
     proc = subprocess.Popen(
         [
@@ -110,29 +105,27 @@ def export_plymouth(chrome: str, profile: Path) -> None:
             cdp.call("Page.navigate", url=BOOT.as_uri())
             cdp.wait("document.readyState === 'complete'", "the boot page")
             cdp.eval(STILL)
-            THEME.mkdir(parents=True, exist_ok=True)
+            COVER.mkdir(parents=True, exist_ok=True)
 
             set_classes(cdp, False, ["#label", ".bar"], [])
-            capture(cdp, THEME / "background.png")
+            capture(cdp, COVER / "background.png")
 
             bar = rect(cdp, ".bar")
             set_classes(cdp, False, ["#label", ".blocks"], [])
-            capture(cdp, THEME / "track.png", clip(bar))
+            capture(cdp, COVER / "track.png", clip(bar))
 
             blocks = rect(cdp, ".blocks")
             set_classes(cdp, True, [], [".blocks"])
-            capture(cdp, THEME / "blocks.png", clip(blocks))
+            capture(cdp, COVER / "blocks.png", clip(blocks))
 
-            for mode, text in LABELS.items():
-                cdp.eval(f"document.getElementById('label').textContent = {text!r}")
-                label = cdp.eval(
-                    "(() => { const n = document.createRange();"
-                    " n.selectNodeContents(document.getElementById('label'));"
-                    " const r = n.getBoundingClientRect();"
-                    " return {x: r.left, y: r.top, w: r.width, h: r.height}; })()"
-                )
-                set_classes(cdp, True, [], ["#label"])
-                capture(cdp, THEME / f"label-{mode}.png", clip(label, 2))
+            label = cdp.eval(
+                "(() => { const n = document.createRange();"
+                " n.selectNodeContents(document.getElementById('label'));"
+                " const r = n.getBoundingClientRect();"
+                " return {x: r.left, y: r.top, w: r.width, h: r.height}; })()"
+            )
+            set_classes(cdp, True, [], ["#label"])
+            capture(cdp, COVER / "label-boot.png", clip(label, 2))
 
             print(f"bar {bar}")
             print(f"blocks {blocks}")
@@ -161,12 +154,12 @@ def shoot(chrome: str, url: str, out: Path, profile: Path) -> None:
 
 def main() -> None:
     bare = "--bare" in sys.argv[1:]
-    plymouth = "--plymouth" in sys.argv[1:]
+    cover = "--cover" in sys.argv[1:]
     chrome = find_chrome()
     tmp = Path(tempfile.mkdtemp(prefix="homeboard-shot-"))
     try:
-        if plymouth:
-            export_plymouth(chrome, tmp / "chrome")
+        if cover:
+            export_cover(chrome, tmp / "chrome")
             return
         SHOTS.mkdir(exist_ok=True)
         url = BOOT.as_uri() + ("?bare=1" if bare else "")
