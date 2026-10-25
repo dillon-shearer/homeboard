@@ -218,8 +218,8 @@ button, input {
 
 .spot-pair {
   grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(2, max-content);
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px 28px;
 }
 

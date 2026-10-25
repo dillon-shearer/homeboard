@@ -15,13 +15,18 @@ def client(tmp_path):
 
 
 def titlebar(page):
-    return re.search(r'<main class="w95-window">\s*<div class="w95-titlebar">(.*?)</div>', page, re.S).group(1)
+    return re.search(
+        r'<main class="w95-window">\s*<div class="w95-titlebar">(.*?)</div>', page, re.DOTALL
+    ).group(1)
 
 
 @pytest.mark.parametrize("path", SUB_PAGES)
 def test_sub_page_title_close_links_to_start(client, path):
     bar = titlebar(client.get(path).text)
-    assert '<a class="title-close" href="/admin" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></a>' in bar
+    assert (
+        '<a class="title-close" href="/admin" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></a>'
+        in bar
+    )
     assert bar.count("w95-close") == 1
 
 

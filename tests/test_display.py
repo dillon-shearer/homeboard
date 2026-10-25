@@ -106,6 +106,10 @@ def test_apply_settings_and_backoff():
         "clock_pos": "bottom-right",
         "caption_pos": "bottom-left",
         "clock_on_top": True,
+        "date_size": 3,
+        "date_pos": "bottom-right",
+        "date_on_top": False,
+        "date_show": True,
         "brightness": 100,
     }
     assert result["b"]["fit"] == "contain" and result["b"]["interval_s"] == 30

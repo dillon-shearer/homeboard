@@ -33,7 +33,7 @@ def _group(page, legend_id):
 
 def test_group_lives_on_tv_page_after_weather(client, page):
     assert page.index('id="group-overlay"') > page.index('id="group-weather"')
-    assert '<h2 id="group-overlay" class="w95-legend">Clock and caption</h2>' in page
+    assert '<h2 id="group-overlay" class="w95-legend">Clock, date and caption</h2>' in page
     photos = client.get("/admin/photos").text
     assert 'id="group-slideshow"' in photos
     for gone in ('id="group-overlay"', 'id="clock-size"', 'id="caption-size"', 'name="clock_pos"'):
@@ -49,7 +49,7 @@ def test_group_has_steppers_spots_stack_and_captions(page):
         values = re.findall(rf'name="{key}" value="([a-z-]+)"', group)
         assert values == list(POSITIONS)
     assert 'aria-label="Top left"' in group and 'aria-label="Middle center"' in group
-    assert len(re.findall(r'role="radiogroup"', group)) == 3
+    assert len(re.findall(r'role="radiogroup"', group)) == 5
     assert re.findall(r'name="clock_on_top" value="(\w+)"', group) == ["true", "false"]
     assert '<div id="stack-row" class="stack-row" hidden>' in group
     assert '<input type="checkbox" data-key="captions">' in group
@@ -61,11 +61,13 @@ var puts = [];
 var settings = {
   interval_s: 20, transition: true, fit: "contain", shuffle: false, captions: true,
   clock_size: 5, caption_size: 4, clock_pos: "bottom-right", caption_pos: "bottom-left", clock_on_top: true,
+  date_size: 3, date_pos: "bottom-right", date_on_top: false, date_show: true,
 };
 var radios = {};
-["fit", "clock_pos", "caption_pos", "clock_on_top"].forEach(function (key) {
+["fit", "clock_pos", "caption_pos", "clock_on_top", "date_pos", "date_on_top"].forEach(function (key) {
   radios[key] = [];
-  var values = key === "fit" ? ["contain", "cover"] : key === "clock_on_top" ? ["true", "false"] : [
+  var flag = key === "clock_on_top" || key === "date_on_top";
+  var values = key === "fit" ? ["contain", "cover"] : flag ? ["true", "false"] : [
     "top-left", "top-center", "top-right", "middle-left", "middle-center", "middle-right",
     "bottom-left", "bottom-center", "bottom-right",
   ];

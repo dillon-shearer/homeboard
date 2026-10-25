@@ -19,7 +19,7 @@ def read(path):
 def localhost_server(name):
     servers = re.split(r"(?m)^server \{", read(NGINX / name))[1:]
     found = [s for s in servers if "listen 127.0.0.1:80;" in s or "listen 80 default_server;" in s]
-    return [s for s in found if "homeboard-proxy.conf" in s][0]
+    return next(s for s in found if "homeboard-proxy.conf" in s)
 
 
 def test_nginx_serves_boot_page_on_localhost():
