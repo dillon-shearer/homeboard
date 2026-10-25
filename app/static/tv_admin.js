@@ -32,7 +32,7 @@
   var win = null;
   var lists = [];
   var allowed = {};
-  var KIND_NAMES = { clock: "Clock", weather: "Weather", calendar: "Calendar", lists: "Lists" };
+  var KIND_NAMES = { clock: "Clock", weather: "Weather", calendar: "Calendar", lists: "Lists", spotify: "Spotify" };
   var SIZE_NAMES = { "2x2": "Full (2x2)", "2x1": "Wide (2x1)", "1x2": "Tall (1x2)", "1x1": "Quarter (1x1)" };
 
   function $(id) {

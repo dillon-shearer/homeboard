@@ -40,6 +40,7 @@ def test_screen_window_markup(client):
         ("weather", "Weather"),
         ("calendar", "Calendar"),
         ("lists", "Lists"),
+        ("spotify", "Spotify"),
     ]
     buttons = re.search(r'<div class="buttons">(.*?)</div>', html, re.DOTALL).group(1)
     assert re.findall(r">([^<]+)</button>", buttons) == ["Delete screen", "Done"]
@@ -206,7 +207,7 @@ def test_screen_window_adds_at_a_cell_moves_and_swaps(server, tmp_path):  # noqa
         assert chrome.eval("!document.getElementById('widget-add').hidden") is False
         chrome.eval(f"{q}('[data-cell=\"0,1\"]').click()")
         assert chrome.eval("!document.getElementById('widget-add').hidden") is True
-        assert chrome.eval(kinds) == ["clock", "weather", "calendar", "lists"]
+        assert chrome.eval(kinds) == ["clock", "weather", "calendar", "lists", "spotify"]
         chrome.eval(f"{q}('[data-kind=weather]').click()")
         _wait(lambda: _widgets(server, "Grid") == [("clock", 0, 0, 1, 1), ("weather", 0, 1, 2, 1)])
         _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Weather")

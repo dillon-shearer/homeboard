@@ -22,6 +22,18 @@
   var TAP_SLOP_PX = 10;
   var SWIPE_CLICK_MS = 600;
   var SLIDE_MS = 250;
+  var SPOTIFY_POLL_MS = 3000;
+  var SPOTIFY_TICK_MS = 1000;
+  var SPOTIFY_AFTER_TAP_MS = 1000;
+  var SPOTIFY_EXTRA_EVERY = 10;
+  var SPOTIFY_NOTE_MS = 3000;
+  var VOLUME_STEP = 5;
+  var SPOTIFY_LAYOUTS = { "2x2": "full", "2x1": "wide", "1x2": "tall", "1x1": "tile" };
+  var NOT_LINKED_TEXT = "Spotify not linked";
+  var IDLE_TEXT = "Nothing playing";
+  var NO_PLAYLISTS_TEXT = "Pick playlists on your phone: Sound.";
+  var SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
+  var SPEAKER_DOWN_TEXT = "Could not reach the speaker";
 
   function placement(widget) {
     return {
@@ -297,6 +309,42 @@
     return isNaN(d.getTime()) ? "" : "as of " + formatClock(d);
   }
 
+  function formatMs(ms) {
+    var s = Math.max(0, Math.floor((ms || 0) / 1000));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  function spotifyLayout(widget) {
+    return SPOTIFY_LAYOUTS[sizeOf(widget)] || "tile";
+  }
+
+  function spotifyState(now) {
+    if (now && now.linked === false) return "unlinked";
+    if (!now || !now.track) return "idle";
+    return now.playing ? "playing" : "paused";
+  }
+
+  function coverUrl(now) {
+    var kind = spotifyState(now);
+    if (kind !== "playing" && kind !== "paused") return null;
+    return typeof now.cover === "string" && now.cover ? now.cover : null;
+  }
+
+  function progressAt(now, sinceMs) {
+    if (!now || typeof now.progress_ms !== "number") return 0;
+    var ms = now.progress_ms + (now.playing ? Math.max(0, sinceMs || 0) : 0);
+    return now.duration_ms ? Math.min(ms, now.duration_ms) : ms;
+  }
+
+  function volumeStep(volume, delta) {
+    var v = typeof volume === "number" ? volume : 50;
+    return Math.max(0, Math.min(100, v + delta));
+  }
+
+  function speakerOn(sound) {
+    return !!(sound && sound.speaker && sound.speaker.connected);
+  }
+
   var CLOUD = '<path d="M18 52h30a10 10 0 0 0 0-20a13 13 0 0 0-25-4a10 10 0 0 0-5 24z" ' +
     'fill="#ffffff" stroke="#000000" stroke-width="2"/>';
   var CLOUD_UP = '<g transform="translate(0,-10)">' + CLOUD + "</g>";
@@ -320,6 +368,20 @@
     snow: CLOUD_UP + SNOW,
     thunder: CLOUD_UP + '<path d="M36 40l-10 13h7l-4 11 13-15h-7l5-9z" fill="#ffff00" stroke="#000000" stroke-width="1.5"/>',
   };
+
+  var SP_ICONS = {
+    play: '<path d="M8 4v16l12-8z"/>',
+    pause: '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>',
+    previous: '<path d="M5 4h3v16H5zM9 12l11-8v16z"/>',
+    next: '<path d="M16 4h3v16h-3zM4 4l11 8-11 8z"/>',
+    speaker: '<path d="M3 9h4l6-5v16l-6-5H3z"/>',
+    note: '<path d="M9 18V6l11-3v12" fill="none" stroke="#000000" stroke-width="2"/>' +
+      '<circle cx="6" cy="18" r="3"/><circle cx="17" cy="15" r="3"/>',
+  };
+
+  function spotSvg(name) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + SP_ICONS[name] + "</svg>";
+  }
 
   function iconSvg(name) {
     return '<svg viewBox="0 0 64 64" aria-hidden="true">' + (ICONS[name] || CLOUD) + "</svg>";
@@ -636,6 +698,133 @@
     return days;
   }
 
+  function spotButton(action, label, icon, text) {
+    var b = el("button", "sp-btn sp-" + action);
+    b.type = "button";
+    b.setAttribute("data-sp", action);
+    b.setAttribute("aria-label", label);
+    if (icon) b.innerHTML = spotSvg(icon);
+    if (text) b.appendChild(el("span", "", text));
+    return b;
+  }
+
+  function spotImage(cls, url) {
+    var box = el(cls === "sp-cover" ? "div" : "span", cls + (url ? "" : " none"));
+    if (url) {
+      var img = el("img");
+      img.alt = "";
+      img.src = url;
+      box.appendChild(img);
+    } else {
+      box.innerHTML = spotSvg("note");
+    }
+    return box;
+  }
+
+  function toggleButton(kind) {
+    return kind === "playing" ? spotButton("toggle", "Pause", "pause") : spotButton("toggle", "Play", "play");
+  }
+
+  function transport(kind) {
+    var row = el("div", "sp-transport");
+    row.appendChild(spotButton("previous", "Previous", "previous"));
+    row.appendChild(toggleButton(kind));
+    row.appendChild(spotButton("next", "Next", "next"));
+    return row;
+  }
+
+  function speakerButton(sp) {
+    var on = speakerOn(sp.sound);
+    var text = on ? "Speaker connected" : "Speaker not connected";
+    if (sp.connecting) text = on ? "Disconnecting..." : "Connecting...";
+    var b = spotButton("speaker", text, "speaker", text);
+    if (on) b.classList.add("on");
+    return b;
+  }
+
+  function playlistRows(shown) {
+    var ul = el("ul", "sp-pls");
+    if (!shown || !shown.length) ul.appendChild(el("li", "none", NO_PLAYLISTS_TEXT));
+    (shown || []).forEach(function (p) {
+      var li = el("li");
+      var b = el("button", "sp-pl");
+      b.type = "button";
+      b.setAttribute("data-playlist", p.id);
+      b.appendChild(spotImage("sp-thumb", p.cover));
+      b.appendChild(el("span", "sp-name", p.name || "Playlist"));
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
+  function spotBody(layout, kind, now, sp) {
+    var box = el("div", "sp sp-" + layout + " " + kind);
+    if (kind === "unlinked") {
+      box.appendChild(el("p", "tv-msg", NOT_LINKED_TEXT));
+      return box;
+    }
+    var live = kind !== "idle";
+    var cover = spotImage("sp-cover", coverUrl(now));
+    box.appendChild(cover);
+    if (layout === "tile") {
+      if (live) cover.appendChild(toggleButton(kind));
+      box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
+    } else {
+      var info = el("div", "sp-info");
+      info.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
+      if (live && now.artist) info.appendChild(el("div", "sp-artist", now.artist));
+      if (live && layout === "full") {
+        var prog = el("div", "sp-progress");
+        prog.appendChild(el("span", "sp-elapsed", "0:00"));
+        prog.appendChild(el("span", "sp-bar")).appendChild(el("i"));
+        prog.appendChild(el("span", "sp-total", formatMs(now.duration_ms)));
+        info.appendChild(prog);
+      }
+      if (live) info.appendChild(transport(kind));
+      if (layout === "full") {
+        if (live) {
+          var vol = el("div", "sp-volume");
+          vol.appendChild(spotButton("vol-down", "Volume down", null, "-"));
+          vol.appendChild(el("span", "sp-vol", typeof now.volume === "number" ? now.volume + "%" : "--%"));
+          vol.appendChild(spotButton("vol-up", "Volume up", null, "+"));
+          info.appendChild(vol);
+        }
+        info.appendChild(speakerButton(sp));
+      }
+      box.appendChild(info);
+      if (layout === "full") box.appendChild(playlistRows(sp.shown));
+    }
+    if (sp.note) box.appendChild(el("p", "sp-msg", sp.note));
+    return box;
+  }
+
+  function renderSpotify(card, widget, ctx) {
+    var sp = ctx.spotify || {};
+    var now = sp.now;
+    var kind = spotifyState(now);
+    var layout = spotifyLayout(widget);
+    var full = layout === "full";
+    var sig = JSON.stringify([layout, kind, kind === "unlinked" || !now ? null : [now.track, now.artist, now.cover,
+      now.duration_ms, now.volume], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
+    var body = card.querySelector(".sp");
+    if (!body || body.getAttribute("data-sig") !== sig) {
+      var oldList = body && body.querySelector(".sp-pls");
+      var scroll = oldList ? oldList.scrollTop : 0;
+      if (body) card.removeChild(body);
+      body = spotBody(layout, kind, now, sp);
+      body.setAttribute("data-sig", sig);
+      card.appendChild(body);
+      var list = body.querySelector(".sp-pls");
+      if (list) list.scrollTop = scroll;
+    }
+    var bar = body.querySelector(".sp-bar i");
+    if (!bar) return;
+    var ms = progressAt(now, sp.since);
+    bar.style.width = (now.duration_ms ? Math.min(100, ms / now.duration_ms * 100) : 0) + "%";
+    body.querySelector(".sp-elapsed").textContent = formatMs(ms);
+  }
+
   var WIDGETS = {
     clock: {
       mount: function (card, widget, ctx) {
@@ -695,6 +884,13 @@
         return w && w.ok && w.location ? w.location : "Weather";
       },
     },
+    spotify: {
+      mount: function (card, widget, ctx) {
+        WIDGETS.spotify.update(card, widget, ctx);
+      },
+      update: renderSpotify,
+      title: function () { return "Spotify"; },
+    },
   };
 
   var TvScreen = {
@@ -739,6 +935,13 @@
     clockAt: clockAt,
     asOf: asOf,
     iconSvg: iconSvg,
+    formatMs: formatMs,
+    spotifyLayout: spotifyLayout,
+    spotifyState: spotifyState,
+    coverUrl: coverUrl,
+    progressAt: progressAt,
+    volumeStep: volumeStep,
+    speakerOn: speakerOn,
   };
 
   root.TvScreen = TvScreen;
@@ -762,6 +965,8 @@
   var lastSwipe = 0;
   var drag = null;
   var sliding = false;
+  var spot = { on: false, seq: 0, polls: 0, timer: null, tick: null, now: null, at: 0, shown: [], sound: null,
+    note: null, noteTimer: null, connecting: false };
 
   function context() {
     var now = new Date();
@@ -770,6 +975,14 @@
       lists: state.data.lists,
       events: state.data.events,
       weather: state.data.weather,
+      spotify: {
+        now: spot.now,
+        since: now.getTime() - spot.at,
+        shown: spot.shown,
+        sound: spot.sound,
+        note: spot.note,
+        connecting: spot.connecting,
+      },
       now: now,
       today: C.localToday(now),
     };
@@ -827,6 +1040,7 @@
     countEl.textContent = screenLabel(state.screens, screen);
     var widgets = screen ? screen.widgets : [];
     if (state.settings.channel !== dayChannel) closeDay();
+    syncSpotify();
     if (key !== builtKey) {
       builtKey = key;
       closeDay();
@@ -848,6 +1062,144 @@
       if (!r.ok) throw new Error(r.status);
       return r.json();
     });
+  }
+
+  function spotifyWidgets() {
+    if (!state.settings) return [];
+    var screen = currentScreen(state.screens, state.settings.screen_id);
+    return screen ? screen.widgets.filter(function (w) { return w.kind === "spotify"; }) : [];
+  }
+
+  function spotifyWanted() {
+    return document.visibilityState !== "hidden" && !!state.settings && state.settings.channel === "screen" &&
+      spotifyWidgets().length > 0;
+  }
+
+  function syncSpotify() {
+    var want = spotifyWanted();
+    if (want === spot.on) return;
+    spot.on = want;
+    spot.seq++;
+    clearTimeout(spot.timer);
+    clearInterval(spot.tick);
+    spot.timer = spot.tick = null;
+    if (!want) return;
+    spot.polls = 0;
+    spot.tick = setInterval(renderSpotifyCards, SPOTIFY_TICK_MS);
+    pollSpotify();
+  }
+
+  function renderSpotifyCards() {
+    if (!state.settings || drag) return;
+    var screen = currentScreen(state.screens, state.settings.screen_id);
+    if (!screen || layoutKey(screen) !== builtKey) return;
+    var ctx = context();
+    var cards = screenEl.querySelectorAll(".tv-card[data-kind]");
+    screen.widgets.forEach(function (w, i) {
+      if (w.kind === "spotify" && cards[i]) WIDGETS.spotify.update(cards[i], w, ctx);
+    });
+  }
+
+  function pollSpotify() {
+    var seq = ++spot.seq;
+    clearTimeout(spot.timer);
+    spot.timer = null;
+    if (!spot.on) return;
+    var jobs = [getJSON("/api/spotify/now").then(function (now) {
+      if (seq !== spot.seq) return;
+      spot.now = now;
+      spot.at = Date.now();
+    })];
+    if (spotifyWidgets().some(isFull) && spot.polls % SPOTIFY_EXTRA_EVERY === 0) {
+      jobs.push(getJSON("/api/spotify/shown").then(function (shown) {
+        if (seq === spot.seq) spot.shown = shown;
+      }));
+      jobs.push(getJSON("/api/sound/status").then(function (sound) {
+        if (seq === spot.seq && !spot.connecting) spot.sound = sound;
+      }));
+    }
+    spot.polls++;
+    Promise.all(jobs.map(function (job) { return job.catch(function () {}); })).then(function () {
+      if (seq !== spot.seq || !spot.on) return;
+      renderSpotifyCards();
+      spot.timer = setTimeout(pollSpotify, SPOTIFY_POLL_MS);
+    });
+  }
+
+  function spotifyNote(text) {
+    spot.note = text;
+    clearTimeout(spot.noteTimer);
+    spot.noteTimer = setTimeout(function () {
+      spot.note = null;
+      renderSpotifyCards();
+    }, SPOTIFY_NOTE_MS);
+    renderSpotifyCards();
+  }
+
+  function errorText(r, fallback) {
+    return r.json().catch(function () { return {}; }).then(function (out) {
+      return r.status === 409 && typeof out.detail === "string" ? out.detail : fallback;
+    });
+  }
+
+  function spotifyCall(method, url, body) {
+    spot.seq++;
+    clearTimeout(spot.timer);
+    renderSpotifyCards();
+    var opts = { method: method };
+    if (body) {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(url, opts).then(function (r) {
+      if (!r.ok) return errorText(r, SPOTIFY_DOWN_TEXT).then(spotifyNote);
+    }, function () {
+      spotifyNote(SPOTIFY_DOWN_TEXT);
+    }).then(function () {
+      if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
+    });
+  }
+
+  function toggleSpeaker() {
+    if (spot.connecting) return;
+    var on = speakerOn(spot.sound);
+    spot.connecting = true;
+    renderSpotifyCards();
+    fetch(on ? "/api/sound/disconnect" : "/api/sound/connect", { method: "POST" }).then(function (r) {
+      if (!r.ok) return errorText(r, SPEAKER_DOWN_TEXT).then(spotifyNote);
+      return r.json().then(function (out) {
+        var speaker = Object.assign({}, spot.sound && spot.sound.speaker, { connected: !!out.connected });
+        spot.sound = Object.assign({}, spot.sound, { speaker: speaker });
+      });
+    }).catch(function () {
+      spotifyNote(SPEAKER_DOWN_TEXT);
+    }).then(function () {
+      spot.connecting = false;
+      renderSpotifyCards();
+    });
+  }
+
+  function spotifyTap(btn) {
+    var now = spot.now || {};
+    if (btn.hasAttribute("data-playlist")) {
+      spotifyCall("POST", "/api/spotify/play-playlist", { id: btn.getAttribute("data-playlist") });
+      return;
+    }
+    var action = btn.getAttribute("data-sp");
+    if (action === "speaker") {
+      toggleSpeaker();
+    } else if (action === "toggle") {
+      var playing = !!now.playing;
+      now.progress_ms = progressAt(now, Date.now() - spot.at);
+      now.playing = !playing;
+      spot.at = Date.now();
+      spotifyCall("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
+    } else if (action === "previous" || action === "next") {
+      spotifyCall("POST", "/api/spotify/" + action);
+    } else if (action === "vol-down" || action === "vol-up") {
+      now.volume = volumeStep(now.volume, action === "vol-up" ? VOLUME_STEP : -VOLUME_STEP);
+      spotifyCall("PUT", "/api/spotify/volume", { percent: now.volume });
+    }
   }
 
   function dataUrl(key) {
@@ -1082,6 +1434,11 @@
 
   function onClick(e) {
     if (Date.now() - lastSwipe < SWIPE_CLICK_MS) return;
+    var sp = e.target.closest ? e.target.closest("[data-sp], [data-playlist]") : null;
+    if (sp) {
+      spotifyTap(sp);
+      return;
+    }
     var row = e.target.closest ? e.target.closest("[data-item]") : null;
     if (row) {
       setDone(Number(row.getAttribute("data-item")), !row.classList.contains("done"));
@@ -1104,6 +1461,7 @@
   document.getElementById("day-close").addEventListener("click", closeDay);
   document.getElementById("day-backdrop").addEventListener("click", closeDay);
   window.addEventListener("resize", render);
+  document.addEventListener("visibilitychange", syncSpotify);
   updateClock();
   setTimeout(atMidnight, msToMidnight(new Date()));
   load().then(connect);

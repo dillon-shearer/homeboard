@@ -98,7 +98,7 @@ def test_current_screen_and_needs():
     assert result["needsA"] == ["events", "lists"]
     assert result["needsB"] == []
     assert result["needsNull"] == []
-    assert result["kinds"] == ["calendar", "clock", "lists", "weather"]
+    assert result["kinds"] == ["calendar", "clock", "lists", "spotify", "weather"]
     assert result["label"] == "Screen 2 of 2"
 
 

@@ -24,8 +24,8 @@ def test_connect_pragmas(conn):
 
 
 def test_migrate_twice_is_idempotent(conn):
-    assert db.migrate(conn) == 16
-    assert conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0] == 16
+    assert db.migrate(conn) == 17
+    assert conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0] == 17
     assert conn.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 1
 
 
