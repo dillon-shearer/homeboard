@@ -26,6 +26,7 @@ SETTINGS_FIELDS = (
     "date_show",
     "brightness",
     "weather_location",
+    "speaker_idle_minutes",
 )
 FITS = ("contain", "cover")
 CHANNELS = ("photos", "screen")
@@ -239,6 +240,10 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
         v = fields["brightness"]
         if isinstance(v, bool) or not isinstance(v, int) or not 10 <= v <= 100:
             raise ValueError("brightness must be an integer from 10 to 100")
+    if "speaker_idle_minutes" in fields:
+        v = fields["speaker_idle_minutes"]
+        if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= 120:
+            raise ValueError("speaker_idle_minutes must be an integer from 1 to 120")
     if "screen_id" in fields:
         fields["screen_id"] = _check_screen_id(conn, fields["screen_id"])
     if "weather_location" in fields:

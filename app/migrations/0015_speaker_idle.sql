@@ -1,0 +1,1 @@
+ALTER TABLE settings ADD COLUMN speaker_idle_minutes INTEGER NOT NULL DEFAULT 10;

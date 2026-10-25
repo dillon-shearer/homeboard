@@ -14,6 +14,8 @@ DNS_CREDENTIALS="$ETC_DIR/dns-credentials.ini"
 API_DROPIN_DIR=/etc/systemd/system/homeboard-api.service.d
 TUNNEL_ENV="$ETC_DIR/tunnel.env"
 PASSWORD_HASH="$ETC_DIR/tunnel-password.hash"
+SPEAKER_ENV="$ETC_DIR/speaker.env"
+BT_CONF=/etc/bluetooth/main.conf
 
 HOST=""
 DNS=""
@@ -22,6 +24,7 @@ NEW_TOKEN=0
 TUNNEL=0
 NEW_TUNNEL_TOKEN=0
 NEW_PASSWORD=0
+PAIR_SPEAKER=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --host) HOST="${2:?--host needs a value}"; shift 2 ;;
@@ -31,6 +34,7 @@ while [ $# -gt 0 ]; do
         --tunnel) TUNNEL=1; shift ;;
         --new-tunnel-token) TUNNEL=1; NEW_TUNNEL_TOKEN=1; shift ;;
         --new-password) TUNNEL=1; NEW_PASSWORD=1; shift ;;
+        --pair-speaker) PAIR_SPEAKER=1; shift ;;
         -*) echo "Unknown option: $1" >&2; exit 1 ;;
         *) REPO_URL="$1"; shift ;;
     esac
@@ -46,6 +50,10 @@ if [ -s "$TUNNEL_ENV" ]; then
 fi
 if [ "$TUNNEL" -eq 1 ] && [ ! -r /dev/tty ] && { [ "$NEW_TUNNEL_TOKEN" -eq 1 ] || [ "$NEW_PASSWORD" -eq 1 ] || [ ! -s "$TUNNEL_ENV" ] || [ ! -s "$PASSWORD_HASH" ]; }; then
     echo "No terminal to ask for the tunnel token or password; run this from an SSH window" >&2
+    exit 1
+fi
+if [ "$PAIR_SPEAKER" -eq 1 ] && [ ! -r /dev/tty ]; then
+    echo "No terminal to pick the speaker; run this from an SSH window" >&2
     exit 1
 fi
 
@@ -77,7 +85,8 @@ systemctl stop homeboard-api.service 2>/dev/null || true
 trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg
+    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg \
+    bluez pipewire pipewire-pulse wireplumber libspa-0.2-bluetooth
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
 fi
@@ -95,7 +104,7 @@ if ! id homeboard >/dev/null 2>&1; then
 fi
 
 if id "$KIOSK_USER" >/dev/null 2>&1; then
-    usermod -aG video,render,input "$KIOSK_USER"
+    usermod -aG video,render,input,bluetooth "$KIOSK_USER"
     if [ "$(id -u "$KIOSK_USER")" -ne 1000 ]; then
         echo "Warning: $KIOSK_USER is not uid 1000; edit XDG_RUNTIME_DIR in homeboard-kiosk.service" >&2
     fi
@@ -296,6 +305,20 @@ else
 fi
 nginx -t
 
+echo "== Sound"
+install -d -m 755 /etc/wireplumber/bluetooth.lua.d /etc/wireplumber/wireplumber.conf.d
+printf 'bluez_monitor.properties["with-logind"] = false\n' \
+    > /etc/wireplumber/bluetooth.lua.d/80-homeboard.lua
+printf 'wireplumber.profiles = {\n  main = {\n    monitor.bluez.seat-monitoring = disabled\n  }\n}\n' \
+    > /etc/wireplumber/wireplumber.conf.d/80-homeboard.conf
+systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service
+if id "$KIOSK_USER" >/dev/null 2>&1; then
+    loginctl enable-linger "$KIOSK_USER"
+    systemctl --machine="$KIOSK_USER@.host" --user enable \
+        pipewire.socket pipewire-pulse.socket wireplumber.service || true
+    systemctl --machine="$KIOSK_USER@.host" --user restart wireplumber.service || true
+fi
+
 echo "== Enabling services"
 systemctl daemon-reload
 systemctl disable getty@tty1.service || true
@@ -303,6 +326,8 @@ systemctl enable \
     homeboard-api.service \
     homeboard-kiosk.service \
     homeboard-preload.service \
+    homeboard-helper.service \
+    bluetooth.service \
     wifi-powersave-off.service \
     homeboard-kiosk-restart.timer \
     homeboard-backup.timer \
@@ -317,6 +342,67 @@ if [ "$TUNNEL" -eq 1 ]; then
 else
     systemctl disable --now homeboard-tunnel.service 2>/dev/null || true
 fi
+
+echo "== Bluetooth"
+BT_RESTART=0
+if [ ! -f "$BT_CONF" ] || ! grep -qx 'AutoEnable=true' "$BT_CONF"; then
+    if [ -f "$BT_CONF" ] && grep -Eq '^#?AutoEnable=' "$BT_CONF"; then
+        sed -i -E 's/^#?AutoEnable=.*/AutoEnable=true/' "$BT_CONF"
+    else
+        printf '\n[Policy]\nAutoEnable=true\n' >> "$BT_CONF"
+    fi
+    BT_RESTART=1
+fi
+if command -v rfkill >/dev/null 2>&1; then
+    rfkill unblock bluetooth || true
+fi
+if [ "$BT_RESTART" -eq 1 ]; then
+    systemctl restart bluetooth.service
+else
+    systemctl start bluetooth.service
+fi
+if [ "$PAIR_SPEAKER" -eq 1 ]; then
+    echo "== Pairing the speaker"
+    echo "Put the soundbar in Bluetooth pairing mode with its remote now."
+    echo "Looking for Bluetooth devices for 15 seconds..."
+    bluetoothctl power on >/dev/null || true
+    bluetoothctl --timeout 300 scan on >/dev/null 2>&1 &
+    SCAN_PID=$!
+    sleep 15
+    mapfile -t FOUND < <(bluetoothctl devices \
+        | sed -n -E 's/^Device ([0-9A-F:]{17}) (.+)$/\1 \2/p' \
+        | grep -Ev '^[0-9A-F:]{17} [0-9A-F]{2}(-[0-9A-F]{2}){5}$' || true)
+    if [ "${#FOUND[@]}" -eq 0 ]; then
+        kill "$SCAN_PID" 2>/dev/null || true
+        echo "No Bluetooth devices found. Put the soundbar in Bluetooth pairing mode with its remote and run: sudo bash $APP_DIR/deploy/install.sh --pair-speaker" >&2
+        exit 1
+    fi
+    for i in "${!FOUND[@]}"; do
+        printf '%3d) %s\n' "$((i + 1))" "${FOUND[$i]#* }"
+    done
+    echo "If the soundbar is not in the list, press Enter, put it in Bluetooth pairing mode with its remote and run: sudo bash $APP_DIR/deploy/install.sh --pair-speaker"
+    read -rp "Type the number of the soundbar and press Enter: " CHOICE < /dev/tty
+    kill "$SCAN_PID" 2>/dev/null || true
+    if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "${#FOUND[@]}" ]; then
+        echo "No speaker picked; the stored speaker is unchanged" >&2
+        exit 1
+    fi
+    SPEAKER_MAC="${FOUND[$((CHOICE - 1))]%% *}"
+    SPEAKER_INFO="$(bluetoothctl info "$SPEAKER_MAC" || true)"
+    if [[ "$SPEAKER_INFO" != *"Paired: yes"* ]]; then
+        if ! timeout 60 bluetoothctl pair "$SPEAKER_MAC"; then
+            echo "Pairing failed. Put the soundbar in Bluetooth pairing mode with its remote and run: sudo bash $APP_DIR/deploy/install.sh --pair-speaker" >&2
+            exit 1
+        fi
+    fi
+    bluetoothctl trust "$SPEAKER_MAC"
+    install -d -m 700 -o root -g root "$ETC_DIR"
+    (umask 077 && printf 'SPEAKER_MAC=%s\n' "$SPEAKER_MAC" > "$SPEAKER_ENV")
+    if ! timeout 60 bluetoothctl connect "$SPEAKER_MAC"; then
+        echo "Warning: paired the speaker but could not connect yet; try: curl -s -X POST 127.0.0.1:8002/connect" >&2
+    fi
+fi
+systemctl restart homeboard-helper.service
 
 echo
 echo "Install finished. reboot now: sudo reboot"

@@ -108,7 +108,7 @@ def test_kiosk_shows_the_cover_before_chromium():
 
 def test_install_draws_the_still_and_enables_preload():
     text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
-    assert " rsync swayimg\n" in text
+    assert " rsync swayimg \\\n" in text
     assert "install -d -m 755 /var/cache/homeboard" in text
     assert "rm -f /var/cache/homeboard/boot.png\n" in text
     assert '"$APP_DIR/deploy/splash/still.py" /var/cache/homeboard/boot.gif' in text
