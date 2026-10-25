@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app import events, routes_sound, spotify
 from app.main import create_app
-from tests.chrome import api, needs_chrome
+from tests.chrome import api, needs_chrome, needs_node
 from tests.test_control_panel import DOWN, OPEN, _load, _swipe
 from tests.test_helper import helperd
 from tests.test_now_playing_cover import _seed
@@ -26,6 +26,62 @@ from tests.test_tv_screen import _show_screen, _sp_setup
 from tests.test_tv_spotify import _playing, _png
 
 HTTP_FETCH = spotify.fetch
+
+
+@needs_node
+@pytest.mark.parametrize("scenario", ["clock", "date", "cover"])
+def test_settings_baseline_scenarios_with_document_events(monkeypatch, scenario):
+    from tests import test_clock_caption_form as form
+    from tests import test_now_playing_cover as cover
+    from tests import test_tv_admin as tv
+
+    monkeypatch.setattr(
+        form,
+        "PAGE_STUB",
+        form.PAGE_STUB + "\nconst reviewDocumentEvents = new EventTarget();"
+        "document.addEventListener = reviewDocumentEvents.addEventListener.bind(reviewDocumentEvents);"
+        "document.dispatchEvent = reviewDocumentEvents.dispatchEvent.bind(reviewDocumentEvents);",
+    )
+    cases = {
+        "clock": form.test_stack_row_shows_only_when_spots_match,
+        "date": tv.test_tv_date_stack_row_and_date_radios_put_one_field,
+        "cover": cover.test_cover_controls_put_cover_keys,
+    }
+    cases[scenario]()
+
+
+@needs_chrome
+@pytest.mark.xfail(strict=True, reason="Photo SSE hello does not reconcile missed playback changes")
+def test_photo_cover_resyncs_on_hello_after_startup_gap(chrome, server, surface_player):
+    _seed(server)
+    hook = chrome.send(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {
+            "source": "const reviewFetchBeforeStart = window.fetch;"
+            "window.fetch = function(url, opts) {"
+            "if (url === '/api/photos' && !window.reviewPhotosHeld) {"
+            "window.reviewPhotosHeld = true;"
+            "return new Promise(resolve => { window.reviewReleasePhotos = () => "
+            "resolve(reviewFetchBeforeStart.call(window, url, opts)); }); }"
+            "return reviewFetchBeforeStart.apply(this, arguments); };"
+        },
+    )
+    try:
+        chrome.send("Page.navigate", {"url": server + "/"})
+        chrome.wait("window.reviewReleasePhotos && !document.getElementById('cover').hidden")
+        assert chrome.eval("__test.heard('hello')") == 0
+        surface_player.now = _playing(track="Missed change", cover=_png((40, 120, 80), 200))
+        events.publish("spotify_changed")
+        chrome.eval("reviewReleasePhotos()")
+        chrome.wait("__test.heard('hello') > 0")
+        chrome.run("__test.settle()")
+        chrome.wait("window.__inflight === 0")
+        assert (
+            chrome.eval("document.getElementById('cover').getAttribute('src')")
+            == (surface_player.now["cover"])
+        )
+    finally:
+        chrome.send("Page.removeScriptToEvaluateOnNewDocument", {"identifier": hook["identifier"]})
 
 
 @pytest.fixture
