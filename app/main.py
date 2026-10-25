@@ -18,6 +18,7 @@ from app.routes_lists import router as lists_router
 from app.routes_photos import router as photos_router
 from app.routes_settings import lan_ip
 from app.routes_settings import router as settings_router
+from app.routes_sound import router as sound_router
 
 APP_DIR = Path(__file__).resolve().parent
 BOOT_HTML = APP_DIR.parent / "deploy" / "splash" / "boot.html"
@@ -83,6 +84,7 @@ def create_app(data_dir=None) -> FastAPI:
     app.include_router(settings_router)
     app.include_router(lists_router)
     app.include_router(calendar_router)
+    app.include_router(sound_router)
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
     app.mount("/photos", ImmutableStaticFiles(directory=photos_dir), name="photos")
     app.mount("/thumbs", ImmutableStaticFiles(directory=thumbs_dir), name="thumbs")

@@ -39,6 +39,7 @@ class SettingsPatch(BaseModel):
     date_show: bool | None = None
     brightness: int | None = None
     weather_location: str | None = None
+    speaker_idle_minutes: int | None = None
 
 
 class DisplayCurrent(BaseModel):
@@ -69,6 +70,7 @@ def settings_dict(row: sqlite3.Row) -> dict:
         "weather_lat": row["weather_lat"],
         "weather_lon": row["weather_lon"],
         "weather_name": row["weather_name"],
+        "speaker_idle_minutes": row["speaker_idle_minutes"],
         "updated_at": row["updated_at"],
     }
 

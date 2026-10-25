@@ -23,7 +23,7 @@ def _db_at_version_10(path):
 def test_fresh_database_has_no_old_tv_columns(tmp_path):
     conn = db.connect(tmp_path / "fresh.db")
     try:
-        assert db.migrate(conn) == 14
+        assert db.migrate(conn) == 15
         cols = _columns(conn)
         assert "show_on_tv" not in cols and "screen_id" not in cols
         assert cols == ["id", "name", "kind", "sort_order", "created_at", "tv_open"]
@@ -54,7 +54,7 @@ def test_upgrade_keeps_lists_items_and_widgets(tmp_path):
         items_before = [dict(r) for r in conn.execute("SELECT * FROM list_items ORDER BY id")]
         widgets_before = [dict(r) for r in conn.execute("SELECT * FROM widgets ORDER BY id")]
 
-        assert db.migrate(conn) == 14
+        assert db.migrate(conn) == 15
 
         cols = _columns(conn)
         assert "show_on_tv" not in cols and "screen_id" not in cols

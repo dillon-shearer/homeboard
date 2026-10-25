@@ -13,6 +13,7 @@ UNITS = [
     "homeboard-backup.service",
     "homeboard-backup.timer",
     "wifi-powersave-off.service",
+    "homeboard-helper.service",
 ]
 
 
@@ -225,3 +226,35 @@ def test_install_cmdline_words_drop_splash():
     words = line.split("(", 1)[1].rstrip(")").split()
     assert words == ["quiet", "loglevel=0", "logo.nologo", "vt.global_cursor_default=0"]
     assert "loglevel=* | splash | plymouth.*) continue ;;" in text
+
+
+def test_helper_service_is_installed_and_enabled():
+    p = load("homeboard-helper.service")
+    s = p["Service"]
+    assert s["User"] == "dillon"
+    assert s["Restart"] == "always"
+    assert s["ExecStart"] == "/usr/bin/python3 /opt/homeboard/deploy/helper/helperd.py"
+    assert s["EnvironmentFile"] == "-/etc/homeboard/speaker.env"
+    assert "NoNewPrivileges" not in s
+    assert p["Install"]["WantedBy"] == "multi-user.target"
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert 'install -m 644 "$APP_DIR"/deploy/*.service' in text
+    enable = text.split("systemctl enable \\\n", 1)[1].split("\n\n", 1)[0]
+    assert "    homeboard-helper.service \\\n" in enable
+    assert "systemctl restart homeboard-helper.service" in text
+
+
+def test_install_sets_up_bluetooth_audio():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    packages = text.split("apt-get install -y \\\n", 1)[1].split("\nif ", 1)[0].split()
+    for name in ["bluez", "pipewire", "pipewire-pulse", "wireplumber", "libspa-0.2-bluetooth"]:
+        assert name in packages
+    assert 'loginctl enable-linger "$KIOSK_USER"' in text
+    assert "--pair-speaker) PAIR_SPEAKER=1; shift ;;" in text
+    assert 'SPEAKER_ENV="$ETC_DIR/speaker.env"' in text
+    assert "printf 'SPEAKER_MAC=%s\\n'" in text
+    assert "AutoEnable=true" in text
+    assert "pairing mode with its remote" in text
+    pair = text.split("== Pairing the speaker", 1)[1]
+    assert pair.index("bluetoothctl pairable on") < pair.index('bluetoothctl pair "$SPEAKER_MAC"')
+    assert '*"Bonded: yes"*' in pair

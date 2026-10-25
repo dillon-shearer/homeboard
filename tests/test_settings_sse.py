@@ -43,6 +43,7 @@ def test_put_interval_persists(client):
         "weather_lat",
         "weather_lon",
         "weather_name",
+        "speaker_idle_minutes",
         "updated_at",
     }
 

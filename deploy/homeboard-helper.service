@@ -1,0 +1,15 @@
+[Unit]
+Description=Home Board helper for the speaker and reboot
+After=bluetooth.service network.target
+Wants=bluetooth.service
+
+[Service]
+User=dillon
+EnvironmentFile=-/etc/homeboard/speaker.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/homeboard/deploy/helper/helperd.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
