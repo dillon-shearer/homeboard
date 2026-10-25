@@ -78,6 +78,11 @@ def now(request: Request):
     return _call(spotify.now_playing, _data_dir(request))
 
 
+@router.get("/me")
+def me(request: Request):
+    return _call(spotify.profile, _data_dir(request))
+
+
 @router.post("/play")
 def play(request: Request):
     return _call(spotify.control, _data_dir(request), "PUT", "/me/player/play")

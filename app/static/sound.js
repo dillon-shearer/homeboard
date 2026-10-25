@@ -9,6 +9,7 @@
   var NO_CREDS = "Spotify is not set up on the Pi yet. See PI_SETUP.md, Spotify.";
 
   var linked = null;
+  var displayName = null;
   var shownIds = {};
   var playlists = [];
   var idle = null;
@@ -59,7 +60,8 @@
     var was = linked;
     if (s.linked) {
       linked = true;
-      $("spotify-state").textContent = s.display_name ? "Linked as " + s.display_name : "Linked to Spotify";
+      if (s.display_name) displayName = s.display_name;
+      $("spotify-state").textContent = displayName ? "Linked as " + displayName : "Linked to Spotify";
     } else if (s.reason === "no credentials") {
       linked = false;
       $("spotify-state").textContent = NO_CREDS;
@@ -77,7 +79,19 @@
       track.textContent = "";
       track.hidden = true;
     }
-    if (was !== linked) loadPlaylists();
+    if (!linked) displayName = null;
+    if (was !== linked) {
+      loadPlaylists();
+      if (linked) loadProfile();
+    }
+  }
+
+  function loadProfile() {
+    return getJSON("/api/spotify/me").then(function (p) {
+      if (!linked || !p.display_name) return;
+      displayName = p.display_name;
+      $("spotify-state").textContent = "Linked as " + displayName;
+    }).catch(function () {});
   }
 
   function loadNow() {
