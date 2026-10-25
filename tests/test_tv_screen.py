@@ -276,7 +276,7 @@ FACE = """JSON.stringify((() => {
 })())"""
 
 
-def _face(base, tmp_path, w, h):  # noqa: F811
+def _face(base, tmp_path, w, h):
     screen = httpx.post(f"{base}/api/screens", json={"name": f"Clock {w}x{h}"}).json()
     r = httpx.post(
         f"{base}/api/screens/{screen['id']}/widgets",
