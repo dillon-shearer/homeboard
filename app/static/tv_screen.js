@@ -163,6 +163,31 @@
     });
   }
 
+  function dayLabel(iso) {
+    var d = C.parseIso(iso);
+    return SHORT_DAYS[d.getUTCDay()] + ", " + SHORT_MONTHS[d.getUTCMonth()] + " " + d.getUTCDate();
+  }
+
+  function nextEvent(occurrences, today) {
+    return comingUp(occurrences, today)[0] || null;
+  }
+
+  function weekDays(occurrences, today) {
+    var out = [];
+    for (var i = 0; i < UPCOMING_DAYS; i++) {
+      var date = C.addDays(today, i);
+      var d = C.parseIso(date);
+      out.push({
+        date: date,
+        name: SHORT_DAYS[d.getUTCDay()],
+        day: d.getUTCDate(),
+        today: i === 0,
+        chips: between(occurrences, date, date).map(chipText),
+      });
+    }
+    return out;
+  }
+
   function eventRange(today) {
     var cells = C.gridDays(Number(today.slice(0, 4)), Number(today.slice(5, 7)));
     var end = cells[cells.length - 1].date;
@@ -416,6 +441,54 @@
     fitDay(box);
   }
 
+  function renderOne(card, ctx) {
+    var box = el("div", "tv-cal-day one");
+    var todayUl = el("ul", "today-list");
+    var now = todayEvents(ctx.events, ctx.today);
+    now.forEach(function (e) {
+      var li = el("li", "ev-row");
+      li.appendChild(el("b", "t", e.time));
+      li.appendChild(document.createTextNode(e.title));
+      todayUl.appendChild(li);
+    });
+    box.appendChild(todayUl);
+    if (!now.length) {
+      todayUl.appendChild(el("li", "none", "Nothing today"));
+      var upUl = el("ul", "tv-up-list");
+      var next = nextEvent(ctx.events, ctx.today);
+      if (next) {
+        var li = el("li", "ev-row", next.title);
+        li.appendChild(el("small", "", next.when));
+        upUl.appendChild(li);
+      } else {
+        upUl.appendChild(el("li", "none", "Nothing coming up"));
+      }
+      box.appendChild(upUl);
+    }
+    card.appendChild(box);
+    fitDay(box);
+  }
+
+  function renderWeek(card, ctx) {
+    var grid = el("div", "tv-cal-grid tv-week");
+    weekDays(ctx.events, ctx.today).forEach(function (w) {
+      var cell = el("div", "d" + (w.today ? " today" : ""));
+      cell.setAttribute("data-date", w.date);
+      var head = el("div", "dh");
+      head.appendChild(el("span", "wd", w.name));
+      head.appendChild(el("b", "", String(w.day)));
+      cell.appendChild(head);
+      var list = el("div", "chips");
+      w.chips.forEach(function (text) {
+        list.appendChild(el("i", "ev", text));
+      });
+      cell.appendChild(list);
+      grid.appendChild(cell);
+    });
+    card.appendChild(grid);
+    fitChips(grid);
+  }
+
   function itemList(list) {
     var notes = list.kind === "notes";
     var ul = el("ul");
@@ -585,13 +658,19 @@
         WIDGETS.calendar.update(card, widget, ctx);
       },
       update: function (card, widget, ctx) {
-        var old = card.querySelector(".tv-cal, .tv-cal-day");
+        var old = card.querySelector(".tv-cal, .tv-cal-day, .tv-week");
         if (old) card.removeChild(old);
-        if (isFull(widget)) renderMonth(card, ctx);
+        var size = sizeOf(widget);
+        if (size === "2x2") renderMonth(card, ctx);
+        else if (size === "2x1") renderWeek(card, ctx);
+        else if (size === "1x1") renderOne(card, ctx);
         else renderDay(card, ctx);
       },
       title: function (widget, ctx) {
-        if (!isFull(widget)) return "Today";
+        var size = sizeOf(widget);
+        if (size === "1x1") return dayLabel(ctx.today);
+        if (size === "2x1") return "This week";
+        if (size !== "2x2") return "Today";
         return C.MONTHS[Number(ctx.today.slice(5, 7)) - 1] + " " + ctx.today.slice(0, 4);
       },
     },
@@ -640,6 +719,9 @@
     dayEvents: todayEvents,
     longDate: longDate,
     comingUp: comingUp,
+    dayLabel: dayLabel,
+    nextEvent: nextEvent,
+    weekDays: weekDays,
     eventRange: eventRange,
     msToMidnight: msToMidnight,
     screenLabel: screenLabel,

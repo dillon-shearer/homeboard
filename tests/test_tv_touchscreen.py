@@ -28,6 +28,8 @@ MEASURE = """JSON.stringify((() => {
     day: px(shown('.tv-cal-day li, .tv-up li')),
     msg: px(shown('.tv-msg')),
     num: px(shown('.tv-cal-grid .d b')),
+    wd: px(shown('.tv-week .wd')),
+    week: shown('.tv-week .d').length,
     chips: px(shown('.tv-cal-grid .ev:not(.more)')),
     wxCell: px(shown('.wx-day > span')),
     wxText: px(shown('.wx-label, .wx-hilo, .wx-rain')),
@@ -95,6 +97,8 @@ def _seed(base):
                 ],
             ),
             ("Wide clock", [{"kind": "clock", "col": 0, "row": 0, "w": 2, "h": 1}]),
+            ("Small calendar", [{"kind": "calendar", "col": 0, "row": 0, "w": 1, "h": 1}]),
+            ("Wide calendar", [{"kind": "calendar", "col": 0, "row": 0, "w": 2, "h": 1}]),
             ("Big weather", [{"kind": "weather", "col": 0, "row": 0, "w": 2, "h": 2}]),
             ("Wide weather", [{"kind": "weather", "col": 0, "row": 0, "w": 2, "h": 1}]),
             ("Tall weather", [{"kind": "weather", "col": 0, "row": 0, "w": 1, "h": 2}]),
@@ -145,6 +149,7 @@ def test_tv_is_readable_and_tappable_at_1024x600(server, tmp_path):  # noqa: F81
             assert all(size >= 16 for size in out["condensed"]), (screen["name"], out["condensed"])
             assert all(size >= 22 for size in out["h2"]), (screen["name"], out["h2"])
             assert all(size >= 16 for size in out["num"]), screen["name"]
+            assert all(size >= 18 for size in out["wd"]), screen["name"]
             assert all(size >= 14 for size in out["chips"]), screen["name"]
             assert all(size >= 0.024 * HEIGHT for size in out["wxCell"]), screen["name"]
             assert all(size >= 0.03 * HEIGHT for size in out["wxText"]), screen["name"]
@@ -164,6 +169,10 @@ def test_tv_is_readable_and_tappable_at_1024x600(server, tmp_path):  # noqa: F81
     for name in ("Big weather", "Wide weather", "Tall weather"):
         assert seen[name]["wxDays"] == 7 and seen[name]["wxCell"], name
     assert seen["Small weather"]["wxDays"] == 0 and seen["Small weather"]["wxText"]
+    assert seen["Small calendar"]["day"] and seen["Small calendar"]["h2"]
+    wide = seen["Wide calendar"]
+    assert wide["week"] == 7 and wide["wd"] and wide["num"] and wide["chips"]
+    assert any(m.startswith("+") for m in wide["more"])
 
 
 @needs_chrome

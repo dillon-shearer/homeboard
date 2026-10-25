@@ -226,9 +226,10 @@ def test_daily_brief_renders_four_cards_in_grid(server, tmp_path):  # noqa: F811
     clock, weather, cal, lists = cards
     assert clock["h2"] == "Clock"
     assert date.today().strftime("%A") in clock["text"]
-    assert cal["h2"] == "Today" and cal["grid"] is False
+    today = date.today()
+    assert cal["h2"] == f"{today:%a}, {today:%b} {today.day}" and cal["grid"] is False
     assert "Dentist" in cal["text"] and "9:00 am" in cal["text"]
-    assert "Coming up" in cal["text"] and "Bins out" in cal["text"]
+    assert "Coming up" not in cal["text"] and "Bins out" not in cal["text"]
     assert weather["h2"] == "Weather" and "No forecast yet" in weather["text"]
     assert lists["h2"] == "Publix"
     assert clock["top"] == weather["top"] and clock["left"] < weather["left"]
@@ -263,6 +264,56 @@ def test_calendar_screen_shows_month_grid_and_switches_without_reload(server, tm
     assert brief["title"] == "Daily Brief"
     assert brief["mark"] == "kept" and brief["nav"] == 1
     assert len(brief["cards"]) == 4
+
+
+FACE = """JSON.stringify((() => {
+  const box = n => { const r = n.getBoundingClientRect(); return {l: r.left, r: r.right, t: r.top, b: r.bottom}; };
+  const f = document.querySelector('#screen .tv-card[data-kind="clock"] .tv-face');
+  if (!f) return null;
+  return {time: box(f.querySelector('.time')), day: box(f.querySelector('.day')),
+    date: box(f.querySelector('.date')), text: f.innerText,
+    size: parseFloat(getComputedStyle(f.querySelector('.time')).fontSize)};
+})())"""
+
+
+def _face(base, tmp_path, w, h):
+    screen = httpx.post(f"{base}/api/screens", json={"name": f"Clock {w}x{h}"}).json()
+    r = httpx.post(
+        f"{base}/api/screens/{screen['id']}/widgets",
+        json={"kind": "clock", "col": 0, "row": 0, "w": w, "h": h},
+    )
+    assert r.status_code == 201, r.text
+    httpx.put(f"{base}/api/settings", json={"channel": "screen", "screen_id": screen["id"]})
+    chrome = _Chrome(tmp_path / f"chrome{w}{h}", 1024, 600)
+    try:
+        chrome.send("Page.navigate", {"url": f"{base}/tv"})
+        face = None
+        for _ in range(100):
+            title = chrome.eval("document.getElementById('title').textContent")
+            face = json.loads(chrome.eval(FACE) or "null")
+            if face and title == screen["name"]:
+                break
+            time.sleep(0.05)
+        time.sleep(0.2)
+        return json.loads(chrome.eval(FACE))
+    finally:
+        chrome.close()
+
+
+@needs_chrome
+def test_wide_clock_puts_time_beside_day_and_date(server, tmp_path):  # noqa: F811
+    small = _face(server, tmp_path, 1, 1)
+    wide = _face(server, tmp_path, 2, 1)
+    today = date.today()
+    for face in (small, wide):
+        assert today.strftime("%A") in face["text"]
+        assert f"{today:%B} {today.day}, {today.year}" in face["text"]
+    assert small["time"]["b"] <= small["day"]["t"] <= small["date"]["t"]
+    t, d, dt = wide["time"], wide["day"], wide["date"]
+    assert t["r"] <= d["l"] and t["r"] <= dt["l"]
+    assert d["b"] <= dt["t"] + 1
+    assert t["t"] < d["b"] and dt["t"] < t["b"]
+    assert wide["size"] > small["size"]
 
 
 @needs_chrome
