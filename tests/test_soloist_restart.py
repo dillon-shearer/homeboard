@@ -29,6 +29,7 @@ def pi(tmp_path):
         "app/deploy/soloist.sh": "run\n",
         "app/deploy/soloist-event.sh": "post\n",
         "opt/soloist": "binary\n",
+        "opt/soloist-key.so": "shim\n",
         "etc/soloist.env": "SOLOIST_API_KEY=k\n",
     }
     for name, body in files.items():
@@ -68,7 +69,13 @@ def test_first_run_restarts_then_unchanged_runs_do_not(pi):
 
 @pytest.mark.parametrize(
     "name",
-    ["units/homeboard-soloist.service", "etc/soloist.env", "app/deploy/soloist.sh", "opt/soloist"],
+    [
+        "units/homeboard-soloist.service",
+        "etc/soloist.env",
+        "app/deploy/soloist.sh",
+        "opt/soloist",
+        "opt/soloist-key.so",
+    ],
 )
 def test_soloist_file_change_restarts_once(pi, name):
     pi()

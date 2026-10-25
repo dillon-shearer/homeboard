@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ARGS=("$@")
 if [ -n "${CREDENTIALS_DIRECTORY:-}" ] && [ -r "$CREDENTIALS_DIRECTORY/soloist" ]; then
-    KEY="$(sed -n 's/^SOLOIST_API_KEY=//p' "$CREDENTIALS_DIRECTORY/soloist")"
-    ARGS+=(--api-key "$KEY")
+    export SOLOIST_API_KEY_FILE="$CREDENTIALS_DIRECTORY/soloist"
+    export LD_PRELOAD=/opt/soloist/soloist-key.so
 fi
-exec /opt/soloist/soloist "${ARGS[@]}"
+exec /opt/soloist/soloist "$@"

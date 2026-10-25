@@ -389,6 +389,8 @@ echo "== Spotify Connect speaker"
 if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ]; then
     bash "$APP_DIR"/deploy/soloist-update.sh
 fi
+cc -O2 -shared -fPIC -o /opt/soloist/soloist-key.so.new "$APP_DIR"/deploy/soloist-key.c
+mv -f /opt/soloist/soloist-key.so.new /opt/soloist/soloist-key.so
 if [ "$NEW_SOLOIST_KEY" -eq 1 ] || { [ ! -s "$SOLOIST_ENV" ] && [ -r /dev/tty ]; }; then
     install -d -m 700 -o root -g root "$ETC_DIR"
     read -rsp "Paste the Spotify Soloist API key and press Enter (nothing shows): " SOLOIST_KEY < /dev/tty
@@ -506,7 +508,7 @@ if [ "$PAIR_SPEAKER" -eq 1 ]; then
     echo "Speaker volume: $(curl -sS -m 5 127.0.0.1:8002/volume 2>/dev/null || echo unknown)"
 fi
 if [ -s "$SOLOIST_ENV" ]; then
-    SOLOIST_SUM="$(cat /etc/systemd/system/homeboard-soloist.service "$SOLOIST_ENV"         "$APP_DIR"/deploy/soloist.sh /opt/soloist/soloist 2>/dev/null | sha256sum | cut -d' ' -f1)"
+    SOLOIST_SUM="$(cat /etc/systemd/system/homeboard-soloist.service "$SOLOIST_ENV"         "$APP_DIR"/deploy/soloist.sh /opt/soloist/soloist /opt/soloist/soloist-key.so 2>/dev/null | sha256sum | cut -d' ' -f1)"
     EVENTS_SUM="$(cat /etc/systemd/system/homeboard-soloist-events.service         "$APP_DIR"/deploy/soloist-event.sh 2>/dev/null | sha256sum | cut -d' ' -f1)"
     if [ "$SOLOIST_SUM" != "$(cat /opt/soloist/service.sum 2>/dev/null)" ]         || [ "$WP_RESTARTED" -eq 1 ]         || ! systemctl is-active --quiet homeboard-soloist.service; then
         echo "Restarting Spotify Soloist (its files changed, WirePlumber restarted or it was not running)"
