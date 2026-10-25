@@ -1,0 +1,23 @@
+.sound-line {
+  margin: 0 0 10px;
+}
+
+.settings .w95-row {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.playlists {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.playlists li + li {
+  margin-top: 8px;
+}
+
+.playlists .w95-check > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
