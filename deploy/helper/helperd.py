@@ -189,6 +189,7 @@ def make_handler(helper):
 def main():
     mac = os.environ.get("SPEAKER_MAC", "").strip().upper()
     helper = Helper(mac if MAC_RE.match(mac) else "")
+    helper.set_playing(False)
     threading.Thread(target=helper.run_timer, daemon=True).start()
     ThreadingHTTPServer((HOST, PORT), make_handler(helper)).serve_forever()
 

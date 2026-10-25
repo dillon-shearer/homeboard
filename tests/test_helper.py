@@ -121,3 +121,28 @@ def test_no_speaker_paired_is_409(server):
     url, helper = server
     helper.mac = ""
     assert call(url + "/connect", "POST", {}) == (409, {"detail": "no speaker paired"})
+
+
+def test_main_starts_the_idle_timer_so_a_boot_connection_is_let_go(monkeypatch):
+    started = []
+
+    class FakeServer:
+        def __init__(self, addr, handler):
+            pass
+
+        def serve_forever(self):
+            started.append(True)
+
+    monkeypatch.setenv("SPEAKER_MAC", "aa:bb:cc:dd:ee:ff")
+    monkeypatch.setattr(helperd, "idle_setting", lambda: 3)
+    monkeypatch.setattr(helperd, "ThreadingHTTPServer", FakeServer)
+    monkeypatch.setattr(
+        helperd.threading, "Thread", lambda **kw: type("T", (), {"start": lambda self: None})()
+    )
+    created = []
+    real = helperd.Helper
+    monkeypatch.setattr(helperd, "Helper", lambda mac: created.append(real(mac)) or created[-1])
+    helperd.main()
+    assert started == [True]
+    assert created[0].mac == "AA:BB:CC:DD:EE:FF"
+    assert created[0].state.deadline - created[0].state.stopped_at == 3 * 60
