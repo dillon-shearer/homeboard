@@ -15,6 +15,7 @@ API_DROPIN_DIR=/etc/systemd/system/homeboard-api.service.d
 TUNNEL_ENV="$ETC_DIR/tunnel.env"
 PASSWORD_HASH="$ETC_DIR/tunnel-password.hash"
 SPEAKER_ENV="$ETC_DIR/speaker.env"
+SPOTIFY_ENV="$ETC_DIR/spotify.env"
 BT_CONF=/etc/bluetooth/main.conf
 
 HOST=""
@@ -25,6 +26,8 @@ TUNNEL=0
 NEW_TUNNEL_TOKEN=0
 NEW_PASSWORD=0
 PAIR_SPEAKER=0
+SPOTIFY=0
+NEW_SPOTIFY=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --host) HOST="${2:?--host needs a value}"; shift 2 ;;
@@ -35,6 +38,8 @@ while [ $# -gt 0 ]; do
         --new-tunnel-token) TUNNEL=1; NEW_TUNNEL_TOKEN=1; shift ;;
         --new-password) TUNNEL=1; NEW_PASSWORD=1; shift ;;
         --pair-speaker) PAIR_SPEAKER=1; shift ;;
+        --spotify) SPOTIFY=1; shift ;;
+        --new-spotify) SPOTIFY=1; NEW_SPOTIFY=1; shift ;;
         -*) echo "Unknown option: $1" >&2; exit 1 ;;
         *) REPO_URL="$1"; shift ;;
     esac
@@ -50,6 +55,13 @@ if [ -s "$TUNNEL_ENV" ]; then
 fi
 if [ "$TUNNEL" -eq 1 ] && [ ! -r /dev/tty ] && { [ "$NEW_TUNNEL_TOKEN" -eq 1 ] || [ "$NEW_PASSWORD" -eq 1 ] || [ ! -s "$TUNNEL_ENV" ] || [ ! -s "$PASSWORD_HASH" ]; }; then
     echo "No terminal to ask for the tunnel token or password; run this from an SSH window" >&2
+    exit 1
+fi
+if [ -s "$SPOTIFY_ENV" ]; then
+    SPOTIFY=1
+fi
+if [ "$SPOTIFY" -eq 1 ] && [ ! -r /dev/tty ] && { [ "$NEW_SPOTIFY" -eq 1 ] || [ ! -s "$SPOTIFY_ENV" ]; }; then
+    echo "No terminal to ask for the Spotify Client ID and secret; run this from an SSH window" >&2
     exit 1
 fi
 if [ "$PAIR_SPEAKER" -eq 1 ] && [ ! -r /dev/tty ]; then
@@ -302,6 +314,37 @@ if [ "$TUNNEL" -eq 1 ]; then
     printf '[Service]\nLoadCredential=tunnel-password:%s\n' "$PASSWORD_HASH" > "$API_DROPIN_DIR/homeboard-tunnel.conf"
 else
     rm -f /etc/nginx/sites-enabled/homeboard-tunnel "$API_DROPIN_DIR/homeboard-tunnel.conf"
+fi
+if [ "$SPOTIFY" -eq 1 ]; then
+    echo "== Spotify"
+    install -d -m 700 -o root -g root "$ETC_DIR"
+    if [ "$NEW_SPOTIFY" -eq 1 ] || [ ! -s "$SPOTIFY_ENV" ]; then
+        read -rp "Paste the Spotify Client ID and press Enter: " SPOTIFY_ID < /dev/tty
+        read -rsp "Paste the Spotify client secret and press Enter (nothing shows): " SPOTIFY_SECRET < /dev/tty
+        echo
+        SPOTIFY_ID="$(printf '%s' "$SPOTIFY_ID" | tr -d '[:space:]')"
+        SPOTIFY_SECRET="$(printf '%s' "$SPOTIFY_SECRET" | tr -d '[:space:]')"
+        if [ -z "$SPOTIFY_ID" ] || [ -z "$SPOTIFY_SECRET" ]; then
+            unset SPOTIFY_ID SPOTIFY_SECRET
+            echo "No Client ID or secret given; the stored Spotify app is unchanged" >&2
+            exit 1
+        fi
+        (umask 077 && printf 'SPOTIFY_CLIENT_ID=%s
+SPOTIFY_CLIENT_SECRET=%s
+' "$SPOTIFY_ID" "$SPOTIFY_SECRET" > "$SPOTIFY_ENV")
+        unset SPOTIFY_ID SPOTIFY_SECRET
+    fi
+    chown root:root "$SPOTIFY_ENV"
+    chmod 600 "$SPOTIFY_ENV"
+    mkdir -p "$API_DROPIN_DIR"
+    printf '[Service]
+LoadCredential=spotify:%s
+' "$SPOTIFY_ENV" > "$API_DROPIN_DIR/homeboard-spotify.conf"
+    if [ -z "$HOST" ]; then
+        echo "Warning: Spotify sign-in needs the https address; set it up as in Part 6 of PI_SETUP.md" >&2
+    fi
+else
+    rm -f "$API_DROPIN_DIR/homeboard-spotify.conf"
 fi
 nginx -t
 

@@ -258,3 +258,28 @@ def test_install_sets_up_bluetooth_audio():
     pair = text.split("== Pairing the speaker", 1)[1]
     assert pair.index("bluetoothctl pairable on") < pair.index('bluetoothctl pair "$SPEAKER_MAC"')
     assert '*"Bonded: yes"*' in pair
+
+
+def test_install_sets_up_spotify_credential():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert "--spotify) SPOTIFY=1; shift ;;" in text
+    assert "--new-spotify) SPOTIFY=1; NEW_SPOTIFY=1; shift ;;" in text
+    assert 'SPOTIFY_ENV="$ETC_DIR/spotify.env"' in text
+    assert 'if [ "$NEW_SPOTIFY" -eq 1 ] || [ ! -s "$SPOTIFY_ENV" ]; then' in text
+    assert "SPOTIFY_CLIENT_ID=%s\nSPOTIFY_CLIENT_SECRET=%s\n" in text
+    assert 'chown root:root "$SPOTIFY_ENV"' in text and 'chmod 600 "$SPOTIFY_ENV"' in text
+    assert (
+        "printf '[Service]\nLoadCredential=spotify:%s\n' \"$SPOTIFY_ENV\""
+        ' > "$API_DROPIN_DIR/homeboard-spotify.conf"'
+    ) in text
+    assert 'rm -f "$API_DROPIN_DIR/homeboard-spotify.conf"' in text
+    assert text.index("homeboard-spotify.conf") < text.index("systemctl daemon-reload")
+
+
+def test_setup_guide_has_spotify_steps():
+    text = (DEPLOY / "PI_SETUP.md").read_text(encoding="utf-8")
+    assert "## Spotify" in text
+    assert "https://developer.spotify.com/dashboard" in text
+    assert "https://homeboard.datawithdillon.com/api/spotify/callback" in text
+    assert "sudo bash /opt/homeboard/deploy/install.sh --spotify" in text
+    assert "--new-spotify" in text
