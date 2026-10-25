@@ -27,6 +27,7 @@
   const FLING_V = 0.5;
   const BRIGHTNESS_MIN = 10;
   const BRIGHTNESS_MAX = 100;
+  const EDGE_FRAC = 0.06;
   const CHANNELS = ["photos", "screen"];
   const POSITIONS = [
     "top-left", "top-center", "top-right",
@@ -150,6 +151,19 @@
     return Math.abs(dx) > FLING_PX && Math.abs(speed) >= FLING_V && speed * dx > 0;
   }
 
+  function inEdge(x, width) {
+    return x < width * EDGE_FRAC;
+  }
+
+  function panelCommits(x, dx, dy, v, width) {
+    return !inEdge(x, width) && dy > 0 && swipeCommits(dy, dx, v);
+  }
+
+  function panelOffset(dy, height, open) {
+    const d = Math.max(-height, Math.min(height, dy || 0));
+    return open ? Math.min(0, d) : Math.max(-height, -height + d);
+  }
+
   function shouldReturn(now, last, timeoutMin, channel) {
     return channel !== "photos" && timeoutMin > 0 && now - last > timeoutMin * 60000;
   }
@@ -251,6 +265,9 @@
     restOffset: restOffset,
     dragOffset: dragOffset,
     swipeCommits: swipeCommits,
+    inEdge: inEdge,
+    panelCommits: panelCommits,
+    panelOffset: panelOffset,
     shouldReturn: shouldReturn,
     focusPosition: focusPosition,
     clampBrightness: clampBrightness,
@@ -270,6 +287,8 @@
   const VELOCITY_MS = 100;
   const SPLASH_FADE_MS = 500;
   const READOUT_HIDE_MS = 800;
+  const PHOTOS_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="22" fill="#000"/><rect x="3" y="6" width="26" height="20" fill="#c0c0c0"/><rect x="5" y="8" width="22" height="16" fill="#00ffff"/><polygon points="5,24 13,14 19,21 22,18 27,24" fill="#008000"/><rect x="21" y="10" width="4" height="4" fill="#ffff00"/></svg>';
+  const SCREEN_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="4" width="28" height="20" fill="#000"/><rect x="3" y="5" width="26" height="18" fill="#c0c0c0"/><rect x="5" y="7" width="22" height="14" fill="#000080"/><rect x="7" y="9" width="8" height="2" fill="#00ffff"/><rect x="7" y="13" width="12" height="2" fill="#00ffff"/><rect x="24" y="22" width="2" height="1" fill="#00ff00"/><rect x="13" y="24" width="6" height="3" fill="#808080"/><rect x="8" y="27" width="16" height="2" fill="#000"/><rect x="9" y="27" width="14" height="1" fill="#c0c0c0"/></svg>';
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
@@ -282,6 +301,15 @@
   const dimEl = document.getElementById("dim");
   const edgeEl = document.getElementById("edge");
   const brightnessEl = document.getElementById("brightness");
+  const panelEl = document.getElementById("control-panel");
+  const screensEl = document.getElementById("cp-screens");
+  const speakerEl = document.getElementById("cp-speaker");
+  const speakerStateEl = document.getElementById("cp-speaker-state");
+  const sliderEl = document.getElementById("cp-brightness");
+  const sliderValueEl = document.getElementById("cp-brightness-value");
+  const confirmEl = document.getElementById("cp-confirm");
+  const confirmErrorEl = document.getElementById("cp-confirm-error");
+  const rebootEl = document.getElementById("cp-restart-yes");
 
   const state = {
     photos: [],
@@ -290,6 +318,7 @@
     pos: -1,
     settings: applySettings(null, null),
     stops: buildStops([]),
+    screens: [],
     currentId: null,
     resumeId: null,
     reportedId: null,
@@ -315,6 +344,14 @@
   let shownId = null;
   let edgeDrag = null;
   let readoutTimer = null;
+  let panelOpen = false;
+  let panelDrag = false;
+  let panelSliding = false;
+  let sliderDrag = false;
+  let speakerOn = false;
+  let speakerBusy = false;
+  let rebootBusy = false;
+  let restarting = false;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -333,6 +370,8 @@
 
   function schedule(delay) {
     clearTimeout(state.timer);
+    state.timer = null;
+    if (panelOpen) return;
     if (delay === undefined) {
       const interval = state.settings.interval_s * 1000;
       if (!state.order.length) delay = Math.min(RETRY_MS, interval);
@@ -349,7 +388,8 @@
     if (!state.settings.captions) hideCaption();
     placeOverlay(state.settings);
     applyChannel();
-    if (!edgeDrag) applyBrightness(state.settings.brightness);
+    if (!edgeDrag && !sliderDrag) applyBrightness(state.settings.brightness);
+    if (sliderEl && !sliderDrag) showSlider(state.settings.brightness);
   }
 
   function applyBrightness(v) {
@@ -397,13 +437,17 @@
       brightnessEl.classList.remove("show");
     }, READOUT_HIDE_MS);
     if (!drag) return;
-    applyBrightness(drag.value);
-    if (drag.value === state.settings.brightness) return;
-    state.settings = applySettings(state.settings, { brightness: drag.value });
+    saveBrightness(drag.value);
+  }
+
+  function saveBrightness(v) {
+    applyBrightness(v);
+    if (v === state.settings.brightness) return;
+    state.settings = applySettings(state.settings, { brightness: v });
     fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brightness: drag.value }),
+      body: JSON.stringify({ brightness: v }),
     }).then(function (r) {
       if (!r.ok) throw new Error(r.status);
     }).catch(function () {
@@ -524,18 +568,19 @@
     return t ? { x: t.clientX + frameLeft(e), y: t.clientY, t: Date.now() } : null;
   }
 
-  function releaseVelocity(start, p) {
+  function releaseVelocity(start, p, axis) {
+    const k = axis || "x";
     for (let i = 0; i < start.samples.length; i++) {
       const dt = p.t - start.samples[i].t;
-      if (dt <= VELOCITY_MS) return dt > 0 ? (p.x - start.samples[i].x) / dt : 0;
+      if (dt <= VELOCITY_MS) return dt > 0 ? (p[k] - start.samples[i][k]) / dt : 0;
     }
     return 0;
   }
 
   function onTouchStart(e) {
     markActivity();
-    const p = sliding ? null : touchPoint(e);
-    touchStart = p ? { x: p.x, y: p.y, samples: [p] } : null;
+    const p = sliding || panelSliding ? null : touchPoint(e);
+    touchStart = p ? { x: p.x, y: p.y, samples: [p], grab: panelGrab(e) } : null;
     lastMove = null;
     shownId = null;
     if (e.target && e.target.addEventListener) {
@@ -553,6 +598,7 @@
     if (touchStart.samples.length > 20) touchStart.samples.shift();
     const dx = p.x - touchStart.x;
     const dy = p.y - touchStart.y;
+    if (panelMove(dx, dy)) return;
     const lx = Math.abs(dx) > Math.abs(dy) ? dx : 0;
     const target = screenTarget(lx);
     const tv = tvScreen();
@@ -587,6 +633,7 @@
     touchStart = null;
     const dx = p.x - start.x;
     const dy = p.y - start.y;
+    if (panelEnd(start, p, dx, dy)) return;
     const wasDragging = dragging;
     const wasTv = tvDrag;
     dragging = false;
@@ -615,6 +662,241 @@
     slideChannel(px, function () { setChannel(stop); });
   }
 
+  function panelGrab(e) {
+    return !!panelEl && e.target !== sliderEl && confirmEl.hidden;
+  }
+
+  function panelMove(dx, dy) {
+    if (!panelEl) return false;
+    const steep = Math.abs(dy) > Math.abs(dx);
+    if (panelOpen) {
+      if (panelDrag || (touchStart.grab && dy < 0 && steep)) {
+        panelDrag = true;
+        movePanel(panelOffset(dy, viewHeight(), true));
+      }
+      return true;
+    }
+    if (!panelDrag) {
+      if (!touchStart.grab || state.settings.channel !== "photos" || dy <= 0 || !steep) return false;
+      if (inEdge(touchStart.x, viewWidth())) return false;
+      if (dragging) {
+        dragging = false;
+        channelEl.classList.remove("drag");
+        moveChannel(restOffset("photos", viewWidth()));
+      }
+      panelDrag = true;
+      preparePanel();
+    }
+    movePanel(panelOffset(dy, viewHeight(), false));
+    return true;
+  }
+
+  function panelEnd(start, p, dx, dy) {
+    const wasPanel = panelDrag;
+    panelDrag = false;
+    if (!wasPanel) return panelOpen;
+    const v = releaseVelocity(start, p, "y");
+    if (panelOpen) {
+      if (dy < 0 && swipeCommits(dy, dx, v)) closePanel();
+      else slidePanel(0);
+    } else if (panelCommits(start.x, dx, dy, v, viewWidth())) {
+      openPanel();
+    } else {
+      closePanel();
+    }
+    return true;
+  }
+
+  function movePanel(px) {
+    panelEl.style.transform = "translateY(" + px + "px)";
+  }
+
+  function slidePanel(px, done) {
+    panelSliding = true;
+    panelEl.classList.add("slide");
+    movePanel(px);
+    setTimeout(function () {
+      panelEl.classList.remove("slide");
+      panelSliding = false;
+      if (done) done();
+    }, SLIDE_MS);
+  }
+
+  function preparePanel() {
+    if (!panelEl.hidden) return;
+    confirmEl.hidden = true;
+    renderScreens();
+    showSlider(state.settings.brightness);
+    loadSpeaker();
+    movePanel(-viewHeight());
+    panelEl.hidden = false;
+    edgeEl.hidden = true;
+  }
+
+  function openPanel() {
+    preparePanel();
+    panelOpen = true;
+    schedule();
+    slidePanel(0);
+  }
+
+  function closePanel() {
+    if (!panelEl || (!panelOpen && panelEl.hidden)) return;
+    panelOpen = false;
+    panelDrag = false;
+    confirmEl.hidden = true;
+    if (!state.loading) schedule();
+    slidePanel(-viewHeight(), function () {
+      if (panelOpen) return;
+      panelEl.hidden = true;
+      edgeEl.hidden = false;
+    });
+  }
+
+  function renderScreens() {
+    screensEl.textContent = "";
+    addIcon(PHOTOS_ICON, "Photos", { channel: "photos" });
+    state.screens.forEach(function (screen) {
+      if (screen && Number.isInteger(screen.id)) {
+        addIcon(SCREEN_ICON, String(screen.name || ""), { channel: "screen", screen_id: screen.id });
+      }
+    });
+  }
+
+  function addIcon(svg, name, stop) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "w95-icon cp-icon";
+    b.innerHTML = svg;
+    const label = document.createElement("span");
+    label.className = "w95-icon-label";
+    label.textContent = name;
+    b.appendChild(label);
+    b.addEventListener("click", function () { pickStop(stop); });
+    li.appendChild(b);
+    screensEl.appendChild(li);
+  }
+
+  function pickStop(stop) {
+    markActivity();
+    closePanel();
+    if (stop.channel === "photos") {
+      if (state.settings.channel !== "photos") setChannel(stop);
+      return;
+    }
+    shownId = null;
+    showStop(tvScreen(), stop);
+    slideChannel(0, function () { setChannel(stop); });
+  }
+
+  function showSlider(v) {
+    sliderEl.value = String(v);
+    sliderValueEl.textContent = v + "%";
+  }
+
+  function onSliderInput() {
+    markActivity();
+    sliderDrag = true;
+    const v = clampBrightness(Number(sliderEl.value));
+    sliderValueEl.textContent = v + "%";
+    applyBrightness(v);
+  }
+
+  function onSliderChange() {
+    markActivity();
+    sliderDrag = false;
+    saveBrightness(clampBrightness(Number(sliderEl.value)));
+  }
+
+  function renderSpeaker(text, on) {
+    speakerOn = on;
+    speakerEl.setAttribute("aria-checked", on ? "true" : "false");
+    speakerStateEl.textContent = text;
+  }
+
+  function speakerError(err) {
+    renderSpeaker(err && err.message === "503" ? "Helper not running" : "Speaker status unknown", false);
+  }
+
+  function loadSpeaker() {
+    return fetchJson("/api/sound/status").then(function (s) {
+      const on = !!(s && s.speaker && s.speaker.connected);
+      renderSpeaker(on ? "Connected" : "Off", on);
+    }, speakerError);
+  }
+
+  function postJson(url) {
+    return fetch(url, { method: "POST" }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+    });
+  }
+
+  function toggleSpeaker() {
+    markActivity();
+    if (speakerBusy) return;
+    speakerBusy = true;
+    speakerEl.disabled = true;
+    const on = speakerOn;
+    renderSpeaker(on ? "Disconnecting..." : "Connecting...", !on);
+    postJson(on ? "/api/sound/disconnect" : "/api/sound/connect").then(loadSpeaker, function (err) {
+      if (err.message === "503") speakerError(err);
+      else return loadSpeaker();
+    }).then(function () {
+      speakerBusy = false;
+      speakerEl.disabled = false;
+    });
+  }
+
+  function askRestart() {
+    markActivity();
+    confirmErrorEl.hidden = true;
+    confirmEl.hidden = false;
+  }
+
+  function cancelRestart() {
+    markActivity();
+    confirmEl.hidden = true;
+  }
+
+  function restartBoard() {
+    markActivity();
+    if (rebootBusy) return;
+    rebootBusy = true;
+    rebootEl.disabled = true;
+    postJson("/api/sound/reboot").then(showRestarting, function (err) {
+      confirmErrorEl.textContent = err.message === "503"
+        ? "Helper not running. The board was not restarted."
+        : "Could not restart the board. Try again.";
+      confirmErrorEl.hidden = false;
+    }).then(function () {
+      rebootBusy = false;
+      rebootEl.disabled = false;
+    });
+  }
+
+  function showRestarting() {
+    restarting = true;
+    confirmEl.hidden = true;
+    const label = splashEl.querySelector("#label");
+    if (label) label.textContent = "Home Board is restarting...";
+    splashEl.classList.remove("fade");
+    splashEl.hidden = false;
+  }
+
+  function hookPanel() {
+    document.getElementById("cp-close").addEventListener("click", function () {
+      markActivity();
+      closePanel();
+    });
+    speakerEl.addEventListener("click", toggleSpeaker);
+    sliderEl.addEventListener("input", onSliderInput);
+    sliderEl.addEventListener("change", onSliderChange);
+    document.getElementById("cp-restart").addEventListener("click", askRestart);
+    document.getElementById("cp-restart-no").addEventListener("click", cancelRestart);
+    rebootEl.addEventListener("click", restartBoard);
+  }
+
   function hookFrame() {
     let doc = null;
     try {
@@ -630,6 +912,9 @@
 
   function checkIdle() {
     const s = state.settings;
+    if (panelOpen && !panelDrag && !restarting && shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, "panel")) {
+      closePanel();
+    }
     if (dragging || sliding || !shouldReturn(Date.now(), lastActivity, s.channel_timeout_min, s.channel)) return;
     slideChannel(viewWidth(), function () { setChannel({ channel: "photos" }); });
   }
@@ -663,6 +948,8 @@
   function loadScreens() {
     return fetchJson("/api/screens").then(function (list) {
       state.stops = buildStops(list);
+      state.screens = Array.isArray(list) ? list : [];
+      if (panelOpen) renderScreens();
     }, function () {});
   }
 
@@ -725,7 +1012,7 @@
   }
 
   function hideSplash(delay) {
-    if (!splashEl || splashEl.hidden || splashEl.classList.contains("fade")) return;
+    if (restarting || !splashEl || splashEl.hidden || splashEl.classList.contains("fade")) return;
     setTimeout(function () {
       splashEl.classList.add("fade");
       setTimeout(function () { splashEl.hidden = true; }, SPLASH_FADE_MS);
@@ -954,6 +1241,7 @@
     document.addEventListener("touchmove", onTouchMove, { passive: true });
     document.addEventListener("touchend", onTouchEnd, { passive: true });
     channelEl.onload = hookFrame;
+    if (panelEl) hookPanel();
     edgeEl.addEventListener("touchstart", onEdgeStart, { passive: true });
     edgeEl.addEventListener("touchmove", onEdgeMove, { passive: true });
     edgeEl.addEventListener("touchend", onEdgeEnd, { passive: true });
