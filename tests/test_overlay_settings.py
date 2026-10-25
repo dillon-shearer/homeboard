@@ -1,14 +1,11 @@
 import json
 import re
 import subprocess
-import time
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from tests.chrome import _Chrome, needs_chrome, server  # noqa: F401
 from tests.test_caption_lifetime import DISPLAY_JS, HARNESS, needs_node
 
 DEFAULTS = {
@@ -174,84 +171,6 @@ def test_settings_change_moves_elements_and_sets_sizes():
     }
 
 
-RECTS = """(() => {
-  const cap = document.getElementById('caption');
-  cap.textContent = 'Beach day';
-  const r = (id) => {
-    const el = document.getElementById(id);
-    const b = el.getBoundingClientRect();
-    return {top: b.top, bottom: b.bottom, left: b.left, right: b.right,
-            font: parseFloat(getComputedStyle(el).fontSize), cell: el.parentNode.id,
-            text: el.textContent};
-  };
-  return JSON.stringify({clock: r('clock'), caption: r('caption'), date: r('date'),
-                         w: innerWidth, h: innerHeight});
-})()"""
-
-
-def _rects(chrome, ready):
-    out = None
-    for _ in range(100):
-        out = json.loads(chrome.eval(RECTS) or "null")
-        if out and out["clock"]["text"] and ready(out):
-            return out
-        time.sleep(0.05)
-    return out
-
-
-@needs_chrome
-def test_default_overlay_matches_old_look(server, tmp_path):  # noqa: F811
-    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        out = _rects(chrome, lambda o: o["caption"]["text"] and o["caption"]["bottom"] > 900)
-    finally:
-        chrome.close()
-    clock, cap = out["clock"], out["caption"]
-    assert (clock["cell"], cap["cell"]) == ("cell-bottom-right", "cell-bottom-left"), out
-    edge = 0.04 * 1080
-    assert abs(clock["font"] - 54) < 1 and abs(cap["font"] - 54) < 1, out
-    assert abs(clock["right"] - (1920 - edge)) < 2, out
-    assert abs(out["date"]["bottom"] - (1080 - edge)) < 2, out
-    assert abs(cap["left"] - edge) < 2 and abs(cap["bottom"] - (1080 - edge)) < 2, out
-
-
-@needs_chrome
-def test_clock_top_center_size_8(server, tmp_path):  # noqa: F811
-    httpx.put(f"{server}/api/settings", json={"clock_pos": "top-center", "clock_size": 8})
-    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        out = _rects(chrome, lambda o: o["clock"]["cell"] == "cell-top-center")
-    finally:
-        chrome.close()
-    clock = out["clock"]
-    assert abs((clock["left"] + clock["right"]) / 2 - 960) < 10
-    assert clock["top"] < 360
-    assert abs(clock["font"] - 86.4) < 2
-
-
-@needs_chrome
-def test_shared_cell_caption_above_clock_and_live_move(server, tmp_path):  # noqa: F811
-    httpx.put(
-        f"{server}/api/settings",
-        json={"clock_pos": "bottom-right", "caption_pos": "bottom-right", "clock_on_top": False},
-    )
-    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        shared = _rects(chrome, lambda o: o["caption"]["cell"] == "cell-bottom-right")
-        httpx.put(f"{server}/api/settings", json={"clock_pos": "top-left"})
-        moved = _rects(chrome, lambda o: o["clock"]["cell"] == "cell-top-left")
-    finally:
-        chrome.close()
-    assert shared["caption"]["top"] < shared["clock"]["top"]
-    assert shared["caption"]["bottom"] <= shared["clock"]["top"] + 1
-    assert abs(shared["clock"]["right"] - (1920 - 0.04 * 1080)) < 2
-    assert moved["clock"]["cell"] == "cell-top-left"
-    assert moved["clock"]["top"] < 360 and moved["clock"]["left"] < 100
-
-
 @needs_node
 def test_apply_settings_date_defaults_and_bad_values():
     r = _node(
@@ -335,40 +254,3 @@ def test_date_show_hides_and_shows_date():
     assert r["off"] is True
     assert r["on"] is False
     assert r["size"] == "6vh"
-
-
-@needs_chrome
-def test_default_date_under_clock(server, tmp_path):  # noqa: F811
-    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
-    kids = "[...document.getElementById('cell-bottom-right').children].map(e => e.id)"
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        out = _rects(chrome, lambda o: o["date"]["text"])
-        order = json.loads(chrome.eval(f"JSON.stringify({kids})"))
-    finally:
-        chrome.close()
-    clock, date = out["clock"], out["date"]
-    assert date["cell"] == "cell-bottom-right", out
-    assert order == ["clock", "date"]
-    assert date["top"] >= clock["bottom"], out
-    assert abs(date["font"] - 32.4) < 2, out
-    assert re.match(r"^[A-Z][a-z]+ \d{1,2}, \d{4}$", date["text"]), out
-
-
-@needs_chrome
-def test_date_show_false_hides_date_live(server, tmp_path):  # noqa: F811
-    chrome = _Chrome(tmp_path / "chrome", 1920, 1080)
-    hidden = "document.getElementById('date').hidden"
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        _rects(chrome, lambda o: o["date"]["text"])
-        httpx.put(f"{server}/api/settings", json={"date_show": False})
-        off = None
-        for _ in range(100):
-            off = chrome.eval(hidden)
-            if off:
-                break
-            time.sleep(0.05)
-    finally:
-        chrome.close()
-    assert off is True

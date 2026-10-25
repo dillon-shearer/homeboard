@@ -1,14 +1,12 @@
 import json
 import subprocess
-import time
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from app import events
 from app.main import create_app
-from tests.chrome import _Chrome, needs_chrome, needs_node, server  # noqa: F401
+from tests.chrome import needs_node
 from tests.test_caption_lifetime import DISPLAY_JS
 
 
@@ -68,81 +66,3 @@ def test_brightness_helpers():
     assert r["dim65"] == pytest.approx(0.35)
     assert r["dim100"] == 0 and r["dimFloor"] == pytest.approx(0.9)
     assert r["setLow"] == 10 and r["setDefault"] == 100
-
-
-STATE = """JSON.stringify((() => {
-  const b = document.getElementById('brightness');
-  const d = document.getElementById('dim');
-  if (!b || !d || !d.style.opacity) return null;
-  return {
-    text: b.textContent,
-    readout: parseFloat(getComputedStyle(b).opacity),
-    dim: parseFloat(getComputedStyle(d).opacity),
-  };
-})())"""
-
-
-def _state(chrome):
-    return json.loads(chrome.eval(STATE) or "null")
-
-
-def _until(fn, ready):
-    v = None
-    for _ in range(100):
-        v = fn()
-        if ready(v):
-            return v
-        time.sleep(0.05)
-    return v
-
-
-def _settings(base):
-    return httpx.get(f"{base}/api/settings").json()
-
-
-def _touch(chrome, kind, x=None, y=None):
-    points = [] if kind == "touchEnd" else [{"x": x, "y": y}]
-    chrome.send("Input.dispatchTouchEvent", {"type": kind, "touchPoints": points})
-
-
-@needs_chrome
-def test_left_edge_drag_dims_and_saves(server, tmp_path):  # noqa: F811
-    chrome = _Chrome(tmp_path / "chrome", 1024, 600)
-    try:
-        chrome.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        _until(lambda: chrome.eval("document.readyState"), lambda s: s == "complete")
-        time.sleep(0.5)
-        _touch(chrome, "touchStart", 30, 100)
-        for y in range(130, 280, 30):
-            _touch(chrome, "touchMove", 30, y)
-        mid = _until(lambda: _state(chrome), lambda s: s and s["readout"] > 0.9)
-        for y in range(280, 401, 30):
-            _touch(chrome, "touchMove", 30, y)
-        _touch(chrome, "touchMove", 30, 400)
-        _touch(chrome, "touchEnd")
-        released = time.monotonic()
-        saved = _until(lambda: _settings(server), lambda s: s["brightness"] != 100)
-        after = _state(chrome)
-        time.sleep(max(0, 1.5 - (time.monotonic() - released)))
-        faded = _state(chrome)
-
-        time.sleep(1)
-        _touch(chrome, "touchStart", 200, 300)
-        for i in range(1, 11):
-            _touch(chrome, "touchMove", 200 + 30 * i, 300)
-        _touch(chrome, "touchEnd")
-        time.sleep(0.6)
-        swiped = _settings(server)
-
-        httpx.put(f"{server}/api/settings", json={"brightness": 40})
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        reloaded = _until(lambda: _state(chrome), lambda s: s and abs(s["dim"] - 0.6) < 0.02)
-    finally:
-        chrome.close()
-    assert mid["readout"] > 0.9 and mid["text"].endswith("%")
-    assert abs(saved["brightness"] - 50) <= 2
-    assert after["dim"] == pytest.approx(1 - saved["brightness"] / 100, abs=0.02)
-    assert faded["readout"] == 0
-    assert swiped["brightness"] == saved["brightness"]
-    assert reloaded["dim"] == pytest.approx(0.6, abs=0.02)

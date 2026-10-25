@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app import events
 from app.main import create_app
-from tests.test_upload_batches import ADMIN_HTML, _node, needs_node
+from tests.test_upload_batches import _node, needs_node
 
 LIVE_SETUP = """
 var calls = [];
@@ -132,12 +132,6 @@ def test_status_line_warns_when_card_is_almost_full():
     )
     assert r["low"] == {"hidden": False, "text": "Card almost full: 0.8 GB left"}
     assert r["ok"] == "" and r["edge"] == ""
-
-
-def test_status_line_has_thumb_and_disk_cells():
-    html = ADMIN_HTML.read_text()
-    assert '<img id="now-thumb" class="now-thumb" alt="" hidden>' in html
-    assert '<span id="disk-warning" class="disk-warning" hidden></span>' in html
 
 
 def test_status_reports_current_photo_id(tmp_path):

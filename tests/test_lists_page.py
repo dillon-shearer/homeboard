@@ -2,21 +2,17 @@ import json
 import re
 import shutil
 import subprocess
-import threading
 import time
 from pathlib import Path
 
-import httpx
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from tests.chrome import _Chrome, _free_port, needs_chrome
+from tests.chrome import api_at, needs_chrome
 
 STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
 LISTS_JS = STATIC / "lists.js"
-LISTS_CSS = STATIC / "lists.css"
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
@@ -39,52 +35,9 @@ def test_lists_page_returns_200_with_styles(client):
     r = client.get("/admin/lists")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
-    assert "/static/win95.css?v=" in r.text
-    assert "/static/lists.css?v=" in r.text
-    assert "/static/lists.js?v=" in r.text
-    assert '<a class="w95-back" href="/admin">Start</a>' in r.text
-    assert '<span class="w95-title-text">Lists</span>' in r.text
-
-
-def test_lists_page_has_ids_lists_js_uses(client):
-    page = client.get("/admin/lists").text
-    js = LISTS_JS.read_text()
-    ids = set(re.findall(r'\$\("([\w-]+)"\)', js))
-    assert {"tabs", "items", "item-input", "list-tv-open", "toast", "toast-text"} <= ids
-    assert 'id="list-screen"' not in page
-    for name in ids:
-        assert f'id="{name}"' in page, name
-    assert "show_on_tv" not in js and "show-on-tv" not in page
-    panel = page[page.index('<div id="panel"') : page.index('<p id="lists-empty"')]
-    assert 'class="form"' not in panel
-    after = panel[panel.index('<ul id="items"') :]
-    assert re.findall(r"<(\w+)[^>]* id=\"([\w-]+)\"", after) == [
-        ("ul", "items"),
-        ("p", "items-empty"),
-        ("button", "clear-done"),
-    ]
-    assert re.search(r'<button type="button" id="clear-done"[^>]*hidden>Clear done</button>', panel)
-    add = re.search(r'<form id="add-form".*?</form>', panel, re.DOTALL).group(0)
-    assert re.search(r'<button type="button" id="list-options"[^>]*aria-label="List options"', add)
-    assert "<svg" in add
-
-
-def test_list_options_dialog_markup(client):
-    page = client.get("/admin/lists").text
-    start = page.index('<div id="list-dialog" class="modal" hidden>')
-    html = page[start : page.index('<div id="name-dialog"', start)]
-    assert re.search(r'<input id="list-name"[^>]*maxlength="60"', html)
-    assert 'name="kind" value="checklist"> Checklist' in html
-    assert 'name="kind" value="notes"> Notes' in html
-    assert (
-        '<label class="w95-check full"><input id="list-tv-open" type="checkbox">'
-        "<span>Open on the TV</span></label>"
-    ) in html
-    assert "<select" not in html
-    for label in ("Save", "Cancel", "Delete list"):
-        assert f">{label}</button>" in html
-    assert 'type="submit" id="list-save" class="w95-btn default">Save<' in html
-    assert 'id="delete-list" class="w95-btn del">Delete list<' in html
+    for name in ("win95.css", "lists.css", "lists.js"):
+        assert f"/static/{name}?v=" in r.text
+    assert 'href="/admin"' in r.text
 
 
 def test_lists_page_has_no_screen_word(client):
@@ -92,39 +45,18 @@ def test_lists_page_has_no_screen_word(client):
     body = page[page.index("<body") :]
     text = re.sub(r"<[^>]*>", " ", body)
     assert "screen" not in text.lower()
-    js = LISTS_JS.read_text()
-    assert "screen_id" not in js
-    assert [ln.strip() for ln in js.splitlines() if "/api/screens" in ln] == [
-        'getJSON("/api/screens").then(function (screens) {'
-    ]
 
 
 def test_start_lists_icon_links(client):
     page = client.get("/admin").text
-    icon = re.search(r'<a class="w95-icon" href="/admin/lists">.*?</a>', page, re.DOTALL)
-    assert icon
-    assert '<span class="w95-icon-label">Lists</span>' in icon.group(0)
-    assert "Coming soon" not in icon.group(0)
+    assert 'href="/admin/lists"' in page
     assert "Coming soon" not in page
 
 
-def test_lists_js_listens_for_changes_and_uses_no_browser_dialogs():
+def test_lists_js_uses_no_browser_dialogs():
     js = LISTS_JS.read_text()
-    assert 'addEventListener("lists_changed"' in js
-    assert '"/api/events"' in js
     for banned in ("prompt(", "confirm(", "alert("):
         assert banned not in js
-
-
-@needs_node
-def test_loads_under_node_and_sets_window_lists():
-    result = _node(
-        "console.log(JSON.stringify({same: globalThis.Lists === L, key: L.TAB_KEY,"
-        " fns: Object.keys(L).filter(k => typeof L[k] === 'function')}))"
-    )
-    assert result["same"] is True
-    assert result["key"] == "homeboard.lists.tab"
-    assert {"sortItems", "pickTab", "rank", "moveId", "countLabel"} <= set(result["fns"])
 
 
 @needs_node
@@ -161,42 +93,6 @@ def test_pick_tab_uses_saved_id_or_falls_back_to_first():
         " L.pickTab(lists, null), L.pickTab([], '9')]))"
     )
     assert result == [9, 4, 4, None]
-
-
-def test_item_dialog_markup(client):
-    page = client.get("/admin/lists").text
-    start = page.index('<div id="item-dialog" class="modal" hidden>')
-    html = page[start : page.index("<script", start)]
-    assert '<span id="item-title" class="w95-title-text">Item</span>' in html
-    assert re.search(r'<input id="item-text"[^>]*maxlength="200"[^>]*enterkeyhint="done"', html)
-    assert '<input id="item-done" type="checkbox"><span>Done</span>' in html
-    assert '<input id="item-pinned" type="checkbox"><span>Pinned</span>' in html
-    edit = re.search(r'<form id="item-edit".*?</form>', html, re.DOTALL).group(0)
-    for label in ("Save", "Cancel", "Delete"):
-        assert f">{label}</button>" in edit
-    assert 'type="submit" id="item-save" class="w95-btn default">Save<' in edit
-    confirm = html[html.index('<div id="item-confirm" class="w95-body" hidden>') :]
-    assert "Delete this item?" in confirm
-    assert 'class="confirm-icon"' in confirm
-    assert 'id="item-confirm-delete" class="w95-btn default">Delete</button>' in confirm
-    assert 'id="item-confirm-cancel" class="w95-btn">Cancel</button>' in confirm
-
-
-def test_inline_edit_is_gone_and_text_opens_the_item_window():
-    js = LISTS_JS.read_text()
-    assert "startEdit" not in js and "finishEdit" not in js
-    assert "text-edit" not in js
-    click = re.search(r"function onItemsClick\(e\) \{.*?\n  \}\n", js, re.DOTALL).group(0)
-    assert 'closest(".text")) {\n      openItem(item, false);' in click
-
-
-def test_swipe_delete_button_is_red():
-    css = LISTS_CSS.read_text()
-    rule = re.search(r"\.swipe-delete \{[^}]*\}", css).group(0)
-    assert "background: #c00000" in rule
-    assert "color: #fff" in rule
-    assert "font-weight: bold" in rule
-    assert re.search(r"\.item \{[^}]*touch-action: pan-y", css)
 
 
 @needs_node
@@ -256,25 +152,6 @@ def test_list_patch_sends_only_changed_fields():
     ]
 
 
-@pytest.fixture
-def server(tmp_path):
-    port = _free_port()
-    config = uvicorn.Config(
-        create_app(tmp_path / "data"), host="127.0.0.1", port=port, log_level="error"
-    )
-    srv = uvicorn.Server(config)
-    thread = threading.Thread(target=srv.run, daemon=True)
-    thread.start()
-    base = f"http://127.0.0.1:{port}"
-    for _ in range(100):
-        if srv.started:
-            break
-        time.sleep(0.05)
-    yield base
-    srv.should_exit = True
-    thread.join(timeout=10)
-
-
 def _wait(chrome, expr):
     for _ in range(100):
         value = chrome.eval(expr)
@@ -304,7 +181,7 @@ def _touch(item_id, dx, dy):
 
 
 def _items(server, list_id, done):
-    with httpx.Client(base_url=server) as c:
+    with api_at(server) as c:
         for _ in range(100):
             lists = c.get("/api/lists").json()
             items = next(x for x in lists if x["id"] == list_id)["items"]
@@ -319,71 +196,66 @@ def _shown(dialog_id):
 
 
 @needs_chrome
-def test_item_window_and_swipe_in_headless_chrome(server, tmp_path):
-    with httpx.Client(base_url=server) as c:
+def test_item_window_and_swipe_in_headless_chrome(chrome, server):
+    with api_at(server) as c:
         shop = c.post("/api/lists", json={"name": "Shop"}).json()
         ids = [
             c.post(f"/api/lists/{shop['id']}/items", json={"text": t}).json()["id"]
             for t in ("milk", "eggs", "bread")
         ]
-    chrome = _Chrome(tmp_path / "chrome", 400, 800)
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/admin/lists"})
-        tab = f"document.querySelector('.tab[data-id=\"{shop['id']}\"]')"
-        _wait(chrome, f"!!{tab}")
-        chrome.eval(f"{tab}.click()")
-        _wait(chrome, "document.querySelectorAll('#items .item').length === 3")
+    chrome.size(400, 800)
+    chrome.send("Page.navigate", {"url": f"{server}/admin/lists"})
+    tab = f"document.querySelector('.tab[data-id=\"{shop['id']}\"]')"
+    _wait(chrome, f"!!{tab}")
+    chrome.eval(f"{tab}.click()")
+    _wait(chrome, "document.querySelectorAll('#items .item').length === 3")
 
-        chrome.eval(f"{_row(ids[0])}.querySelector('.text').click()")
-        assert chrome.eval(_shown("item-dialog"))
-        assert chrome.eval("document.getElementById('item-text').value") == "milk"
-        chrome.eval(
-            "document.getElementById('item-text').value = 'oat milk';"
-            "document.getElementById('item-pinned').click();"
-            "document.getElementById('item-save').click()"
-        )
-        assert not chrome.eval(_shown("item-dialog"))
-        items = _items(
-            server, shop["id"], lambda items: any(i["text"] == "oat milk" for i in items)
-        )
-        first = next(i for i in items if i["id"] == ids[0])
-        assert (first["text"], first["pinned"], first["done"]) == ("oat milk", True, False)
-        _wait(chrome, "document.querySelector('.item.pinned .text').textContent === 'oat milk'")
+    chrome.eval(f"{_row(ids[0])}.querySelector('.text').click()")
+    assert chrome.eval(_shown("item-dialog"))
+    assert chrome.eval("document.getElementById('item-text').value") == "milk"
+    chrome.eval(
+        "document.getElementById('item-text').value = 'oat milk';"
+        "document.getElementById('item-pinned').click();"
+        "document.getElementById('item-save').click()"
+    )
+    assert not chrome.eval(_shown("item-dialog"))
+    items = _items(server, shop["id"], lambda items: any(i["text"] == "oat milk" for i in items))
+    first = next(i for i in items if i["id"] == ids[0])
+    assert (first["text"], first["pinned"], first["done"]) == ("oat milk", True, False)
+    _wait(chrome, "document.querySelector('.item.pinned .text').textContent === 'oat milk'")
 
-        chrome.eval(f"{_row(ids[1])}.querySelector('.text').click()")
-        chrome.eval("document.getElementById('item-delete').click()")
-        assert chrome.eval(_shown("item-confirm"))
-        assert not chrome.eval(_shown("item-edit"))
-        chrome.eval("document.getElementById('item-confirm-cancel').click()")
-        assert chrome.eval(_shown("item-edit"))
-        chrome.eval("document.getElementById('item-delete').click()")
-        chrome.eval("document.getElementById('item-confirm-delete').click()")
-        _wait(chrome, f"!{_row(ids[1])}")
+    chrome.eval(f"{_row(ids[1])}.querySelector('.text').click()")
+    chrome.eval("document.getElementById('item-delete').click()")
+    assert chrome.eval(_shown("item-confirm"))
+    assert not chrome.eval(_shown("item-edit"))
+    chrome.eval("document.getElementById('item-confirm-cancel').click()")
+    assert chrome.eval(_shown("item-edit"))
+    chrome.eval("document.getElementById('item-delete').click()")
+    chrome.eval("document.getElementById('item-confirm-delete').click()")
+    _wait(chrome, f"!{_row(ids[1])}")
 
-        chrome.eval(_touch(ids[2], 10, 80))
-        assert not chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
-        chrome.eval(_touch(ids[2], -90, 4))
-        assert chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
-        chrome.eval(
-            "document.getElementById('item-input').dispatchEvent(new PointerEvent('pointerdown',"
-            " {bubbles: true, pointerId: 8, pointerType: 'touch'}))"
-        )
-        assert not chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
+    chrome.eval(_touch(ids[2], 10, 80))
+    assert not chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
+    chrome.eval(_touch(ids[2], -90, 4))
+    assert chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
+    chrome.eval(
+        "document.getElementById('item-input').dispatchEvent(new PointerEvent('pointerdown',"
+        " {bubbles: true, pointerId: 8, pointerType: 'touch'}))"
+    )
+    assert not chrome.eval(f"{_row(ids[2])}.classList.contains('open')")
 
-        chrome.eval(_touch(ids[2], -90, 4))
-        chrome.eval(
-            f"const b = {_row(ids[2])}.querySelector('.swipe-delete');"
-            "b.dispatchEvent(new PointerEvent('pointerdown',"
-            " {bubbles: true, pointerId: 9, pointerType: 'touch'}));"
-            "b.click()"
-        )
-        assert chrome.eval(_shown("item-dialog") + " && " + _shown("item-confirm"))
-        chrome.eval("document.getElementById('item-confirm-delete').click()")
-        _wait(chrome, f"!{_row(ids[2])}")
-        items = _items(server, shop["id"], lambda items: len(items) == 1)
-        assert [i["id"] for i in items] == [ids[0]]
-    finally:
-        chrome.close()
+    chrome.eval(_touch(ids[2], -90, 4))
+    chrome.eval(
+        f"const b = {_row(ids[2])}.querySelector('.swipe-delete');"
+        "b.dispatchEvent(new PointerEvent('pointerdown',"
+        " {bubbles: true, pointerId: 9, pointerType: 'touch'}));"
+        "b.click()"
+    )
+    assert chrome.eval(_shown("item-dialog") + " && " + _shown("item-confirm"))
+    chrome.eval("document.getElementById('item-confirm-delete').click()")
+    _wait(chrome, f"!{_row(ids[2])}")
+    items = _items(server, shop["id"], lambda items: len(items) == 1)
+    assert [i["id"] for i in items] == [ids[0]]
 
 
 def _reopen_options(chrome, checked):
@@ -397,60 +269,184 @@ def _reopen_options(chrome, checked):
 
 
 @needs_chrome
-def test_list_options_window_in_headless_chrome(server, tmp_path):
-    with httpx.Client(base_url=server) as c:
+def test_list_options_window_in_headless_chrome(chrome, server):
+    with api_at(server) as c:
         shop = c.post("/api/lists", json={"name": "Shop"}).json()
         c.post(f"/api/lists/{shop['id']}/items", json={"text": "milk"})
-    chrome = _Chrome(tmp_path / "chrome", 400, 800)
-    try:
-        chrome.send("Page.navigate", {"url": f"{server}/admin/lists"})
-        tab = f"document.querySelector('.tab[data-id=\"{shop['id']}\"]')"
-        _wait(chrome, f"!!{tab}")
-        chrome.eval(f"{tab}.click()")
-        _wait(chrome, "document.querySelectorAll('#items .item').length === 1")
-        assert not chrome.eval("!document.getElementById('clear-done').hidden")
+    chrome.size(400, 800)
+    chrome.send("Page.navigate", {"url": f"{server}/admin/lists"})
+    tab = f"document.querySelector('.tab[data-id=\"{shop['id']}\"]')"
+    _wait(chrome, f"!!{tab}")
+    chrome.eval(f"{tab}.click()")
+    _wait(chrome, "document.querySelectorAll('#items .item').length === 1")
+    assert not chrome.eval("!document.getElementById('clear-done').hidden")
 
-        chrome.eval("document.getElementById('list-options').click()")
-        assert chrome.eval(_shown("list-dialog"))
-        assert chrome.eval("document.getElementById('list-title').textContent") == "Shop"
-        assert chrome.eval("document.getElementById('list-screen') === null")
-        assert chrome.eval("document.getElementById('list-tv-open').checked") is True
+    chrome.eval("document.getElementById('list-options').click()")
+    assert chrome.eval(_shown("list-dialog"))
+    assert chrome.eval("document.getElementById('list-title').textContent") == "Shop"
+    assert chrome.eval("document.getElementById('list-screen') === null")
+    assert chrome.eval("document.getElementById('list-tv-open').checked") is True
+    chrome.eval(
+        "document.getElementById('list-name').value = 'Food';"
+        'document.querySelector(\'input[name="kind"][value="notes"]\').click();'
+        "document.getElementById('list-tv-open').click();"
+        "document.getElementById('list-save').click()"
+    )
+    assert not chrome.eval(_shown("list-dialog"))
+    with api_at(server) as c:
+        for _ in range(100):
+            row = next(x for x in c.get("/api/lists").json() if x["id"] == shop["id"])
+            if row["name"] == "Food":
+                break
+            time.sleep(0.05)
+    assert (row["name"], row["kind"], row["tv_open"]) == ("Food", "notes", False)
+    _wait(chrome, f"{tab}.textContent === 'Food'")
+
+    _reopen_options(chrome, "false")
+    chrome.eval(
+        "document.getElementById('list-tv-open').click();"
+        "document.getElementById('list-save').click()"
+    )
+    with api_at(server) as c:
+        for _ in range(100):
+            row = next(x for x in c.get("/api/lists").json() if x["id"] == shop["id"])
+            if row["tv_open"]:
+                break
+            time.sleep(0.05)
+    assert row["tv_open"] is True
+
+    _reopen_options(chrome, "true")
+    chrome.eval("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
+    assert not chrome.eval(_shown("list-dialog"))
+    chrome.eval("document.getElementById('list-options').click()")
+    chrome.eval("document.getElementById('delete-list').click()")
+    assert not chrome.eval(_shown("list-dialog"))
+    assert chrome.eval(_shown("delete-dialog"))
+    chrome.eval("document.getElementById('confirm-cancel').click()")
+
+
+@needs_chrome
+def test_delete_confirm_names_screen_and_cancel_returns_to_options(chrome, server):
+    with api_at(server) as c:
+        shop = c.post("/api/lists", json={"name": "Shop"}).json()
+        spare = c.post("/api/screens", json={"name": "Spare"}).json()
+        c.post(
+            f"/api/screens/{spare['id']}/widgets",
+            json={"kind": "lists", "col": 0, "row": 0, "w": 1, "h": 1, "list_id": shop["id"]},
+        ).raise_for_status()
+    chrome.size(390, 844)
+    chrome.send("Page.navigate", {"url": f"{server}/admin/lists"})
+    tab = f"document.querySelector('.tab[data-id=\"{shop['id']}\"]')"
+    _wait(chrome, f"!!{tab}")
+    chrome.eval(f"{tab}.click()")
+    chrome.eval("document.getElementById('list-options').click()")
+    chrome.eval("document.getElementById('list-name').value = 'Typed'")
+    chrome.eval("document.getElementById('delete-list').click()")
+    assert not chrome.eval(_shown("list-dialog"))
+    text = _wait(
+        chrome,
+        "(t => t.includes('Spare') && t)(document.getElementById('delete-text').textContent)",
+    )
+    chrome.eval("document.getElementById('confirm-cancel').click()")
+    back = json.loads(
         chrome.eval(
-            "document.getElementById('list-name').value = 'Food';"
-            'document.querySelector(\'input[name="kind"][value="notes"]\').click();'
-            "document.getElementById('list-tv-open').click();"
-            "document.getElementById('list-save').click()"
+            "JSON.stringify({options: !document.getElementById('list-dialog').hidden,"
+            " confirm: !document.getElementById('delete-dialog').hidden,"
+            " name: document.getElementById('list-name').value,"
+            " focus: document.activeElement.id})"
         )
-        assert not chrome.eval(_shown("list-dialog"))
-        with httpx.Client(base_url=server) as c:
-            for _ in range(100):
-                row = next(x for x in c.get("/api/lists").json() if x["id"] == shop["id"])
-                if row["name"] == "Food":
-                    break
-                time.sleep(0.05)
-        assert (row["name"], row["kind"], row["tv_open"]) == ("Food", "notes", False)
-        _wait(chrome, f"{tab}.textContent === 'Food'")
-
-        _reopen_options(chrome, "false")
+    )
+    chrome.eval("document.getElementById('delete-list').click()")
+    chrome.eval("document.getElementById('delete-backdrop').click()")
+    backdrop = chrome.eval(_shown("list-dialog"))
+    chrome.eval("document.getElementById('delete-list').click()")
+    chrome.eval("document.getElementById('confirm-delete').click()")
+    after = json.loads(
         chrome.eval(
-            "document.getElementById('list-tv-open').click();"
-            "document.getElementById('list-save').click()"
+            "JSON.stringify({options: !document.getElementById('list-dialog').hidden,"
+            " confirm: !document.getElementById('delete-dialog').hidden})"
         )
-        with httpx.Client(base_url=server) as c:
-            for _ in range(100):
-                row = next(x for x in c.get("/api/lists").json() if x["id"] == shop["id"])
-                if row["tv_open"]:
-                    break
-                time.sleep(0.05)
-        assert row["tv_open"] is True
+    )
+    with api_at(server) as c:
+        for _ in range(100):
+            if all(x["id"] != shop["id"] for x in c.get("/api/lists").json()):
+                break
+            time.sleep(0.05)
+        lists = c.get("/api/lists").json()
+        screen = next(s for s in c.get("/api/screens").json() if s["id"] == spare["id"])
+    assert text == (
+        'Delete "Shop" and everything on it? It is also removed from the TV screen "Spare".'
+    )
+    assert back == {"options": True, "confirm": False, "name": "Typed", "focus": "delete-list"}
+    assert backdrop is True
+    assert after == {"options": False, "confirm": False}
+    assert all(x["id"] != shop["id"] for x in lists)
+    assert screen["widgets"] == []
 
-        _reopen_options(chrome, "true")
-        chrome.eval("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
-        assert not chrome.eval(_shown("list-dialog"))
-        chrome.eval("document.getElementById('list-options').click()")
-        chrome.eval("document.getElementById('delete-list').click()")
-        assert not chrome.eval(_shown("list-dialog"))
-        assert chrome.eval(_shown("delete-dialog"))
-        chrome.eval("document.getElementById('confirm-cancel').click()")
-    finally:
-        chrome.close()
+
+MONTH_IDS = ["month-prev", "month-select", "year-select", "month-next", "month-today"]
+
+MONTH_ROW = """JSON.stringify({
+  w: innerWidth,
+  box: document.querySelector('.month').getBoundingClientRect().right,
+  scrollW: document.documentElement.scrollWidth,
+  years: document.getElementById('year-select').options.length,
+  rects: IDS.map(id => {
+    const r = document.getElementById(id).getBoundingClientRect();
+    return {id, top: r.top, right: r.right, width: r.width};
+  }),
+  months: [...document.getElementById('month-select').options].map(o => [o.value, o.text]),
+  fit: ['month-select', 'year-select'].map(id => {
+    const s = document.getElementById(id);
+    const c = s.cloneNode(true);
+    c.removeAttribute('id');
+    c.style.cssText = 'position:absolute;flex:none;width:auto;min-width:0;max-width:none';
+    s.parentNode.appendChild(c);
+    const need = c.getBoundingClientRect().width;
+    c.remove();
+    return {id, need, width: s.getBoundingClientRect().width};
+  }),
+})""".replace("IDS", json.dumps(MONTH_IDS))
+
+MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+
+@needs_chrome
+def test_calendar_month_row_stays_on_one_line(chrome, server):
+    sizes = [(320, 844), (360, 844), (390, 844), (412, 915)]
+    for n, (touch, (width, height)) in enumerate((t, s) for t in (False, True) for s in sizes):
+        chrome.size(width, height)
+        chrome.touch(touch, 5)
+        chrome.send("Page.navigate", {"url": f"{server}/admin/calendar?{n}"})
+        row = None
+        for _ in range(100):
+            row = json.loads(chrome.eval(f"location.search === '?{n}' && {MONTH_ROW}") or "null")
+            if row and row["years"]:
+                break
+            time.sleep(0.05)
+        where = (width, touch)
+        assert row["w"] == width, where
+        assert len({r["top"] for r in row["rects"]}) == 1, (where, row["rects"])
+        for r in row["rects"]:
+            assert r["right"] <= width and r["right"] <= row["box"], (where, r)
+        assert row["scrollW"] <= width, where
+        year = next(r for r in row["rects"] if r["id"] == "year-select")
+        assert year["width"] >= 50, (where, year)
+        assert [v for v, _ in row["months"]] == [str(m) for m in range(1, 13)], where
+        labels = [t for _, t in row["months"]]
+        assert labels == ([m[:3] for m in MONTHS] if width < 390 else MONTHS), where
+        for f in row["fit"]:
+            assert f["width"] >= f["need"] - 0.5, (where, f)

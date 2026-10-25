@@ -115,14 +115,14 @@ def _seed(base):
 def _show(base, chrome, screen):
     httpx.put(f"{base}/api/settings", json={"channel": "screen", "screen_id": screen["id"]})
     chrome.send("Page.navigate", {"url": f"{base}/tv"})
-    out = None
+    out = last = None
     for _ in range(100):
         out = json.loads(chrome.eval(MEASURE) or "null")
-        if out and out["title"] == screen["name"] and out["ready"]:
+        if out and out["title"] == screen["name"] and out["ready"] and out == last:
             break
+        last = out
         time.sleep(0.05)
-    time.sleep(0.3)
-    return json.loads(chrome.eval(MEASURE))
+    return out
 
 
 @needs_chrome

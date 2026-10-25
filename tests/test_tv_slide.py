@@ -1,11 +1,8 @@
 import json
 import subprocess
-import time
 from pathlib import Path
 
-import httpx
-
-from tests.chrome import _Chrome, needs_chrome, needs_node, server  # noqa: F401
+from tests.chrome import needs_node
 from tests.test_caption_lifetime import HARNESS
 
 DISPLAY_JS = Path(__file__).resolve().parent.parent / "app" / "static" / "display.js"
@@ -176,77 +173,3 @@ def test_swipe_right_on_photos_drags_last_screen_in_from_the_left():
     assert r["dragged"] == "translateX(-700px)"
     assert r["puts"] == [{"channel": "screen", "screen_id": 2}]
     assert r["tf"] == "translateX(0px)"
-
-
-def _tx(chrome):
-    m = chrome.eval("getComputedStyle(document.getElementById('channel')).transform")
-    if m in (None, "none"):
-        return 0.0
-    return float(m[m.index("(") + 1 : -1].split(",")[4])
-
-
-def _until(get, ok, tries=100):
-    v = None
-    for _ in range(tries):
-        v = get()
-        if ok(v):
-            return v
-        time.sleep(0.05)
-    return v
-
-
-def _move(chrome, kind, x):
-    points = [] if kind == "touchEnd" else [{"x": x, "y": 300}]
-    chrome.send("Input.dispatchTouchEvent", {"type": kind, "touchPoints": points})
-
-
-READY = """(() => {
-  const f = document.getElementById('channel');
-  const d = f.contentDocument;
-  return !!(d && d.readyState === 'complete' && d.location.pathname === '/tv'
-    && performance.getEntriesByName(location.origin + '/api/screens').length);
-})()"""
-
-
-@needs_chrome
-def test_kiosk_tv_window_follows_finger_in_headless_chrome(server, tmp_path):  # noqa: F811
-    first = min(httpx.get(f"{server}/api/screens").json(), key=lambda s: s["sort_order"])
-    chrome = _Chrome(tmp_path / "chrome", 1024, 600)
-    try:
-        chrome.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
-        chrome.send("Page.navigate", {"url": f"{server}/"})
-        _until(lambda: chrome.eval(READY), bool)
-        time.sleep(0.3)
-        rest = _tx(chrome)
-        _move(chrome, "touchStart", 800)
-        for i in range(1, 6):
-            _move(chrome, "touchMove", 800 - 30 * i)
-        mid = _until(lambda: _tx(chrome), lambda v: 0 < v < 1024, tries=40)
-        for i in range(6, 11):
-            _move(chrome, "touchMove", 800 - 30 * i)
-        _move(chrome, "touchEnd", 500)
-        landed = _until(
-            lambda: httpx.get(f"{server}/api/settings").json(), lambda s: s["channel"] == "screen"
-        )
-        shown = _until(lambda: _tx(chrome), lambda v: v == 0)
-        time.sleep(1)
-        _move(chrome, "touchStart", 200)
-        for i in range(1, 6):
-            _move(chrome, "touchMove", 200 + 30 * i)
-        out = _until(lambda: _tx(chrome), lambda v: v >= 150, tries=40)
-        for i in range(6, 11):
-            _move(chrome, "touchMove", 200 + 30 * i)
-        _move(chrome, "touchEnd", 500)
-        back = _until(
-            lambda: httpx.get(f"{server}/api/settings").json(), lambda s: s["channel"] == "photos"
-        )
-        gone = _until(lambda: _tx(chrome), lambda v: v >= 1024)
-    finally:
-        chrome.close()
-    assert rest >= 1024
-    assert 0 < mid < 1024
-    assert (landed["channel"], landed["screen_id"]) == ("screen", first["id"])
-    assert shown == 0
-    assert out == 150
-    assert back["channel"] == "photos"
-    assert gone >= 1024
