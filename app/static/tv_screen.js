@@ -22,10 +22,10 @@
   var TAP_SLOP_PX = 10;
   var SWIPE_CLICK_MS = 600;
   var SLIDE_MS = 250;
-  var SPOTIFY_POLL_MS = 3000;
+  var SPOTIFY_POLL_MS = 15000;
   var SPOTIFY_TICK_MS = 1000;
   var SPOTIFY_AFTER_TAP_MS = 1000;
-  var SPOTIFY_EXTRA_EVERY = 10;
+  var SPOTIFY_EXTRA_EVERY = 2;
   var SPOTIFY_NOTE_MS = 3000;
   var VOLUME_STEP = 5;
   var VOLUME_CHAIN_MS = 1000;
@@ -772,14 +772,15 @@
     var live = kind !== "idle";
     var here = !live && !!now && !now.device;
     var cover = spotImage("sp-cover", coverUrl(now));
-    box.appendChild(cover);
+    var left = layout === "full" ? box.appendChild(el("div", "sp-left")) : box;
+    left.appendChild(cover);
     if (layout === "tile") {
       if (live) cover.appendChild(toggleButton(kind));
       if (here) cover.appendChild(playHere());
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
     } else {
       var info = el("div", "sp-info");
-      var head = info.appendChild(el("div", "sp-head"));
+      var head = (layout === "full" ? left : info).appendChild(el("div", "sp-head"));
       var controls = info.appendChild(el("div", "sp-controls"));
       head.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
       if (live && now.artist) head.appendChild(el("div", "sp-artist", now.artist));
@@ -1143,6 +1144,10 @@
     });
   }
 
+  function onSpotifyChanged() {
+    if (spot.on) pollSpotify();
+  }
+
   function spotifyNote(text) {
     spot.note = text;
     clearTimeout(spot.noteTimer);
@@ -1295,6 +1300,7 @@
     ["hello", "settings_changed", "lists_changed", "events_changed", "weather_changed"].forEach(function (name) {
       es.addEventListener(name, load);
     });
+    es.addEventListener("spotify_changed", onSpotifyChanged);
     es.onerror = function () {
       es.close();
       setTimeout(connect, backoff * 1000);

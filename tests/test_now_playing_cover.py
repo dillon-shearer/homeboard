@@ -235,16 +235,16 @@ def test_cover_not_in_layout_when_not_playing(chrome, server, now):
     chrome.touch()
     chrome.send("Page.navigate", {"url": f"{server}/"})
     chrome.wait("document.readyState === 'complete' && window.__test.heard('hello') > 0")
-    chrome.run("window.__test.tick(5000)")
+    chrome.run("window.__test.tick(15000)")
     c = _js(chrome, COVER)
     assert c["hidden"] is True and c["shown"] is False
     assert c["w"] == 0 and c["h"] == 0
     now["now"] = _playing(cover=_png((200, 40, 40), 200))
-    chrome.run("window.__test.tick(5000)")
+    chrome.run("window.__test.tick(15000)")
     shown = _until(lambda: _js(chrome, COVER), lambda v: v["shown"])
     assert shown["shown"] is True
     now["now"] = _playing(on_board=False, cover=_png((200, 40, 40), 200))
-    chrome.run("window.__test.tick(5000)")
+    chrome.run("window.__test.tick(15000)")
     gone = _until(lambda: _js(chrome, COVER), lambda v: not v["shown"])
     assert gone["hidden"] is True
 
