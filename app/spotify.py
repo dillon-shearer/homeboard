@@ -31,6 +31,7 @@ _lock = threading.Lock()
 _now_lock = threading.Lock()
 _token: dict = {}
 _now: dict = {}
+_profile: dict = {}
 _states: dict[str, float] = {}
 
 
@@ -121,6 +122,7 @@ def forget(data_dir=None) -> None:
         if data_dir is not None:
             token_path(data_dir).unlink(missing_ok=True)
         _token.clear()
+        _profile.clear()
     with _now_lock:
         _now.clear()
 
@@ -197,6 +199,7 @@ def exchange_code(data_dir, code: str, redirect_uri: str) -> None:
     with _lock:
         _save_refresh_token(data_dir, data["refresh_token"])
         _keep_token(data)
+        _profile.clear()
     with _now_lock:
         _now.clear()
 
@@ -334,6 +337,17 @@ def now_playing(data_dir, fresh=False) -> dict:
             last = _now.get("data") or _empty()
             _now["data"] = {**last, "stale": True}
         return _now["data"]
+
+
+def profile(data_dir) -> dict:
+    with _lock:
+        if "display_name" in _profile:
+            return {"linked": True, "display_name": _profile["display_name"]}
+    data = api(data_dir, "GET", "/me") or {}
+    name = data.get("display_name") or data.get("id") or None
+    with _lock:
+        _profile["display_name"] = name
+    return {"linked": True, "display_name": name}
 
 
 def playlists(data_dir) -> list[dict]:

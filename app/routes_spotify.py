@@ -86,6 +86,11 @@ def now(request: Request, fresh: bool = False):
     return _call(spotify.now_playing, _data_dir(request))
 
 
+@router.get("/me")
+def me(request: Request):
+    return _call(spotify.profile, _data_dir(request))
+
+
 @router.post("/event")
 def player_event(body: PlayerEvent, request: Request):
     host = request.client.host if request.client else None
