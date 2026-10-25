@@ -2,6 +2,7 @@
   "use strict";
 
   var NOW_MS = 5000;
+  var SPEAKER_MS = 10000;
   var STEP_DEBOUNCE_MS = 400;
   var IDLE_MIN = 1;
   var IDLE_MAX = 120;
@@ -117,25 +118,25 @@
   function loadSpeaker() {
     var mine = ++speakerSeq;
     return getJSON("/api/sound/status").then(function (s) {
-      if (mine === speakerSeq) renderSpeaker(s);
+      if (mine === speakerSeq && !busy) renderSpeaker(s);
     }, function (err) {
-      if (mine === speakerSeq) speakerError(err);
+      if (mine === speakerSeq && !busy) speakerError(err);
     });
   }
 
   function speakerAction(path, label) {
     if (busy) return;
     busy = true;
-    speakerSeq++;
     $("speaker-connect").disabled = true;
     $("speaker-disconnect").disabled = true;
     $("speaker-state").textContent = label;
     send("POST", path).catch(function (err) {
       if (err.status !== 503) showError("Could not reach the speaker. Try again.");
-    }).then(loadSpeaker).then(function () {
+    }).then(function () {
       busy = false;
       $("speaker-connect").disabled = false;
       $("speaker-disconnect").disabled = false;
+      return loadSpeaker();
     });
   }
 
@@ -343,10 +344,11 @@
     loadSpeaker();
   });
   setInterval(function () {
-    if (document.visibilityState !== "visible") return;
-    loadNow();
-    if (!busy) loadSpeaker();
+    if (document.visibilityState === "visible") loadNow();
   }, NOW_MS);
+  setInterval(function () {
+    if (document.visibilityState === "visible") loadSpeaker();
+  }, SPEAKER_MS);
 
   loadSettings();
   loadSpeaker();

@@ -1169,7 +1169,7 @@ class FakeSpotify:
         return {"linked": True, "ok": True}
 
     def play_here(self, data_dir):
-        self.calls.append(("POST", "/api/spotify/here"))
+        self.calls.append(("POST", "/api/spotify/play-here", None))
         return {"linked": True, "ok": True}
 
     def helper(self, method, path, timeout=None):

@@ -52,6 +52,15 @@ def _call(fn, *args):
         return JSONResponse({"detail": "spotify unreachable"}, status_code=503)
 
 
+def _command(request: Request, fn, *args):
+    data_dir = _data_dir(request)
+    before = spotify.seen_now()
+    try:
+        return _call(fn, data_dir, *args)
+    finally:
+        spotify.settle(data_dir, events.publish, before)
+
+
 @router.get("/login")
 def login(request: Request):
     try:
@@ -104,32 +113,27 @@ def player_event(body: PlayerEvent, request: Request):
 
 @router.post("/play")
 def play(request: Request):
-    spotify.settle(_data_dir(request), events.publish)
-    return _call(spotify.control, _data_dir(request), "PUT", "/me/player/play")
+    return _command(request, spotify.control, "PUT", "/me/player/play")
 
 
-@router.post("/here")
-def here(request: Request):
-    spotify.settle(_data_dir(request), events.publish)
-    return _call(spotify.play_here, _data_dir(request))
+@router.post("/play-here")
+def play_here(request: Request):
+    return _command(request, spotify.play_here)
 
 
 @router.post("/pause")
 def pause(request: Request):
-    spotify.settle(_data_dir(request), events.publish)
-    return _call(spotify.control, _data_dir(request), "PUT", "/me/player/pause")
+    return _command(request, spotify.control, "PUT", "/me/player/pause")
 
 
 @router.post("/next")
 def next_track(request: Request):
-    spotify.settle(_data_dir(request), events.publish)
-    return _call(spotify.control, _data_dir(request), "POST", "/me/player/next")
+    return _command(request, spotify.control, "POST", "/me/player/next")
 
 
 @router.post("/previous")
 def previous_track(request: Request):
-    spotify.settle(_data_dir(request), events.publish)
-    return _call(spotify.control, _data_dir(request), "POST", "/me/player/previous")
+    return _command(request, spotify.control, "POST", "/me/player/previous")
 
 
 @router.put("/volume")
@@ -152,8 +156,7 @@ def playlists(request: Request):
 
 @router.post("/play-playlist")
 def play_playlist(body: PlaylistId, request: Request):
-    spotify.settle(_data_dir(request), events.publish)
-    return _call(spotify.play_playlist, _data_dir(request), body.id)
+    return _command(request, spotify.play_playlist, body.id)
 
 
 @router.get("/shown")

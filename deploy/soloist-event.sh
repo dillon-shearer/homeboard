@@ -33,7 +33,11 @@ while IFS= read -r LINE; do
     if [ "$BODY" = "$LAST" ]; then
         continue
     fi
-    if curl -sf -o /dev/null --max-time 3 -X POST -H 'Content-Type: application/json' -d "$BODY" "$URL"; then
-        LAST="$BODY"
-    fi
+    for TRY in 1 2 3; do
+        if curl -fs -o /dev/null --connect-timeout 1 --max-time 3 -X POST -H 'Content-Type: application/json' -d "$BODY" "$URL"; then
+            LAST="$BODY"
+            break
+        fi
+        if [ "$TRY" -lt 3 ]; then sleep 1; fi
+    done
 done

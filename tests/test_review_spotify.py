@@ -169,7 +169,7 @@ def test_play_here_transfers_from_active_phone(review_api):
         {"devices": [{"id": "hb", "name": "Home Board", "is_active": False}]},
     )
     assert client.get("/api/spotify/now").json()["on_board"] is False
-    assert client.post("/api/spotify/here").status_code == 200
+    assert client.post("/api/spotify/play-here").status_code == 200
     transfers = [json.loads(c[4]) for c in fake.calls if c[:2] == ("PUT", "/me/player")]
     assert any(c["device_ids"] == ["hb"] for c in transfers)
 
@@ -317,6 +317,7 @@ def surface_player(monkeypatch):
     player.now = _playing(volume=80)
     monkeypatch.setattr(spotify, "now_playing", player.now_playing)
     monkeypatch.setattr(spotify, "control", player.control)
+    monkeypatch.setattr(spotify, "play_here", player.play_here)
     monkeypatch.setattr(routes_sound, "helper", player.helper)
     return player
 
@@ -406,7 +407,6 @@ def test_quick_volume_taps_wait_for_previous_write(chrome, server, surface_playe
 
 @needs_chrome
 @pytest.mark.parametrize("surface", ["phone", "tv", "panel"])
-@pytest.mark.xfail(strict=True, reason="Now-playing surfaces omit the active device name")
 def test_other_device_is_named_on_every_control_surface(chrome, server, surface_player, surface):
     surface_player.now = _playing(device="Review Phone", on_board=False)
     _open_surface(chrome, server, surface)
@@ -418,9 +418,6 @@ def test_other_device_is_named_on_every_control_surface(chrome, server, surface_
 
 @needs_chrome
 @pytest.mark.parametrize("surface", ["phone", "tv", "panel"])
-@pytest.mark.xfail(
-    strict=True, reason="Clients render stale playback as current without a status message"
-)
 def test_stale_playback_is_explained(chrome, server, surface_player, surface):
     _open_surface(chrome, server, surface)
     surface_player.now = _playing(stale=True)
@@ -431,7 +428,6 @@ def test_stale_playback_is_explained(chrome, server, surface_player, surface):
 
 
 @needs_chrome
-@pytest.mark.xfail(strict=True, reason="TV volume changes recreate the unchanged cover image")
 def test_tv_volume_refresh_keeps_cover_element(chrome, server, surface_player):
     _open_surface(chrome, server, "tv")
     chrome.eval("window.reviewImage = document.querySelector('.sp-cover img')")

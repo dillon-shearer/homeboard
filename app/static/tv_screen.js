@@ -23,6 +23,7 @@
   var SWIPE_CLICK_MS = 600;
   var SLIDE_MS = 250;
   var SPOTIFY_POLL_MS = 15000;
+  var SPOTIFY_MAX_POLL_MS = 120000;
   var SPOTIFY_TICK_MS = 1000;
   var SPOTIFY_AFTER_TAP_MS = 1000;
   var SPOTIFY_END_MS = 1000;
@@ -334,7 +335,7 @@
 
   function progressAt(now, sinceMs) {
     if (!now || typeof now.progress_ms !== "number") return 0;
-    var ms = now.progress_ms + (now.playing ? Math.max(0, sinceMs || 0) : 0);
+    var ms = now.progress_ms + (now.playing && !now.stale ? Math.max(0, sinceMs || 0) : 0);
     return now.duration_ms ? Math.min(ms, now.duration_ms) : ms;
   }
 
@@ -342,6 +343,22 @@
     if (!now || !now.playing || typeof now.progress_ms !== "number" || !now.duration_ms) return SPOTIFY_POLL_MS;
     var left = now.duration_ms - now.progress_ms + SPOTIFY_END_MS;
     return Math.max(SPOTIFY_END_MS, Math.min(SPOTIFY_POLL_MS, left));
+  }
+
+  function backoffMs(now, fails) {
+    if (!fails) return nextPollMs(now);
+    return Math.min(SPOTIFY_MAX_POLL_MS, SPOTIFY_POLL_MS * Math.pow(2, fails - 1));
+  }
+
+  function staleText(now) {
+    if (!now || !now.stale) return null;
+    var why = now.reason === "rate limited" ? "Could not reach Spotify (too many requests)." : "Could not reach Spotify.";
+    return now.track ? why + " Showing the last known song." : why;
+  }
+
+  function deviceText(now) {
+    if (!now || !now.device) return null;
+    return now.on_board ? "Playing on Home Board" : "Playing on " + now.device;
   }
 
   function volumeStep(volume, delta) {
@@ -777,20 +794,23 @@
       return box;
     }
     var live = kind !== "idle";
-    var here = !live && !!now && !now.device;
+    var here = !!now && (live ? !!now.device && !now.on_board : !now.device);
+    var device = live ? deviceText(now) : null;
     var cover = spotImage("sp-cover", coverUrl(now));
     var left = layout === "full" ? box.appendChild(el("div", "sp-left")) : box;
     left.appendChild(cover);
     if (layout === "tile") {
-      if (live) cover.appendChild(toggleButton(kind));
-      if (here) cover.appendChild(playHere());
+      if (live) cover.appendChild(here ? playHere() : toggleButton(kind));
+      else if (here) cover.appendChild(playHere());
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
+      if (device) box.appendChild(el("div", "sp-device", device));
     } else {
       var info = el("div", "sp-info");
       var head = (layout === "full" ? left : info).appendChild(el("div", "sp-head"));
       var controls = info.appendChild(el("div", "sp-controls"));
       head.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
       if (live && now.artist) head.appendChild(el("div", "sp-artist", now.artist));
+      if (device) head.appendChild(el("div", "sp-device", device));
       if (live && layout === "full") {
         var prog = el("div", "sp-progress");
         prog.appendChild(el("span", "sp-elapsed", "0:00"));
@@ -820,7 +840,8 @@
         box.appendChild(side);
       }
     }
-    if (sp.note) box.appendChild(el("p", "sp-msg", sp.note));
+    var msg = sp.note || staleText(now);
+    if (msg) box.appendChild(el("p", "sp-msg", msg));
     return box;
   }
 
@@ -831,14 +852,20 @@
     var layout = spotifyLayout(widget);
     var full = layout === "full";
     var sig = JSON.stringify([layout, kind, kind === "unlinked" || !now ? null : [now.track, now.artist, now.cover,
-      now.duration_ms, now.volume, now.device], full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
+      now.duration_ms, now.volume, now.device, !!now.on_board, staleText(now)],
+      full ? [sp.shown || [], speakerOn(sp.sound), !!sp.connecting] : null, sp.note || null]);
     var body = card.querySelector(".sp");
     if (!body || body.getAttribute("data-sig") !== sig) {
       var oldList = body && body.querySelector(".sp-pls");
       var scroll = oldList ? oldList.scrollTop : 0;
+      var oldImg = body && body.querySelector(".sp-cover img");
       if (body) card.removeChild(body);
       body = spotBody(layout, kind, now, sp);
       body.setAttribute("data-sig", sig);
+      var newImg = body.querySelector(".sp-cover img");
+      if (oldImg && newImg && oldImg.getAttribute("src") === newImg.getAttribute("src")) {
+        newImg.parentNode.replaceChild(oldImg, newImg);
+      }
       card.appendChild(body);
       var list = body.querySelector(".sp-pls");
       if (list) list.scrollTop = scroll;
@@ -968,6 +995,9 @@
     nextPollMs: nextPollMs,
     volumeStep: volumeStep,
     speakerOn: speakerOn,
+    backoffMs: backoffMs,
+    staleText: staleText,
+    deviceText: deviceText,
   };
 
   root.TvScreen = TvScreen;
@@ -992,7 +1022,7 @@
   var drag = null;
   var sliding = false;
   var spot = { on: false, seq: 0, polls: 0, timer: null, tick: null, now: null, at: 0, shown: [], sound: null,
-    note: null, noteTimer: null, connecting: false, vol: null };
+    note: null, noteTimer: null, connecting: false, vol: null, fails: 0, queue: Promise.resolve() };
 
   function context() {
     var now = new Date();
@@ -1133,7 +1163,15 @@
     if (!spot.on) return;
     var jobs = [getJSON("/api/spotify/now").then(function (now) {
       if (seq !== spot.seq) return;
+      spot.fails = now.stale ? spot.fails + 1 : 0;
       spot.now = now;
+      spot.at = Date.now();
+    }, function () {
+      if (seq !== spot.seq) return;
+      spot.fails++;
+      if (!spot.now || spot.now.linked === false) return;
+      spot.now = Object.assign({}, spot.now, { progress_ms: progressAt(spot.now, Date.now() - spot.at), stale: true,
+        reason: "unreachable" });
       spot.at = Date.now();
     })];
     if (spotifyWidgets().some(isFull) && spot.polls % SPOTIFY_EXTRA_EVERY === 0) {
@@ -1148,12 +1186,17 @@
     Promise.all(jobs.map(function (job) { return job.catch(function () {}); })).then(function () {
       if (seq !== spot.seq || !spot.on) return;
       renderSpotifyCards();
-      spot.timer = setTimeout(pollSpotify, nextPollMs(spot.now));
+      spot.timer = setTimeout(pollSpotify, backoffMs(spot.now, spot.fails));
     });
   }
 
   function onSpotifyChanged() {
     if (spot.on) pollSpotify();
+  }
+
+  function onHello() {
+    spot.polls = 0;
+    onSpotifyChanged();
   }
 
   function spotifyNote(text) {
@@ -1168,7 +1211,7 @@
 
   function errorText(r, fallback) {
     return r.json().catch(function () { return {}; }).then(function (out) {
-      return r.status === 409 && typeof out.detail === "string" ? out.detail : fallback;
+      return (r.status === 409 || r.status === 429) && typeof out.detail === "string" ? out.detail : fallback;
     });
   }
 
@@ -1181,13 +1224,17 @@
       opts.headers = { "Content-Type": "application/json" };
       opts.body = JSON.stringify(body);
     }
-    return fetch(url, opts).then(function (r) {
-      if (!r.ok) return errorText(r, SPOTIFY_DOWN_TEXT).then(spotifyNote);
-    }, function () {
-      spotifyNote(SPOTIFY_DOWN_TEXT);
+    spot.queue = spot.queue.then(function () {
+      return fetch(url, opts).then(function (r) {
+        if (!r.ok) return errorText(r, SPOTIFY_DOWN_TEXT).then(spotifyNote);
+      }, function () {
+        spotifyNote(SPOTIFY_DOWN_TEXT);
+      });
     }).then(function () {
+      clearTimeout(spot.timer);
       if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
     });
+    return spot.queue;
   }
 
   function toggleSpeaker() {
@@ -1255,7 +1302,7 @@
       spot.at = Date.now();
       spotifyCall("POST", playing ? "/api/spotify/pause" : "/api/spotify/play");
     } else if (action === "here") {
-      spotifyCall("POST", "/api/spotify/here");
+      spotifyCall("POST", "/api/spotify/play-here");
     } else if (action === "previous" || action === "next") {
       spotifyCall("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {
@@ -1309,6 +1356,7 @@
     ["hello", "settings_changed", "lists_changed", "events_changed", "weather_changed"].forEach(function (name) {
       es.addEventListener(name, load);
     });
+    es.addEventListener("hello", onHello);
     es.addEventListener("spotify_changed", onSpotifyChanged);
     es.onerror = function () {
       es.close();
