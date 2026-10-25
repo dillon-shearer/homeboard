@@ -14,6 +14,10 @@ UNITS = [
     "homeboard-backup.timer",
     "wifi-powersave-off.service",
     "homeboard-helper.service",
+    "homeboard-soloist.service",
+    "homeboard-soloist-events.service",
+    "homeboard-soloist-update.service",
+    "homeboard-soloist-update.timer",
 ]
 
 
@@ -32,7 +36,17 @@ def test_unit_parses_with_lf_endings(name):
     assert parser.has_section("Unit")
 
 
-@pytest.mark.parametrize("name", ["install.sh", "kiosk.sh", "homeboard-backup.sh"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "install.sh",
+        "kiosk.sh",
+        "homeboard-backup.sh",
+        "soloist.sh",
+        "soloist-update.sh",
+        "soloist-event.sh",
+    ],
+)
 def test_scripts_use_lf_endings(name):
     raw = (DEPLOY / name).read_bytes()
     assert raw.startswith(b"#!/usr/bin/env bash\n")
@@ -154,6 +168,7 @@ def test_api_service_is_sandboxed():
     assert s["ReadWritePaths"] == "/var/lib/homeboard"
     assert s["ProtectHome"] == "yes"
     assert s["PrivateDevices"] == "yes"
+    assert s["ProtectProc"] == "invisible"
 
 
 def test_install_restarts_api_when_it_fails_after_the_stop():
@@ -283,3 +298,91 @@ def test_setup_guide_has_spotify_steps():
     assert "https://homeboard.datawithdillon.com/api/spotify/callback" in text
     assert "sudo bash /opt/homeboard/deploy/install.sh --spotify" in text
     assert "--new-spotify" in text
+
+
+def test_install_sets_up_soloist():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert "--new-soloist-key) NEW_SOLOIST_KEY=1; shift ;;" in text
+    assert "--update-soloist) UPDATE_SOLOIST=1; shift ;;" in text
+    assert 'SOLOIST_ENV="$ETC_DIR/soloist.env"' in text
+    speaker = text.split('echo "== Spotify Connect speaker"', 1)[1].split(
+        'echo "== Enabling services"', 1
+    )[0]
+    assert 'if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ]; then' in speaker
+    assert 'bash "$APP_DIR"/deploy/soloist-update.sh' in speaker
+    assert 'printf \'SOLOIST_API_KEY=%s\\n\' "$SOLOIST_KEY" > "$SOLOIST_ENV"' in speaker
+    assert 'chown root:root "$SOLOIST_ENV"' in speaker and 'chmod 600 "$SOLOIST_ENV"' in speaker
+    assert "--update-soloist" in speaker.split("SOLOIST_EXPIRES=", 1)[1]
+    enable = text.split("systemctl enable \\\n", 1)[1].split("\n\n", 1)[0]
+    for name in [
+        "homeboard-soloist.service",
+        "homeboard-soloist-events.service",
+        "homeboard-soloist-update.timer",
+    ]:
+        assert f"    {name} \\\n" in enable
+    assert "systemctl restart homeboard-soloist.service" in text
+    packages = text.split("apt-get install -y \\\n", 1)[1].split("\nif ", 1)[0].split()
+    assert "patchelf" in packages
+
+
+def test_install_removes_raspotify():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert "if dpkg -s raspotify >/dev/null 2>&1; then" in text
+    assert "systemctl disable --now raspotify.service || true" in text
+    assert "apt-get purge -y raspotify" in text
+    assert (
+        "rm -f /etc/apt/sources.list.d/raspotify.list /usr/share/keyrings/raspotify_key.asc" in text
+    )
+    assert "rm -rf /etc/systemd/system/raspotify.service.d /etc/raspotify" in text
+    assert "apt-get install -y -o Dpkg::Options::=--force-confold raspotify" not in text
+    assert "raspotify.service \\" not in text
+    assert not (DEPLOY / "raspotify.conf").exists()
+    assert not (DEPLOY / "raspotify-event.sh").exists()
+
+
+def test_soloist_service():
+    p = load("homeboard-soloist.service")
+    s, u = p["Service"], p["Unit"]
+    assert s["User"] == "dillon"
+    assert "PULSE_SERVER=unix:/run/user/1000/pulse/native" in s["Environment"].split()
+    assert s["LoadCredential"] == "soloist:/etc/homeboard/soloist.env"
+    assert s["StateDirectory"] == "soloist"
+    assert s["ExecStart"].startswith('/opt/homeboard/deploy/soloist.sh --device-name "Home Board" ')
+    assert "--ws 127.0.0.1:0" in s["ExecStart"]
+    assert s["RestartPreventExitStatus"] == "10"
+    assert "user@1000.service" in u["After"].split()
+    assert p["Install"]["WantedBy"] == "multi-user.target"
+    run = (DEPLOY / "soloist.sh").read_text(encoding="utf-8")
+    assert '"$CREDENTIALS_DIRECTORY/soloist"' in run
+    assert 'exec /opt/soloist/soloist "${ARGS[@]}"' in run
+
+
+def test_soloist_events_service():
+    p = load("homeboard-soloist-events.service")
+    s, u = p["Service"], p["Unit"]
+    assert s["User"] == "dillon"
+    assert s["ExecStart"] == (
+        "/bin/bash -c '/opt/soloist/soloist ctl -D /var/lib/soloist trace"
+        " | /opt/homeboard/deploy/soloist-event.sh'"
+    )
+    assert s["Restart"] == "always"
+    assert u["BindsTo"] == "homeboard-soloist.service"
+    assert p["Install"]["WantedBy"] == "homeboard-soloist.service"
+
+
+def test_soloist_update():
+    t = load("homeboard-soloist-update.timer")["Timer"]
+    assert "OnCalendar" in t
+    assert t["Unit"] == "homeboard-soloist-update.service"
+    s = load("homeboard-soloist-update.service")["Service"]
+    assert s["ExecStart"] == "/opt/homeboard/deploy/soloist-update.sh"
+    script = (DEPLOY / "soloist-update.sh").read_text(encoding="utf-8")
+    assert "set -euo pipefail" in script
+    assert "https://soloist-builds.spotifycdn.com/soloist_release_arm64.tar.gz" in script
+    assert "sha256sum -c --quiet -" in script
+    assert (
+        'patchelf --set-interpreter "$DIR/lib/ld-linux-aarch64.so.1" --set-rpath "$DIR/lib"'
+        in script
+    )
+    assert 'date -d "$BUILT + 90 days" +%F > "$DIR/expires"' in script
+    assert "systemctl try-restart homeboard-soloist.service" in script
