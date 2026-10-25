@@ -364,6 +364,9 @@ fi
 nginx -t
 
 echo "== Sound"
+WP_CONF="/etc/wireplumber/bluetooth.lua.d/80-homeboard.lua /etc/wireplumber/wireplumber.conf.d/80-homeboard.conf"
+WP_OLD_SUM="$(cat $WP_CONF 2>/dev/null | sha256sum | cut -d' ' -f1)"
+WP_RESTARTED=0
 install -d -m 755 /etc/wireplumber/bluetooth.lua.d /etc/wireplumber/wireplumber.conf.d
 printf 'bluez_monitor.properties["with-logind"] = false\n' \
     > /etc/wireplumber/bluetooth.lua.d/80-homeboard.lua
@@ -374,7 +377,12 @@ if id "$KIOSK_USER" >/dev/null 2>&1; then
     loginctl enable-linger "$KIOSK_USER"
     systemctl --machine="$KIOSK_USER@.host" --user enable \
         pipewire.socket pipewire-pulse.socket wireplumber.service || true
-    systemctl --machine="$KIOSK_USER@.host" --user restart wireplumber.service || true
+    if [ "$WP_OLD_SUM" != "$(cat $WP_CONF | sha256sum | cut -d' ' -f1)" ] \
+        || ! systemctl --machine="$KIOSK_USER@.host" --user is-active --quiet wireplumber.service; then
+        echo "Restarting WirePlumber (its config changed or it was not running)"
+        systemctl --machine="$KIOSK_USER@.host" --user restart wireplumber.service || true
+        WP_RESTARTED=1
+    fi
 fi
 
 echo "== Spotify Connect speaker"
@@ -500,8 +508,8 @@ fi
 if [ -s "$SOLOIST_ENV" ]; then
     SOLOIST_SUM="$(cat /etc/systemd/system/homeboard-soloist.service "$SOLOIST_ENV"         "$APP_DIR"/deploy/soloist.sh /opt/soloist/soloist 2>/dev/null | sha256sum | cut -d' ' -f1)"
     EVENTS_SUM="$(cat /etc/systemd/system/homeboard-soloist-events.service         "$APP_DIR"/deploy/soloist-event.sh 2>/dev/null | sha256sum | cut -d' ' -f1)"
-    if [ "$SOLOIST_SUM" != "$(cat /opt/soloist/service.sum 2>/dev/null)" ]         || ! systemctl is-active --quiet homeboard-soloist.service; then
-        echo "Restarting Spotify Soloist (its files changed or it was not running)"
+    if [ "$SOLOIST_SUM" != "$(cat /opt/soloist/service.sum 2>/dev/null)" ]         || [ "$WP_RESTARTED" -eq 1 ]         || ! systemctl is-active --quiet homeboard-soloist.service; then
+        echo "Restarting Spotify Soloist (its files changed, WirePlumber restarted or it was not running)"
         systemctl restart homeboard-soloist.service
         echo "$EVENTS_SUM" > /opt/soloist/events.sum
     elif [ "$EVENTS_SUM" != "$(cat /opt/soloist/events.sum 2>/dev/null)" ]         || ! systemctl is-active --quiet homeboard-soloist-events.service; then

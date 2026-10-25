@@ -37,6 +37,7 @@ def pi(tmp_path):
     script = (
         "set -euo pipefail\n"
         f'APP_DIR="{root}/app"\nSOLOIST_ENV="{root}/etc/soloist.env"\n'
+        'WP_RESTARTED="${WP_RESTARTED:-0}"\n'
         "systemctl() {\n"
         f'  if [ "$1" = is-active ]; then grep -qx "$3" "{root}/active"; return; fi\n'
         f'  echo "$*" >> "{root}/calls"; echo "$2" >> "{root}/active"\n'
@@ -47,10 +48,11 @@ def pi(tmp_path):
     )
     (tmp_path / "run.sh").write_text(script, newline="\n")
 
-    def run():
+    def run(wp_restarted="0"):
         calls = tmp_path / "calls"
         calls.write_text("")
-        subprocess.run([BASH, str(tmp_path / "run.sh")], check=True, capture_output=True)
+        env = {**os.environ, "WP_RESTARTED": wp_restarted}
+        subprocess.run([BASH, str(tmp_path / "run.sh")], check=True, capture_output=True, env=env)
         return calls.read_text().splitlines()
 
     run.path = tmp_path
@@ -93,3 +95,10 @@ def test_stopped_soloist_is_restarted(pi):
     pi()
     (pi.path / "active").write_text("homeboard-soloist-events.service\n")
     assert pi() == ["restart homeboard-soloist.service"]
+
+
+def test_wireplumber_restart_restarts_soloist(pi):
+    pi()
+    (pi.path / "active").write_text("homeboard-soloist.service\nhomeboard-soloist-events.service\n")
+    assert pi(wp_restarted="1") == ["restart homeboard-soloist.service"]
+    assert pi() == []
