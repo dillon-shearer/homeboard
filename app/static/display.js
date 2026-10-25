@@ -317,7 +317,7 @@
   const VELOCITY_MS = 100;
   const SPLASH_FADE_MS = 500;
   const READOUT_HIDE_MS = 800;
-  const COVER_POLL_MS = 5000;
+  const COVER_POLL_MS = 15000;
   const PHOTOS_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="22" fill="#000"/><rect x="3" y="6" width="26" height="20" fill="#c0c0c0"/><rect x="5" y="8" width="22" height="16" fill="#00ffff"/><polygon points="5,24 13,14 19,21 22,18 27,24" fill="#008000"/><rect x="21" y="10" width="4" height="4" fill="#ffff00"/></svg>';
   const SCREEN_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="4" width="28" height="20" fill="#000"/><rect x="3" y="5" width="26" height="18" fill="#c0c0c0"/><rect x="5" y="7" width="22" height="14" fill="#000080"/><rect x="7" y="9" width="8" height="2" fill="#00ffff"/><rect x="7" y="13" width="12" height="2" fill="#00ffff"/><rect x="24" y="22" width="2" height="1" fill="#00ff00"/><rect x="13" y="24" width="6" height="3" fill="#808080"/><rect x="8" y="27" width="16" height="2" fill="#000"/><rect x="9" y="27" width="14" height="1" fill="#c0c0c0"/></svg>';
 
@@ -1307,6 +1307,7 @@
       loadScreens();
     });
     es.addEventListener("events_changed", markActivity);
+    es.addEventListener("spotify_changed", pollCover);
     es.onerror = function () {
       es.close();
       setTimeout(connect, backoff * 1000);
