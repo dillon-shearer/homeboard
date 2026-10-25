@@ -24,6 +24,7 @@ TOKEN_NAME = "spotify.json"
 TIMEOUT_S = 5
 TOKEN_MARGIN_S = 60
 NOW_EVERY_S = 3
+SETTLE_S = (0.5, 1.5, 3, 6)
 STATE_TTL_S = 600
 
 log = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ _now_lock = threading.Lock()
 _token: dict = {}
 _now: dict = {}
 _profile: dict = {}
+_settle = {"gen": 0}
 _states: dict[str, float] = {}
 
 
@@ -337,6 +339,39 @@ def now_playing(data_dir, fresh=False) -> dict:
             last = _now.get("data") or _empty()
             _now["data"] = {**last, "stale": True}
         return _now["data"]
+
+
+def _seen(now) -> tuple:
+    now = now or {}
+    return (now.get("track"), now.get("cover"), now.get("playing"), now.get("device"))
+
+
+def settle(data_dir, publish) -> None:
+    delays = tuple(SETTLE_S)
+    with _now_lock:
+        _settle["gen"] += 1
+        gen = _settle["gen"]
+        last = _seen(_now.get("data"))
+    if not delays:
+        return
+
+    def run():
+        nonlocal last
+        waited = 0.0
+        for at in delays:
+            time.sleep(max(0.0, at - waited))
+            waited = at
+            if _settle["gen"] != gen:
+                return
+            now = now_playing(data_dir, True)
+            if now.get("stale"):
+                continue
+            seen = _seen(now)
+            if seen != last:
+                last = seen
+                publish("spotify_changed")
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def profile(data_dir) -> dict:

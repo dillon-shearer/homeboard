@@ -96,6 +96,7 @@ def player_event(body: PlayerEvent, request: Request):
     host = request.client.host if request.client else None
     if is_tunnel(request.scope) or host not in events.LOCAL_HOSTS:
         return JSONResponse({"detail": "local only"}, status_code=403)
+    spotify.settle(_data_dir(request), events.publish)
     spotify.clear_now()
     events.publish("spotify_changed")
     return {"ok": True}
@@ -103,21 +104,25 @@ def player_event(body: PlayerEvent, request: Request):
 
 @router.post("/play")
 def play(request: Request):
+    spotify.settle(_data_dir(request), events.publish)
     return _call(spotify.control, _data_dir(request), "PUT", "/me/player/play")
 
 
 @router.post("/pause")
 def pause(request: Request):
+    spotify.settle(_data_dir(request), events.publish)
     return _call(spotify.control, _data_dir(request), "PUT", "/me/player/pause")
 
 
 @router.post("/next")
 def next_track(request: Request):
+    spotify.settle(_data_dir(request), events.publish)
     return _call(spotify.control, _data_dir(request), "POST", "/me/player/next")
 
 
 @router.post("/previous")
 def previous_track(request: Request):
+    spotify.settle(_data_dir(request), events.publish)
     return _call(spotify.control, _data_dir(request), "POST", "/me/player/previous")
 
 
@@ -141,6 +146,7 @@ def playlists(request: Request):
 
 @router.post("/play-playlist")
 def play_playlist(body: PlaylistId, request: Request):
+    spotify.settle(_data_dir(request), events.publish)
     return _call(spotify.play_playlist, _data_dir(request), body.id)
 
 

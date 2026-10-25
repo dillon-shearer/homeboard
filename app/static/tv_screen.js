@@ -25,6 +25,7 @@
   var SPOTIFY_POLL_MS = 15000;
   var SPOTIFY_TICK_MS = 1000;
   var SPOTIFY_AFTER_TAP_MS = 1000;
+  var SPOTIFY_END_MS = 1000;
   var SPOTIFY_EXTRA_EVERY = 2;
   var SPOTIFY_NOTE_MS = 3000;
   var VOLUME_STEP = 5;
@@ -335,6 +336,12 @@
     if (!now || typeof now.progress_ms !== "number") return 0;
     var ms = now.progress_ms + (now.playing ? Math.max(0, sinceMs || 0) : 0);
     return now.duration_ms ? Math.min(ms, now.duration_ms) : ms;
+  }
+
+  function nextPollMs(now) {
+    if (!now || !now.playing || typeof now.progress_ms !== "number" || !now.duration_ms) return SPOTIFY_POLL_MS;
+    var left = now.duration_ms - now.progress_ms + SPOTIFY_END_MS;
+    return Math.max(SPOTIFY_END_MS, Math.min(SPOTIFY_POLL_MS, left));
   }
 
   function volumeStep(volume, delta) {
@@ -958,6 +965,7 @@
     spotifyState: spotifyState,
     coverUrl: coverUrl,
     progressAt: progressAt,
+    nextPollMs: nextPollMs,
     volumeStep: volumeStep,
     speakerOn: speakerOn,
   };
@@ -1140,7 +1148,7 @@
     Promise.all(jobs.map(function (job) { return job.catch(function () {}); })).then(function () {
       if (seq !== spot.seq || !spot.on) return;
       renderSpotifyCards();
-      spot.timer = setTimeout(pollSpotify, SPOTIFY_POLL_MS);
+      spot.timer = setTimeout(pollSpotify, nextPollMs(spot.now));
     });
   }
 
