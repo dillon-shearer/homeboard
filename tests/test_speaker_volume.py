@@ -90,8 +90,8 @@ def test_set_volume_with_a_level_does_not_wait(monkeypatch):
     assert helperd.Helper(MAC).set_volume(50) is None
 
 
-def test_volume_setting_falls_back_to_70(monkeypatch):
-    for v, want in ((40, 40), (0, 0), (100, 100), (101, 70), (True, 70), (None, 70), ("x", 70)):
+def test_volume_setting_falls_back_to_100(monkeypatch):
+    for v, want in ((40, 40), (0, 0), (100, 100), (101, 100), (True, 100), (None, 100), ("x", 100)):
         monkeypatch.setattr(helperd, "read_setting", lambda key, v=v: v)
         assert helperd.volume_setting() == want
 
@@ -150,8 +150,8 @@ def free_port():
         return s.getsockname()[1]
 
 
-def test_speaker_volume_setting_defaults_to_70(client):
-    assert client.get("/api/settings").json()["speaker_volume"] == 70
+def test_speaker_volume_setting_defaults_to_100(client):
+    assert client.get("/api/settings").json()["speaker_volume"] == 100
     for bad in (-1, 101, 5.5, "ten"):
         assert client.put("/api/settings", json={"speaker_volume": bad}).status_code == 422
     r = client.put("/api/settings", json={"speaker_volume": 0})
