@@ -33,6 +33,7 @@ while IFS= read -r LINE; do
     if [ "$BODY" = "$LAST" ]; then
         continue
     fi
-    LAST="$BODY"
-    curl -s -o /dev/null --max-time 3 -X POST -H 'Content-Type: application/json' -d "$BODY" "$URL" || true
+    if curl -sf -o /dev/null --max-time 3 -X POST -H 'Content-Type: application/json' -d "$BODY" "$URL"; then
+        LAST="$BODY"
+    fi
 done

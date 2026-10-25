@@ -108,6 +108,12 @@ def play(request: Request):
     return _call(spotify.control, _data_dir(request), "PUT", "/me/player/play")
 
 
+@router.post("/here")
+def here(request: Request):
+    spotify.settle(_data_dir(request), events.publish)
+    return _call(spotify.play_here, _data_dir(request))
+
+
 @router.post("/pause")
 def pause(request: Request):
     spotify.settle(_data_dir(request), events.publish)

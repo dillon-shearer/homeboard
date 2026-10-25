@@ -365,7 +365,7 @@ nginx -t
 
 echo "== Sound"
 WP_CONF="/etc/wireplumber/bluetooth.lua.d/80-homeboard.lua /etc/wireplumber/wireplumber.conf.d/80-homeboard.conf"
-WP_OLD_SUM="$(cat $WP_CONF 2>/dev/null | sha256sum | cut -d' ' -f1)"
+WP_OLD_SUM="$({ cat $WP_CONF 2>/dev/null || true; } | sha256sum | cut -d' ' -f1)"
 WP_RESTARTED=0
 install -d -m 755 /etc/wireplumber/bluetooth.lua.d /etc/wireplumber/wireplumber.conf.d
 printf 'bluez_monitor.properties["with-logind"] = false\n' \

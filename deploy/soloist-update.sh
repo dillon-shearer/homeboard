@@ -33,4 +33,8 @@ install -m 755 "$TMP/soloist" "$DIR/soloist.new"
 mv -f "$DIR/soloist.new" "$DIR/soloist"
 date -d "$BUILT + 90 days" +%F > "$DIR/expires"
 echo "Installed $VERSION, runs out on $(cat "$DIR/expires")"
-systemctl try-restart homeboard-soloist.service
+if [ -s /etc/homeboard/soloist.env ] && systemctl is-enabled --quiet homeboard-soloist.service; then
+    systemctl restart homeboard-soloist.service
+else
+    systemctl try-restart homeboard-soloist.service
+fi

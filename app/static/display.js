@@ -436,12 +436,14 @@
   let shownId = null;
   let coverTouch = null;
   let coverEndTimer = null;
+  let coverSeq = 0;
   let panelOpen = false;
   let panelDrag = false;
   let panelSliding = false;
   let sliderDrag = false;
   let speakerOn = false;
   let speakerBusy = false;
+  let speakerSeq = 0;
   let rebootBusy = false;
   let restarting = false;
   let nowData = null;
@@ -549,6 +551,7 @@
   }
 
   function pollCover() {
+    const mine = ++coverSeq;
     if (state.settings.channel !== "photos") return;
     if (!state.settings.cover_show || spotifyScreenId(state.screens) === null) {
       state.now = null;
@@ -556,11 +559,15 @@
       return;
     }
     return fetchJson("/api/spotify/now").then(function (now) {
+      if (mine !== coverSeq) return;
       state.now = now;
       coverAtEnd(now);
+      showCover();
     }, function () {
+      if (mine !== coverSeq) return;
       state.now = null;
-    }).then(showCover);
+      showCover();
+    });
   }
 
   function coverAtEnd(now) {
@@ -953,10 +960,14 @@
   }
 
   function loadSpeaker() {
+    const mine = ++speakerSeq;
     return fetchJson("/api/sound/status").then(function (s) {
+      if (mine !== speakerSeq) return;
       const on = !!(s && s.speaker && s.speaker.connected);
       renderSpeaker(on ? "Connected" : "Off", on);
-    }, speakerError);
+    }, function (err) {
+      if (mine === speakerSeq) speakerError(err);
+    });
   }
 
   function postJson(url) {
@@ -969,6 +980,7 @@
     markActivity();
     if (speakerBusy) return;
     speakerBusy = true;
+    speakerSeq++;
     speakerEl.disabled = true;
     const on = speakerOn;
     renderSpeaker(on ? "Disconnecting..." : "Connecting...", !on);
@@ -996,7 +1008,12 @@
 
   function nowLater(ms) {
     clearTimeout(nowTimer);
-    nowTimer = panelEl.hidden ? null : setTimeout(loadNow, ms);
+    nowTimer = panelEl.hidden ? null : setTimeout(pollPanel, ms);
+  }
+
+  function pollPanel() {
+    if (!speakerBusy) loadSpeaker();
+    loadNow();
   }
 
   function loadNow() {
@@ -1058,8 +1075,9 @@
         return null;
       }
       if (nowData) nowData.volume = next;
-      putVolume(next);
-      return next;
+      return putVolume(next).then(function () {
+        return next;
+      });
     });
     nowVol = { sent: sent, at: Date.now() };
     nowData.volume = volumeStep(nowData.volume, delta);
@@ -1530,6 +1548,8 @@
       loadScreens();
       onSettingsChanged();
       onPhotosChanged();
+      pollCover();
+      if (panelEl && !panelEl.hidden) pollPanel();
     });
     es.addEventListener("photos_changed", function () {
       markActivity();

@@ -60,7 +60,6 @@ def test_settings_events_publish_loaded_and_saved_values():
 
 
 @needs_chrome
-@pytest.mark.xfail(strict=True, reason="Photo SSE hello does not reconcile missed playback changes")
 def test_photo_cover_resyncs_on_hello_after_startup_gap(chrome, server, surface_player):
     _seed(server)
     hook = chrome.send(
@@ -162,7 +161,6 @@ def test_takeover_and_return_are_observed_without_transfer(review_api):
     assert fake.count("PUT", "/me/player") == 0
 
 
-@pytest.mark.xfail(strict=True, reason="Play here uses untargeted play on the active phone")
 def test_play_here_transfers_from_active_phone(review_api):
     client, fake, _ = review_api
     fake.routes[("GET", "/me/player")] = (200, {**PLAYER, "device": {"name": "Phone"}})
@@ -171,12 +169,11 @@ def test_play_here_transfers_from_active_phone(review_api):
         {"devices": [{"id": "hb", "name": "Home Board", "is_active": False}]},
     )
     assert client.get("/api/spotify/now").json()["on_board"] is False
-    assert client.post("/api/spotify/play").status_code == 200
+    assert client.post("/api/spotify/here").status_code == 200
     transfers = [json.loads(c[4]) for c in fake.calls if c[:2] == ("PUT", "/me/player")]
     assert any(c["device_ids"] == ["hb"] for c in transfers)
 
 
-@pytest.mark.xfail(strict=True, reason="control suppresses every SpotifyError on play retry")
 def test_restart_play_retry_reports_upstream_500(review_api, monkeypatch):
     client, fake, _ = review_api
     fake.routes[("GET", "/me/player/devices")] = (
@@ -196,9 +193,6 @@ def test_restart_play_retry_reports_upstream_500(review_api, monkeypatch):
     assert client.post("/api/spotify/play").status_code == 502
 
 
-@pytest.mark.xfail(
-    strict=True, reason="fetch drops Retry-After and fresh polls bypass any cooldown"
-)
 def test_429_retry_after_prevents_immediate_second_request(review_api, monkeypatch):
     client, _, _ = review_api
     spotify._keep_token({"access_token": "acc", "expires_in": 3600})
@@ -237,7 +231,6 @@ def test_pause_idle_disconnect_then_resume_connects(monkeypatch):
 
 
 @pytest.mark.skipif(BASH is None, reason="bash not installed")
-@pytest.mark.xfail(strict=True, reason="Bridge remembers failed helper delivery and drops retries")
 def test_bridge_retries_same_state_after_helper_503():
     received = []
 
@@ -291,9 +284,6 @@ def test_worker_thread_event_reaches_every_subscriber():
     asyncio.run(check())
 
 
-@pytest.mark.xfail(
-    strict=True, reason="settle ignores artist and progress changes with same title and art"
-)
 def test_settle_notifies_same_title_and_cover_with_changed_artist(review_api, monkeypatch):
     _, fake, data_dir = review_api
     spotify.now_playing(data_dir)
@@ -389,9 +379,6 @@ def test_subscribed_surfaces_follow_changed_track(chrome, server, surface_player
 
 @needs_chrome
 @pytest.mark.parametrize("surface", ["phone", "tv", "panel"])
-@pytest.mark.xfail(
-    strict=True, reason="Volume chains calculate values but do not await PUT completion"
-)
 def test_quick_volume_taps_wait_for_previous_write(chrome, server, surface_player, surface):
     _open_surface(chrome, server, surface)
     selector = "#cp-now-down" if surface == "panel" else '[data-sp="vol-down"]'
@@ -472,7 +459,6 @@ def test_cover_setting_and_return_from_other_device(chrome, server, surface_play
 
 
 @needs_chrome
-@pytest.mark.xfail(strict=True, reason="pollCover lets an older response overwrite newer artwork")
 def test_late_cover_response_does_not_restore_old_art(chrome, server, surface_player):
     _open_surface(chrome, server, "cover")
     old = json.dumps(surface_player.now)
@@ -500,9 +486,6 @@ def test_late_cover_response_does_not_restore_old_art(chrome, server, surface_pl
 
 
 @needs_chrome
-@pytest.mark.xfail(
-    strict=True, reason="Settings sound group does not poll or resync speaker status"
-)
 def test_settings_speaker_recovers_without_visibility_change(chrome, server, monkeypatch):
     from fastapi.responses import JSONResponse
 
@@ -530,7 +513,6 @@ def test_settings_speaker_recovers_without_visibility_change(chrome, server, mon
 
 
 @pytest.mark.skipif(BASH is None, reason="bash not installed")
-@pytest.mark.xfail(strict=True, reason="Missing WirePlumber config aborts install under pipefail")
 def test_installer_can_read_missing_initial_wireplumber_config(tmp_path):
     install = Path(__file__).resolve().parents[1] / "deploy" / "install.sh"
     assignment = next(s for s in install.read_text().splitlines() if s.startswith("WP_OLD_SUM="))

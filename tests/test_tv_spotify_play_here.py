@@ -15,7 +15,7 @@ def test_no_device_shows_play_here_and_taps_play(chrome, server, fake):  # noqa:
     assert label == "Play here" and full["msg"] is None and full["toggle"] is None
     assert full["out"] == [] and full["small"] == []
     _sp_tap(chrome, '[data-sp="here"]')
-    _sp_until(lambda: fake.sent("POST", "/api/spotify/play"), "the play call")
+    _sp_until(lambda: fake.sent("POST", "/api/spotify/here"), "the play here call")
     assert not fake.sent("POST", "/api/spotify/pause")
     assert _sp_card(chrome, "Music 2x2", lambda o: True)["msg"] is None
 
