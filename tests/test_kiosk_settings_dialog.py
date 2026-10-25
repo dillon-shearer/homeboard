@@ -29,6 +29,10 @@ def test_preset_stepping_helpers():
           idleTop: S.stepPreset(D, 120, 1),
           idleBottom: S.stepPreset(D, 1, -1),
           idleSnap: S.stepPreset(D, 7, 1),
+          offUp: S.stepPreset(I, 24, 1),
+          offDown: S.stepPreset(I, 24, -1),
+          idleOffDown: S.stepPreset(D, 9, -1),
+          idleOffUp: S.stepPreset(D, 9, 1),
         }));
         """
     )
@@ -45,6 +49,10 @@ def test_preset_stepping_helpers():
     assert r["idleTop"] == 120
     assert r["idleBottom"] == 1
     assert r["idleSnap"] == 10
+    assert r["offUp"] == 30
+    assert r["offDown"] == 20
+    assert r["idleOffDown"] == 5
+    assert r["idleOffUp"] == 10
 
 
 @pytest.fixture
@@ -156,3 +164,62 @@ def test_kiosk_settings_failed_put_and_idle_close(chrome, server, helper):
     assert error == "Could not save that setting. Try again."
     assert captions is server_captions
     assert chrome.eval(f"{KIOSK}.hidden") is True
+
+
+@needs_chrome
+def test_kiosk_settings_show_saved_values_like_the_phone(chrome, server, helper):
+    api.put(f"{server}/api/settings", json={"interval_s": 24, "speaker_idle_minutes": 9})
+    _load(chrome, server)
+    _swipe(chrome, 500, DOWN)
+    chrome.wait(OPEN)
+    chrome.eval(
+        "(() => { const real = window.fetch; window.fetch = function (url) {"
+        " if (url === '/api/settings' && !window.__failed) { window.__failed = true;"
+        " return Promise.reject(new Error('down')); }"
+        " return real.apply(this, arguments); }; })()"
+    )
+    chrome.eval("document.getElementById('cp-settings').click()")
+    shown = chrome.eval(
+        "['interval_s', 'speaker_idle_minutes']"
+        ".map(f => document.getElementById('cp-kiosk-' + f).textContent)"
+    )
+    chrome.wait("!document.getElementById('cp-kiosk-error').hidden")
+    load_error = chrome.eval("document.getElementById('cp-kiosk-error').textContent")
+    chrome.wait("__test.waiting(2000) > 0")
+    chrome.eval("__test.fire(2000)")
+    chrome.wait("document.getElementById('cp-kiosk-error').hidden")
+    chrome.wait("window.__inflight === 0")
+
+    chrome.eval(f"{KIOSK}.querySelector('[data-field=interval_s][data-step=\"1\"]').click()")
+    chrome.wait("window.__inflight === 0")
+    chrome.eval(
+        f"{KIOSK}.querySelector('[data-field=speaker_idle_minutes][data-step=\"-1\"]').click()"
+    )
+    chrome.wait("window.__inflight === 0")
+    after = chrome.eval(
+        "['interval_s', 'speaker_idle_minutes']"
+        ".map(f => document.getElementById('cp-kiosk-' + f).textContent)"
+    )
+    settings = api.get(f"{server}/api/settings").json()
+
+    assert shown == ["24 s", "9 min"]
+    assert load_error == "Could not load the settings. Trying again."
+    assert [p["body"] for p in _puts(chrome)] == [
+        {"interval_s": 30},
+        {"speaker_idle_minutes": 5},
+    ]
+    assert after == ["30 s", "5 min"]
+    assert (settings["interval_s"], settings["speaker_idle_minutes"]) == (30, 5)
+    assert chrome.eval("window.__errors") == []
+
+
+@needs_chrome
+def test_phone_idle_minutes_follow_a_board_change(chrome, server, helper):
+    chrome.size(390, 844)
+    chrome.send("Page.navigate", {"url": f"{server}/admin/settings"})
+    chrome.wait("document.getElementById('idle-minutes').value !== ''")
+    chrome.wait("window.__test && __test.heard('hello') > 0")
+    api.put(f"{server}/api/settings", json={"speaker_idle_minutes": 15, "interval_s": 45})
+    chrome.wait("document.getElementById('idle-minutes').value === '15'")
+
+    assert chrome.eval("document.getElementById('interval').value") == "45"
