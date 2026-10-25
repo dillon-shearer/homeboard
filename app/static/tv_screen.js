@@ -33,7 +33,7 @@
   var SPOTIFY_LAYOUTS = { "2x2": "full", "2x1": "wide", "1x2": "tall", "1x1": "tile" };
   var NOT_LINKED_TEXT = "Spotify not linked";
   var IDLE_TEXT = "Nothing playing";
-  var NO_PLAYLISTS_TEXT = "Pick playlists on your phone: Sound.";
+  var NO_PLAYLISTS_TEXT = "Pick playlists on your phone: Settings.";
   var SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
   var SPEAKER_DOWN_TEXT = "Could not reach the speaker";
 
