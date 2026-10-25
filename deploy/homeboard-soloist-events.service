@@ -1,0 +1,14 @@
+[Unit]
+Description=Home Board Spotify play and pause to the helper
+After=homeboard-soloist.service homeboard-helper.service
+BindsTo=homeboard-soloist.service
+
+[Service]
+User=dillon
+Group=dillon
+ExecStart=/bin/bash -c '/opt/soloist/soloist ctl -D /var/lib/soloist trace | /opt/homeboard/deploy/soloist-event.sh'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=homeboard-soloist.service

@@ -10,12 +10,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = "127.0.0.1"
 PORT = 8002
 SETTINGS_URL = "http://127.0.0.1:8000/api/settings"
+SOLOIST_EXPIRES = "/opt/soloist/expires"
 DEFAULT_IDLE_MINUTES = 10
 CONNECT_TRIES = 5
 CONNECT_GAP_S = 3
 BLUETOOTHCTL_TIMEOUT_S = 20
 TICK_S = 5
 MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class IdleState:
@@ -72,6 +74,15 @@ def speaker_info(mac):
     return {"mac": mac, "connected": "Connected: yes" in text, "name": name}
 
 
+def soloist_expires():
+    try:
+        with open(SOLOIST_EXPIRES, encoding="utf-8") as f:
+            text = f.read().strip()
+    except OSError:
+        return None
+    return text if DATE_RE.match(text) else None
+
+
 def idle_setting():
     try:
         with urllib.request.urlopen(SETTINGS_URL, timeout=5) as resp:
@@ -112,7 +123,12 @@ class Helper:
         with self.lock:
             playing = self.state.playing
             idle = self.state.idle_minutes(time.monotonic())
-        return {"speaker": speaker_info(self.mac), "playing": playing, "idle_minutes": idle}
+        return {
+            "speaker": speaker_info(self.mac),
+            "playing": playing,
+            "idle_minutes": idle,
+            "soloist_expires": soloist_expires(),
+        }
 
     def set_playing(self, playing):
         minutes = DEFAULT_IDLE_MINUTES if playing else idle_setting()

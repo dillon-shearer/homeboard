@@ -295,6 +295,23 @@ The installer saves the Client ID and secret in `/etc/homeboard/spotify.env`. On
 sudo bash /opt/homeboard/deploy/install.sh --new-spotify
 ```
 
+### Home Board as a Spotify speaker
+
+The Pi shows up as "Home Board" in the Spotify app's device list through Spotify Soloist, Spotify's own Linux speaker. It needs its own key, made once:
+
+1. Open https://developer.spotify.com/dashboard/soloist and log in with the Spotify Premium account.
+2. Generate an API key and copy it.
+3. On the Pi: `sudo bash /opt/homeboard/deploy/install.sh --new-soloist-key` and paste the key when asked.
+4. In the Spotify app on the phone, tap the devices button and pick Home Board.
+
+The key is saved in `/etc/homeboard/soloist.env`, readable only by root. Each Soloist build stops working 90 days after it was made. The Pi fetches the newest build every Monday. If that fails, the Sound window shows a warning two weeks before the end. To fetch it by hand:
+
+```
+sudo bash /opt/homeboard/deploy/install.sh --update-soloist
+```
+
+Logs: `journalctl -u homeboard-soloist -u homeboard-soloist-events -n 50`
+
 ## Check the logs
 
 Logs are messages the programs write about what they are doing. They are kept in memory and cleared at each restart, to save the SD card.
