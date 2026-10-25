@@ -22,13 +22,18 @@ def test_kiosk_starts_the_overlay_under_the_cover_before_chromium():
     assert b"\r\n" not in raw
     text = raw.decode("ascii")
     line = (
-        '    /opt/homeboard/.venv/bin/python /opt/homeboard/deploy/splash/overlay.py "$COVER" &\n'
+        "    /opt/homeboard/.venv/bin/python /opt/homeboard/deploy/splash/overlay.py"
+        ' "$COVER" "$SWAYIMG" &\n'
     )
     assert line in text
     block = text.split('if [ -r "$COVER" ]; then\n', 1)[1].split("\nfi\n", 1)[0]
     assert line.rstrip("\n") in block
     assert (
-        text.index("swayimg") < text.index("sleep 0.5") < text.index(line) < text.index("seq 1 150")
+        text.index("swayimg")
+        < text.index("SWAYIMG=$!")
+        < text.index("sleep 0.5")
+        < text.index(line)
+        < text.index("seq 1 150")
     )
     assert text.index(line) < text.index("exec chromium")
 
@@ -71,3 +76,28 @@ def test_wire_strings_pad_to_four_bytes():
         raw = overlay.s(text)
         assert len(raw) % 4 == 0
         assert overlay.read_string(raw + b"rest", 0) == (text, len(raw))
+
+
+def test_overlay_stops_swayimg_only_after_the_page_shows(monkeypatch):
+    killed = []
+    monkeypatch.setattr(overlay.os, "kill", lambda pid, sig: killed.append((pid, sig)))
+    for painted in [False, True]:
+        monkeypatch.setattr(
+            overlay,
+            "Overlay",
+            lambda path, painted=painted: type("O", (), {"run": lambda self: painted})(),
+        )
+        overlay.main(["overlay.py", "boot.gif", "4321"])
+        overlay.main(["overlay.py", "boot.gif"])
+    assert killed == [(4321, overlay.signal.SIGTERM)]
+
+
+def test_overlay_ignores_a_swayimg_that_already_exited(monkeypatch):
+    def gone(pid, sig):
+        raise ProcessLookupError
+
+    monkeypatch.setattr(overlay.os, "kill", gone)
+    monkeypatch.setattr(
+        overlay, "Overlay", lambda path: type("O", (), {"run": lambda self: True})()
+    )
+    overlay.main(["overlay.py", "boot.gif", "4321"])

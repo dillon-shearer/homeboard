@@ -9,8 +9,9 @@ fi
 
 if [ -r "$COVER" ]; then
     swayimg --fullscreen --scale=fit --no-sway "$COVER" &
+    SWAYIMG=$!
     sleep 0.5
-    /opt/homeboard/.venv/bin/python /opt/homeboard/deploy/splash/overlay.py "$COVER" &
+    /opt/homeboard/.venv/bin/python /opt/homeboard/deploy/splash/overlay.py "$COVER" "$SWAYIMG" &
 fi
 
 BOOT=file:///opt/homeboard/deploy/splash/boot.html

@@ -1,6 +1,7 @@
 import mmap
 import os
 import select
+import signal
 import socket
 import struct
 import sys
@@ -363,12 +364,17 @@ class Overlay:
                 elif under == "blank":
                     state = "under"
                 elif under == "other" or (under == "ground" and state == "under"):
-                    return
+                    return True
             frame, result = self.sample()
+        return False
 
 
 def main(argv):
-    Overlay(argv[1]).run()
+    if Overlay(argv[1]).run() and len(argv) > 2:
+        try:
+            os.kill(int(argv[2]), signal.SIGTERM)
+        except ProcessLookupError:
+            pass
 
 
 if __name__ == "__main__":
