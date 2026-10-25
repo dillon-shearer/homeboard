@@ -126,7 +126,7 @@ for (const id of ["display-state", "channel-timeout", "name-dialog", "name-form"
   "screens-hint", "screen-delete", "screen-delete-dialog", "screen-delete-text",
   "screen-confirm-delete", "screen-confirm-cancel", "screen-delete-close",
   "screen-delete-backdrop", "widget-row", "widget-add", "widget-size", "widget-list-field",
-  "widget-list", "widget-left", "widget-right", "widget-remove"]) {
+  "widget-list", "widget-remove"]) {
   body.appendChild(make("x", id));
 }
 const row = body.appendChild(make("span", "tv-stops"));
@@ -199,6 +199,52 @@ def _tv(body):
         ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
     )
     return json.loads(out.stdout)
+
+
+def _node(body):
+    script = f"const T = require({json.dumps(str(TV_JS))});\n{body}"
+    out = subprocess.run(
+        ["node", "-e", script], capture_output=True, text=True, timeout=30, check=True
+    )
+    return json.loads(out.stdout)
+
+
+@needs_node
+def test_js_fits_checks_the_grid_and_the_other_widgets():
+    r = _node(
+        """
+        const top = { id: 1, col: 0, row: 0, w: 1, h: 1 };
+        const tall = { id: 2, col: 1, row: 0, w: 1, h: 2 };
+        console.log(JSON.stringify({
+          emptyFull: T.fits([], null, 0, 0, 2, 2),
+          leaves: T.fits([], null, 1, 0, 2, 1),
+          bottomWide: T.fits([top], null, 0, 1, 2, 1),
+          bottomTall: T.fits([top], null, 0, 1, 1, 2),
+          overTop: T.fits([top], null, 0, 0, 2, 1),
+          selfIgnored: T.fits([top], top, 0, 0, 2, 2),
+          besideTall: T.fits([top, tall], top, 0, 0, 2, 1),
+          belowTop: T.fits([top, tall], top, 0, 0, 1, 2),
+          negative: T.fits([], null, -1, 0, 1, 1),
+        }));
+        """
+    )
+    assert r == {
+        "emptyFull": True,
+        "leaves": False,
+        "bottomWide": True,
+        "bottomTall": False,
+        "overTop": False,
+        "selfIgnored": True,
+        "besideTall": False,
+        "belowTop": True,
+        "negative": False,
+    }
+
+
+@needs_node
+def test_js_exports_only_fits():
+    r = _node("console.log(JSON.stringify(Object.keys(T)))")
+    assert r == ["fits"]
 
 
 @needs_node
