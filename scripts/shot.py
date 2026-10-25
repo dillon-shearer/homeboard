@@ -301,10 +301,18 @@ def shoot_panel(chrome: str, base: str, out: Path, profile: Path) -> None:
             "!document.getElementById('control-panel').hidden && "
             "document.getElementById('control-panel').style.transform === 'translateY(0px)' && "
             "document.querySelectorAll('#cp-screens .cp-icon').length > 1 && "
-            "document.getElementById('cp-speaker-state').textContent === 'Connected'",
+            "document.getElementById('cp-speaker-state').textContent === 'Connected' && "
+            "!document.getElementById('cp-now').hidden",
             "the open Control Panel",
         )
         time.sleep(0.4)
+        over = cdp.eval(
+            "(p => p.scrollHeight > p.clientHeight || "
+            "p.querySelector('.cp-body').scrollWidth > p.querySelector('.cp-body').clientWidth)"
+            "(document.getElementById('control-panel'))"
+        )
+        if over:
+            sys.exit(f"Control Panel overflows at {width}x{height}")
         shot = cdp.call("Page.captureScreenshot", format="png")
         out.write_bytes(base64.b64decode(shot["data"]))
         with Image.open(out) as img:
@@ -318,7 +326,7 @@ def panel_main(out_dir: Path) -> None:
     import uvicorn
     from fastapi.responses import JSONResponse
 
-    from app import routes_sound, weather
+    from app import routes_sound, spotify, weather
     from app.main import create_app
 
     def helper(method, path, timeout=5):
@@ -327,7 +335,17 @@ def panel_main(out_dir: Path) -> None:
     def offline(url):
         raise OSError(f"offline in shots: {url}")
 
+    def now_playing(data_dir, fresh=False):
+        return {
+            "linked": True,
+            "playing": True,
+            "track": "Bohemian Rhapsody - Remastered 2011 Edition With A Very Long Title",
+            "artist": "Queen",
+            "volume": 45,
+        }
+
     routes_sound.helper = helper
+    spotify.now_playing = now_playing
     weather.fetch_json = offline
     chrome = find_chrome()
     out_dir.mkdir(parents=True, exist_ok=True)

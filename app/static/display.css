@@ -230,6 +230,7 @@ html, body {
 .cp-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
   min-height: 0;
   overflow: hidden;
@@ -240,6 +241,8 @@ html, body {
 }
 
 .cp-side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -351,6 +354,23 @@ html, body {
   min-height: 48px;
   padding-left: 20px;
   padding-right: 20px;
+}
+
+.cp-now {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.cp-now-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp-row .cp-now-vol {
+  min-width: 56px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .cp-modal {

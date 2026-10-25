@@ -190,6 +190,23 @@
     return open ? Math.min(0, d) : Math.max(-height, -height + d);
   }
 
+  function nowRow(now) {
+    if (!now || now.linked === false || !now.track) return { shown: false };
+    const known = typeof now.volume === "number";
+    return {
+      shown: true,
+      line: now.artist ? now.track + " - " + now.artist : String(now.track),
+      toggle: now.playing ? "Pause" : "Play",
+      known: known,
+      volume: known ? now.volume + "%" : "--%",
+    };
+  }
+
+  function volumeStep(volume, delta) {
+    if (typeof volume !== "number") return null;
+    return Math.max(0, Math.min(100, volume + delta));
+  }
+
   function shouldReturn(now, last, timeoutMin, channel) {
     return channel !== "photos" && timeoutMin > 0 && now - last > timeoutMin * 60000;
   }
@@ -296,6 +313,8 @@
     panelCommits: panelCommits,
     inScroller: inScroller,
     panelOffset: panelOffset,
+    nowRow: nowRow,
+    volumeStep: volumeStep,
     shouldReturn: shouldReturn,
     focusPosition: focusPosition,
     clampBrightness: clampBrightness,
@@ -315,6 +334,10 @@
   const SPLASH_FADE_MS = 500;
   const COVER_POLL_MS = 15000;
   const COVER_END_MS = 1000;
+  const NOW_POLL_MS = 15000;
+  const NOW_AFTER_TAP_MS = 1000;
+  const VOLUME_STEP = 5;
+  const VOLUME_CHAIN_MS = 1000;
   const PHOTOS_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="22" fill="#000"/><rect x="3" y="6" width="26" height="20" fill="#c0c0c0"/><rect x="5" y="8" width="22" height="16" fill="#00ffff"/><polygon points="5,24 13,14 19,21 22,18 27,24" fill="#008000"/><rect x="21" y="10" width="4" height="4" fill="#ffff00"/></svg>';
   const SCREEN_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="4" width="28" height="20" fill="#000"/><rect x="3" y="5" width="26" height="18" fill="#c0c0c0"/><rect x="5" y="7" width="22" height="14" fill="#000080"/><rect x="7" y="9" width="8" height="2" fill="#00ffff"/><rect x="7" y="13" width="12" height="2" fill="#00ffff"/><rect x="24" y="22" width="2" height="1" fill="#00ff00"/><rect x="13" y="24" width="6" height="3" fill="#808080"/><rect x="8" y="27" width="16" height="2" fill="#000"/><rect x="9" y="27" width="14" height="1" fill="#c0c0c0"/></svg>';
 
@@ -337,6 +360,12 @@
   const confirmEl = document.getElementById("cp-confirm");
   const confirmErrorEl = document.getElementById("cp-confirm-error");
   const rebootEl = document.getElementById("cp-restart-yes");
+  const nowEl = document.getElementById("cp-now");
+  const nowLineEl = document.getElementById("cp-now-line");
+  const nowToggleEl = document.getElementById("cp-now-toggle");
+  const nowDownEl = document.getElementById("cp-now-down");
+  const nowUpEl = document.getElementById("cp-now-up");
+  const nowVolumeEl = document.getElementById("cp-now-volume");
 
   const state = {
     photos: [],
@@ -380,6 +409,10 @@
   let speakerBusy = false;
   let rebootBusy = false;
   let restarting = false;
+  let nowData = null;
+  let nowTimer = null;
+  let nowSeq = 0;
+  let nowVol = null;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -785,8 +818,10 @@
     renderScreens();
     showSlider(state.settings.brightness);
     loadSpeaker();
+    renderNow(nowData);
     movePanel(-viewHeight());
     panelEl.hidden = false;
+    loadNow();
   }
 
   function openPanel() {
@@ -805,6 +840,8 @@
     slidePanel(-viewHeight(), function () {
       if (panelOpen) return;
       panelEl.hidden = true;
+      clearTimeout(nowTimer);
+      nowTimer = null;
     });
   }
 
@@ -903,6 +940,91 @@
     });
   }
 
+  function renderNow(now) {
+    const row = nowRow(now);
+    nowData = row.shown ? now : null;
+    nowEl.hidden = !row.shown;
+    if (!row.shown) return;
+    nowLineEl.textContent = row.line;
+    nowLineEl.title = row.line;
+    nowToggleEl.textContent = row.toggle;
+    nowDownEl.disabled = !row.known;
+    nowUpEl.disabled = !row.known;
+    nowVolumeEl.textContent = row.volume;
+  }
+
+  function nowLater(ms) {
+    clearTimeout(nowTimer);
+    nowTimer = panelEl.hidden ? null : setTimeout(loadNow, ms);
+  }
+
+  function loadNow() {
+    if (!panelEl || panelEl.hidden) return;
+    clearTimeout(nowTimer);
+    nowTimer = null;
+    const mine = ++nowSeq;
+    return fetchJson("/api/spotify/now").then(function (now) {
+      if (mine === nowSeq) renderNow(now);
+    }, function () {
+      if (mine === nowSeq) renderNow(null);
+    }).then(function () {
+      if (mine === nowSeq) nowLater(NOW_POLL_MS);
+    });
+  }
+
+  function nowTap(action) {
+    markActivity();
+    if (!nowData) return;
+    if (action === "toggle") {
+      action = nowData.playing ? "pause" : "play";
+      nowData.playing = !nowData.playing;
+      renderNow(nowData);
+    }
+    nowSeq++;
+    postJson("/api/spotify/" + action).catch(function () {}).then(function () {
+      nowLater(NOW_AFTER_TAP_MS);
+    });
+  }
+
+  function freshVolume() {
+    nowSeq++;
+    clearTimeout(nowTimer);
+    return fetchJson("/api/spotify/now?fresh=1").then(function (now) {
+      return now.volume;
+    }, function () {
+      return null;
+    });
+  }
+
+  function putVolume(percent) {
+    return fetch("/api/spotify/volume", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ percent: percent }),
+    }).catch(function () {}).then(function () {
+      nowLater(NOW_AFTER_TAP_MS);
+    });
+  }
+
+  function nowVolumeTap(delta) {
+    markActivity();
+    if (!nowData || typeof nowData.volume !== "number") return;
+    const chained = nowVol && Date.now() - nowVol.at < VOLUME_CHAIN_MS;
+    const sent = (chained ? nowVol.sent : freshVolume()).then(function (volume) {
+      const next = volumeStep(volume, delta);
+      if (next === null) {
+        nowLater(NOW_AFTER_TAP_MS);
+        return null;
+      }
+      if (nowData) nowData.volume = next;
+      putVolume(next);
+      return next;
+    });
+    nowVol = { sent: sent, at: Date.now() };
+    nowData.volume = volumeStep(nowData.volume, delta);
+    renderNow(nowData);
+  }
+
   function askRestart() {
     markActivity();
     confirmErrorEl.hidden = true;
@@ -950,6 +1072,11 @@
     document.getElementById("cp-restart").addEventListener("click", askRestart);
     document.getElementById("cp-restart-no").addEventListener("click", cancelRestart);
     rebootEl.addEventListener("click", restartBoard);
+    document.getElementById("cp-now-prev").addEventListener("click", function () { nowTap("previous"); });
+    nowToggleEl.addEventListener("click", function () { nowTap("toggle"); });
+    document.getElementById("cp-now-next").addEventListener("click", function () { nowTap("next"); });
+    nowDownEl.addEventListener("click", function () { nowVolumeTap(-VOLUME_STEP); });
+    nowUpEl.addEventListener("click", function () { nowVolumeTap(VOLUME_STEP); });
   }
 
   function hookFrame() {
@@ -1278,6 +1405,7 @@
     });
     es.addEventListener("events_changed", markActivity);
     es.addEventListener("spotify_changed", pollCover);
+    es.addEventListener("spotify_changed", loadNow);
     es.onerror = function () {
       es.close();
       setTimeout(connect, backoff * 1000);
