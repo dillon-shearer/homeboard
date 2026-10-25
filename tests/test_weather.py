@@ -12,13 +12,13 @@ ZIP = {"places": [{"place name": "Marietta", "latitude": "33.97", "longitude": "
 FORECAST = {
     "current": {"temperature_2m": 71.4, "weather_code": 0, "is_day": 1},
     "daily": {
-        "time": ["2026-10-23", "2026-10-24", "2026-10-25"],
-        "weather_code": [2, 61, 95],
-        "temperature_2m_max": [78.2, 70.0, 66.6],
-        "temperature_2m_min": [55.0, 52.4, 49.9],
-        "precipitation_probability_max": [20, 80, None],
-        "sunrise": ["2026-10-23T07:50", "2026-10-24T07:51", "2026-10-25T07:52"],
-        "sunset": ["2026-10-23T18:55", "2026-10-24T18:54", "2026-10-25T18:53"],
+        "time": [f"2026-10-{d}" for d in range(23, 30)],
+        "weather_code": [2, 61, 95, 0, 3, 71, 45],
+        "temperature_2m_max": [78.2, 70.0, 66.6, 74.0, 69.0, 40.0, 61.0],
+        "temperature_2m_min": [55.0, 52.4, 49.9, 51.0, 50.0, 30.0, 48.0],
+        "precipitation_probability_max": [20, 80, None, 0, 10, 60, 5],
+        "sunrise": [f"2026-10-{d}T07:{27 + d}" for d in range(23, 30)],
+        "sunset": [f"2026-10-{d}T18:{78 - d}" for d in range(23, 30)],
     },
 }
 
@@ -78,7 +78,7 @@ def test_fresh_app_returns_forecast(client, upstream, tmp_path):
     assert body["location"] == "Newnan"
     assert body["stale"] is False
     assert body["current"] == {"temp": 71, "label": "Sunny", "icon": "sun", "is_day": True}
-    assert len(body["days"]) == 3
+    assert len(body["days"]) == 7
     assert {k: body["days"][0][k] for k in ("date", "high", "low", "rain", "label", "icon")} == {
         "date": "2026-10-23",
         "high": 78,
@@ -87,12 +87,20 @@ def test_fresh_app_returns_forecast(client, upstream, tmp_path):
         "label": "Partly cloudy",
         "icon": "cloud-sun",
     }
-    assert [d["icon"] for d in body["days"]] == ["cloud-sun", "rain", "thunder"]
+    assert [d["icon"] for d in body["days"]] == [
+        "cloud-sun",
+        "rain",
+        "thunder",
+        "sun",
+        "cloud",
+        "snow",
+        "fog",
+    ]
     assert body["days"][2]["rain"] is None
     geo = next(u for u in upstream.calls if u.startswith(weather.GEOCODE_URL))
     assert "name=30263" in geo and "countryCode=US" in geo
     fc = next(u for u in upstream.calls if u.startswith(weather.FORECAST_URL))
-    assert "temperature_unit=fahrenheit" in fc and "forecast_days=3" in fc
+    assert "temperature_unit=fahrenheit" in fc and "forecast_days=7" in fc
     s = _settings(tmp_path)
     assert (s["weather_lat"], s["weather_lon"], s["weather_name"]) == (33.38, -84.8, "Newnan")
 

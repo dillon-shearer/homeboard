@@ -18,7 +18,7 @@ TIMEOUT_S = 10
 REFRESH_AFTER = timedelta(minutes=30)
 STALE_AFTER = timedelta(minutes=90)
 RETRY_AFTER = timedelta(minutes=5)
-FORECAST_DAYS = 3
+FORECAST_DAYS = 7
 
 CODES = {
     0: ("Sunny", "sun"),
