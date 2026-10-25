@@ -1,3 +1,4 @@
+import contextlib
 import re
 import sqlite3
 from datetime import UTC, date, datetime, time
@@ -72,6 +73,17 @@ _UNSET = object()
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+@contextlib.contextmanager
+def _write_lock(conn: sqlite3.Connection):
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+    except BaseException:
+        conn.rollback()
+        raise
+    conn.commit()
 
 
 def connect(path=None) -> sqlite3.Connection:
@@ -513,27 +525,29 @@ def add_widget(
         raise ValueError(f"kind must be one of {', '.join(WIDGET_KINDS)}")
     list_id = _check_widget_list(conn, kind, list_id)
     col, row = _check_cell(col, "col"), _check_cell(row, "row")
-    current = [dict(r) for r in list_widgets(conn, screen_id)]
     if w is None and h is None:
         sizes = ALLOWED_SIZES[kind]
     else:
         sizes = [_check_size(kind, 1 if w is None else w, 1 if h is None else h)]
-    error = None
-    for sw, sh in sizes:
-        try:
-            _check_layout([*current, {"col": col, "row": row, "w": sw, "h": sh}])
-        except ValueError as e:
-            error = error or e
-            continue
-        with conn:
+    with _write_lock(conn):
+        current = [dict(r) for r in list_widgets(conn, screen_id)]
+        error = None
+        for sw, sh in sizes:
+            try:
+                _check_layout([*current, {"col": col, "row": row, "w": sw, "h": sh}])
+            except ValueError as e:
+                error = error or e
+                continue
             cur = conn.execute(
                 "INSERT INTO widgets (screen_id, kind, list_id, w, h, col, row, sort_order,"
                 " created_at) VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0)"
                 " + 10 FROM widgets WHERE screen_id = ?), ?)",
                 (screen_id, kind, list_id, sw, sh, col, row, screen_id, _now()),
             )
-        return get_widget(conn, cur.lastrowid)
-    raise error
+            break
+        else:
+            raise error
+    return get_widget(conn, cur.lastrowid)
 
 
 def update_widget(
@@ -545,9 +559,16 @@ def update_widget(
     row=_UNSET,
     list_id=_UNSET,
 ) -> sqlite3.Row | None:
-    current = get_widget(conn, id)
-    if current is None:
-        return None
+    with _write_lock(conn):
+        current = get_widget(conn, id)
+        if current is None:
+            return None
+        _update_widget(conn, current, w, h, col, row, list_id)
+    return get_widget(conn, id)
+
+
+def _update_widget(conn: sqlite3.Connection, current, w, h, col, row, list_id) -> None:
+    id = current["id"]
     fields = {}
     if w is not _UNSET or h is not _UNSET:
         fields["w"], fields["h"] = _check_size(
@@ -572,12 +593,10 @@ def update_widget(
         for wid, change in changes.items():
             layout[wid].update(change)
         _check_layout(layout.values())
-    with conn:
-        for wid, change in changes.items():
-            if change:
-                sets = ", ".join(f"{k} = ?" for k in change)
-                conn.execute(f"UPDATE widgets SET {sets} WHERE id = ?", (*change.values(), wid))
-    return get_widget(conn, id)
+    for wid, change in changes.items():
+        if change:
+            sets = ", ".join(f"{k} = ?" for k in change)
+            conn.execute(f"UPDATE widgets SET {sets} WHERE id = ?", (*change.values(), wid))
 
 
 def delete_widget(conn: sqlite3.Connection, id: int) -> sqlite3.Row | None:

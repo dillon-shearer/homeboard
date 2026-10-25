@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 import sqlite3
@@ -23,6 +24,30 @@ class PhotoPatch(BaseModel):
 
 class PhotoOrder(BaseModel):
     ids: list[int]
+
+
+class UploadGate:
+    def __init__(self, app):
+        self.app = app
+        self.slots = asyncio.Semaphore(images.MAX_ADMITTED)
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] != "http"
+            or scope["method"] != "POST"
+            or scope["path"].rstrip("/") != router.prefix
+        ):
+            await self.app(scope, receive, send)
+            return
+        length = dict(scope["headers"]).get(b"content-length", b"")
+        if not length.isdigit():
+            await JSONResponse({"detail": "length required"}, status_code=411)(scope, receive, send)
+            return
+        if int(length) > images.MAX_REQUEST_BYTES:
+            await JSONResponse({"detail": "too large"}, status_code=413)(scope, receive, send)
+            return
+        async with self.slots:
+            await self.app(scope, receive, send)
 
 
 def get_conn(request: Request):

@@ -218,7 +218,7 @@ def test_nginx_marks_only_the_tunnel_port():
     assert 'default "";' in mapping
     proxy = read(NGINX / "homeboard-proxy.conf")
     assert "proxy_set_header X-Homeboard-Tunnel $homeboard_tunnel;" in proxy
-    assert "client_max_body_size 0;" in proxy
+    assert "client_max_body_size 51m;" in proxy
     tunnel = read(NGINX / "homeboard-tunnel.conf")
     assert "listen 127.0.0.1:8081;" in tunnel
     assert "listen [::1]:8081;" in tunnel
