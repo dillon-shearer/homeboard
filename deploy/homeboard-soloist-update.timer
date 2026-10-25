@@ -1,0 +1,11 @@
+[Unit]
+Description=Fetch the newest Spotify Soloist build every week
+
+[Timer]
+OnCalendar=Mon *-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=30min
+Unit=homeboard-soloist-update.service
+
+[Install]
+WantedBy=timers.target

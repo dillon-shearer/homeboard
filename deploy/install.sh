@@ -16,6 +16,7 @@ TUNNEL_ENV="$ETC_DIR/tunnel.env"
 PASSWORD_HASH="$ETC_DIR/tunnel-password.hash"
 SPEAKER_ENV="$ETC_DIR/speaker.env"
 SPOTIFY_ENV="$ETC_DIR/spotify.env"
+SOLOIST_ENV="$ETC_DIR/soloist.env"
 BT_CONF=/etc/bluetooth/main.conf
 
 HOST=""
@@ -28,6 +29,8 @@ NEW_PASSWORD=0
 PAIR_SPEAKER=0
 SPOTIFY=0
 NEW_SPOTIFY=0
+NEW_SOLOIST_KEY=0
+UPDATE_SOLOIST=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --host) HOST="${2:?--host needs a value}"; shift 2 ;;
@@ -40,6 +43,8 @@ while [ $# -gt 0 ]; do
         --pair-speaker) PAIR_SPEAKER=1; shift ;;
         --spotify) SPOTIFY=1; shift ;;
         --new-spotify) SPOTIFY=1; NEW_SPOTIFY=1; shift ;;
+        --new-soloist-key) NEW_SOLOIST_KEY=1; shift ;;
+        --update-soloist) UPDATE_SOLOIST=1; shift ;;
         -*) echo "Unknown option: $1" >&2; exit 1 ;;
         *) REPO_URL="$1"; shift ;;
     esac
@@ -62,6 +67,10 @@ if [ -s "$SPOTIFY_ENV" ]; then
 fi
 if [ "$SPOTIFY" -eq 1 ] && [ ! -r /dev/tty ] && { [ "$NEW_SPOTIFY" -eq 1 ] || [ ! -s "$SPOTIFY_ENV" ]; }; then
     echo "No terminal to ask for the Spotify Client ID and secret; run this from an SSH window" >&2
+    exit 1
+fi
+if [ "$NEW_SOLOIST_KEY" -eq 1 ] && [ ! -r /dev/tty ]; then
+    echo "No terminal to ask for the Spotify Soloist API key; run this from an SSH window" >&2
     exit 1
 fi
 if [ "$PAIR_SPEAKER" -eq 1 ] && [ ! -r /dev/tty ]; then
@@ -97,7 +106,7 @@ systemctl stop homeboard-api.service 2>/dev/null || true
 trap 'systemctl start homeboard-api.service || true' EXIT
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg \
+    git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg patchelf \
     bluez pipewire pipewire-pulse wireplumber libspa-0.2-bluetooth
 if [ -n "$HOST" ]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y certbot "python3-certbot-dns-$DNS"
@@ -109,6 +118,12 @@ if [ "$TUNNEL" -eq 1 ]; then
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared
 fi
+if dpkg -s raspotify >/dev/null 2>&1; then
+    systemctl disable --now raspotify.service || true
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y raspotify
+fi
+rm -f /etc/apt/sources.list.d/raspotify.list /usr/share/keyrings/raspotify_key.asc
+rm -rf /etc/systemd/system/raspotify.service.d /etc/raspotify
 
 echo "== Creating the homeboard user"
 if ! id homeboard >/dev/null 2>&1; then
@@ -362,6 +377,31 @@ if id "$KIOSK_USER" >/dev/null 2>&1; then
     systemctl --machine="$KIOSK_USER@.host" --user restart wireplumber.service || true
 fi
 
+echo "== Spotify Connect speaker"
+if [ "$UPDATE_SOLOIST" -eq 1 ] || [ ! -x /opt/soloist/soloist ]; then
+    bash "$APP_DIR"/deploy/soloist-update.sh
+fi
+if [ "$NEW_SOLOIST_KEY" -eq 1 ] || { [ ! -s "$SOLOIST_ENV" ] && [ -r /dev/tty ]; }; then
+    install -d -m 700 -o root -g root "$ETC_DIR"
+    read -rsp "Paste the Spotify Soloist API key and press Enter (nothing shows): " SOLOIST_KEY < /dev/tty
+    echo
+    SOLOIST_KEY="$(printf '%s' "$SOLOIST_KEY" | tr -d '[:space:]')"
+    if [ -n "$SOLOIST_KEY" ]; then
+        (umask 077 && printf 'SOLOIST_API_KEY=%s\n' "$SOLOIST_KEY" > "$SOLOIST_ENV")
+    fi
+    unset SOLOIST_KEY
+fi
+if [ -s "$SOLOIST_ENV" ]; then
+    chown root:root "$SOLOIST_ENV"
+    chmod 600 "$SOLOIST_ENV"
+else
+    echo "Warning: no Spotify Soloist API key, so Home Board does not show in Spotify; run: sudo bash $APP_DIR/deploy/install.sh --new-soloist-key" >&2
+fi
+SOLOIST_EXPIRES="$(cat /opt/soloist/expires 2>/dev/null || true)"
+if [ -n "$SOLOIST_EXPIRES" ] && [ "$(date -d "$SOLOIST_EXPIRES - 14 days" +%s)" -le "$(date +%s)" ]; then
+    echo "Warning: the Spotify Soloist build runs out on $SOLOIST_EXPIRES; run: sudo bash $APP_DIR/deploy/install.sh --update-soloist" >&2
+fi
+
 echo "== Enabling services"
 systemctl daemon-reload
 systemctl disable getty@tty1.service || true
@@ -370,6 +410,9 @@ systemctl enable \
     homeboard-kiosk.service \
     homeboard-preload.service \
     homeboard-helper.service \
+    homeboard-soloist.service \
+    homeboard-soloist-events.service \
+    homeboard-soloist-update.timer \
     bluetooth.service \
     wifi-powersave-off.service \
     homeboard-kiosk-restart.timer \
@@ -447,6 +490,9 @@ if [ "$PAIR_SPEAKER" -eq 1 ]; then
     fi
 fi
 systemctl restart homeboard-helper.service
+if [ -s "$SOLOIST_ENV" ]; then
+    systemctl restart homeboard-soloist.service
+fi
 
 echo
 echo "Install finished. reboot now: sudo reboot"

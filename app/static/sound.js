@@ -5,6 +5,7 @@
   var STEP_DEBOUNCE_MS = 400;
   var IDLE_MIN = 1;
   var IDLE_MAX = 120;
+  var EXPIRY_WARN_MS = 14 * 24 * 60 * 60 * 1000;
   var NO_CREDS = "Spotify is not set up on the Pi yet. See PI_SETUP.md, Spotify.";
 
   var linked = null;
@@ -89,6 +90,16 @@
   function renderSpeaker(s) {
     var sp = (s && s.speaker) || {};
     $("speaker-state").textContent = sp.connected ? "Connected to " + (sp.name || "the speaker") : "Not connected";
+    var warn = $("soloist-warning");
+    var ends = s && s.soloist_expires ? new Date(s.soloist_expires + "T00:00:00").getTime() : NaN;
+    if (ends - Date.now() < EXPIRY_WARN_MS) {
+      warn.textContent = "Home Board stops playing Spotify on " + s.soloist_expires +
+        ". To renew it, on the Pi run: sudo bash /opt/homeboard/deploy/install.sh --update-soloist";
+      warn.hidden = false;
+    } else {
+      warn.textContent = "";
+      warn.hidden = true;
+    }
   }
 
   function speakerError(err) {

@@ -1,0 +1,19 @@
+[Unit]
+Description=Home Board Spotify Connect speaker (Spotify Soloist)
+Wants=network-online.target user@1000.service
+After=network-online.target user@1000.service
+
+[Service]
+User=dillon
+Group=dillon
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native XDG_RUNTIME_DIR=/run/user/1000
+LoadCredential=soloist:/etc/homeboard/soloist.env
+StateDirectory=soloist
+CacheDirectory=soloist
+ExecStart=/opt/homeboard/deploy/soloist.sh --device-name "Home Board" --ws 127.0.0.1:0 --cache-size 100
+Restart=always
+RestartSec=10
+RestartPreventExitStatus=10
+
+[Install]
+WantedBy=multi-user.target

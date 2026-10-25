@@ -106,6 +106,7 @@ def test_status_endpoint_shape(server):
         "speaker": {"mac": "AA:BB:CC:DD:EE:FF", "connected": False, "name": "Bar"},
         "playing": False,
         "idle_minutes": 0,
+        "soloist_expires": None,
     }
 
 
