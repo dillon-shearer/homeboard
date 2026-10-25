@@ -64,6 +64,7 @@ def test_widget_sizes_lists_allowed_sizes_per_kind(client):
         "weather": [[2, 2], [2, 1], [1, 2], [1, 1]],
         "calendar": [[2, 2], [2, 1], [1, 2], [1, 1]],
         "lists": [[2, 2], [2, 1], [1, 2], [1, 1]],
+        "spotify": [[2, 2], [2, 1], [1, 2], [1, 1]],
     }
 
 
@@ -325,7 +326,7 @@ def test_migration_keeps_each_packed_layout(tmp_path):
     ids = _db_at_version_12(tmp_path / "homeboard.db", layouts)
     conn = db.connect(tmp_path / "homeboard.db")
     try:
-        assert db.migrate(conn) == 16
+        assert db.migrate(conn) == 17
         cols = {r[1] for r in conn.execute("PRAGMA table_info(widgets)")}
         assert {"col", "row"} <= cols
 
@@ -429,7 +430,7 @@ def test_migration_maps_old_channels(tmp_path, old, new):
     try:
         with conn:
             conn.execute("UPDATE settings SET channel = ?", (old,))
-        assert db.migrate(conn) == 16
+        assert db.migrate(conn) == 17
         s = db.get_settings(conn)
         expected = None if old == "photos" else db.list_screens(conn)[2]["id"]
         assert (s["channel"], s["screen_id"]) == (new, expected)

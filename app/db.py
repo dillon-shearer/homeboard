@@ -47,13 +47,14 @@ OVERLAY_SIZE_MAX = 12
 LIST_KINDS = ("checklist", "notes")
 LIST_NAME_MAX = 60
 SCREEN_NAME_MAX = 60
-WIDGET_KINDS = ("clock", "weather", "calendar", "lists")
+WIDGET_KINDS = ("clock", "weather", "calendar", "lists", "spotify")
 WIDGET_SIZES = ((2, 2), (2, 1), (1, 2), (1, 1))
 ALLOWED_SIZES = {
     "clock": ((2, 1), (1, 1)),
     "weather": WIDGET_SIZES,
     "calendar": WIDGET_SIZES,
     "lists": WIDGET_SIZES,
+    "spotify": WIDGET_SIZES,
 }
 GRID_COLS = 2
 GRID_ROWS = 2
