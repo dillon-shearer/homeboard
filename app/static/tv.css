@@ -1015,6 +1015,12 @@ body.tv {
   box-shadow: inset 1px 1px 0 var(--w95-shadow);
 }
 
+.sp-btn:disabled {
+  color: var(--w95-shadow);
+  border-color: var(--w95-light) var(--w95-dark) var(--w95-dark) var(--w95-light);
+  box-shadow: inset -1px -1px 0 var(--w95-shadow), inset 1px 1px 0 #dfdfdf;
+}
+
 .sp-btn.on {
   background: #dfdfdf;
   font-weight: bold;
