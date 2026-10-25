@@ -108,6 +108,8 @@ def test_status_endpoint_shape(server):
         "idle_minutes": 0,
         "soloist_expires": None,
         "connect_ok": None,
+        "connecting": False,
+        "sink": None,
     }
 
 

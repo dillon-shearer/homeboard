@@ -15,6 +15,8 @@ SOLOIST_NOW = ["/opt/soloist/soloist", "ctl", "-D", "/var/lib/soloist", "now", "
 DEFAULT_IDLE_MINUTES = 10
 CONNECT_TRIES = 5
 CONNECT_GAP_S = 3
+CONNECT_BUDGET_S = 15
+PLAYING_WAIT_S = 2
 BLUETOOTHCTL_TIMEOUT_S = 20
 WPCTL_TIMEOUT_S = 5
 DEFAULT_VOLUME = 100
@@ -170,21 +172,44 @@ class Helper:
         self.lock = threading.Lock()
         self.bt_lock = threading.Lock()
         self.connect_ok = None
+        self.connecting = None
 
     def connected(self):
         return speaker_info(self.mac)["connected"]
 
     def connect(self):
-        with self.bt_lock:
+        deadline = time.monotonic() + CONNECT_BUDGET_S
+        if not self.bt_lock.acquire(timeout=CONNECT_BUDGET_S):
+            return False
+        try:
             for attempt in range(CONNECT_TRIES):
+                if time.monotonic() >= deadline:
+                    break
                 if self.connected():
                     return True
+                if time.monotonic() >= deadline:
+                    break
                 bluetoothctl("connect", self.mac)
                 if self.connected():
                     return True
                 if attempt < CONNECT_TRIES - 1:
-                    time.sleep(CONNECT_GAP_S)
+                    time.sleep(max(0, min(CONNECT_GAP_S, deadline - time.monotonic())))
             return False
+        finally:
+            self.bt_lock.release()
+
+    def connect_async(self):
+        with self.lock:
+            job = self.connecting
+            if job is None or not job.is_alive():
+                job = threading.Thread(target=self.run_connect, daemon=True)
+                self.connecting = job
+                job.start()
+        job.join(PLAYING_WAIT_S)
+        return None if job.is_alive() else self.connect_ok
+
+    def run_connect(self):
+        self.connect_ok = self.connect()
 
     def disconnect(self):
         with self.bt_lock:
@@ -212,12 +237,16 @@ class Helper:
         with self.lock:
             playing = self.state.playing
             idle = self.state.idle_minutes(time.monotonic())
+            job = self.connecting
+        speaker = speaker_info(self.mac)
         return {
-            "speaker": speaker_info(self.mac),
+            "speaker": speaker,
             "playing": playing,
             "idle_minutes": idle,
             "soloist_expires": soloist_expires(),
             "connect_ok": self.connect_ok,
+            "connecting": job is not None and job.is_alive(),
+            "sink": speaker_sink(self.mac) if speaker["connected"] else None,
         }
 
     def set_playing(self, playing):
@@ -225,8 +254,7 @@ class Helper:
         with self.lock:
             action = self.state.set_playing(playing, time.monotonic(), minutes)
         if action == "connect" and self.mac:
-            self.connect_ok = self.connect()
-            return self.connect_ok
+            return self.connect_async()
         return None
 
     def reconcile(self, startup=False):
@@ -294,7 +322,8 @@ def make_handler(helper):
                 if not isinstance(playing, bool):
                     return self.reply(400, {"detail": "playing must be true or false"})
                 ok = helper.set_playing(playing)
-                return self.reply(503 if ok is False else 200, helper.status())
+                code = 503 if ok is False else 202 if ok is None and playing and helper.mac else 200
+                return self.reply(code, helper.status())
             if self.path not in ("/connect", "/disconnect", "/volume"):
                 return self.reply(404, {"detail": "not found"})
             if not helper.mac:
