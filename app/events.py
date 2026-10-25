@@ -3,15 +3,28 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 LOCAL_HOSTS = ("127.0.0.1", "::1")
+QUEUE_MAX = 32
 
 last_event: str | None = None
+
+
+class EventQueue(asyncio.Queue):
+    def __init__(self):
+        super().__init__(QUEUE_MAX)
+
+    def put_nowait(self, item):
+        if item in self._queue:
+            return
+        if self.full():
+            self.get_nowait()
+        super().put_nowait(item)
 
 
 @dataclass(eq=False)
 class Subscriber:
     loop: asyncio.AbstractEventLoop
     local: bool
-    queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    queue: asyncio.Queue = field(default_factory=EventQueue)
 
 
 subscribers: set[Subscriber] = set()
