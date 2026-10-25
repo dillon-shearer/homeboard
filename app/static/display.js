@@ -318,6 +318,7 @@
   const SPLASH_FADE_MS = 500;
   const READOUT_HIDE_MS = 800;
   const COVER_POLL_MS = 15000;
+  const COVER_END_MS = 1000;
   const PHOTOS_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="22" fill="#000"/><rect x="3" y="6" width="26" height="20" fill="#c0c0c0"/><rect x="5" y="8" width="22" height="16" fill="#00ffff"/><polygon points="5,24 13,14 19,21 22,18 27,24" fill="#008000"/><rect x="21" y="10" width="4" height="4" fill="#ffff00"/></svg>';
   const SCREEN_ICON = '<svg class="w95-icon-img" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="4" width="28" height="20" fill="#000"/><rect x="3" y="5" width="26" height="18" fill="#c0c0c0"/><rect x="5" y="7" width="22" height="14" fill="#000080"/><rect x="7" y="9" width="8" height="2" fill="#00ffff"/><rect x="7" y="13" width="12" height="2" fill="#00ffff"/><rect x="24" y="22" width="2" height="1" fill="#00ff00"/><rect x="13" y="24" width="6" height="3" fill="#808080"/><rect x="8" y="27" width="16" height="2" fill="#000"/><rect x="9" y="27" width="14" height="1" fill="#c0c0c0"/></svg>';
 
@@ -378,6 +379,7 @@
   let edgeDrag = null;
   let readoutTimer = null;
   let coverTouch = null;
+  let coverEndTimer = null;
   let panelOpen = false;
   let panelDrag = false;
   let panelSliding = false;
@@ -531,9 +533,18 @@
     }
     return fetchJson("/api/spotify/now").then(function (now) {
       state.now = now;
+      coverAtEnd(now);
     }, function () {
       state.now = null;
     }).then(showCover);
+  }
+
+  function coverAtEnd(now) {
+    clearTimeout(coverEndTimer);
+    coverEndTimer = null;
+    if (!now || !now.playing || typeof now.progress_ms !== "number" || !now.duration_ms) return;
+    const left = now.duration_ms - now.progress_ms + COVER_END_MS;
+    if (left < COVER_POLL_MS) coverEndTimer = setTimeout(pollCover, Math.max(left, COVER_END_MS));
   }
 
   function openSpotify() {
@@ -627,6 +638,7 @@
     }
     state.settings = applySettings(state.settings, body);
     applyChannel();
+    if (body.channel === "photos") pollCover();
     fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1009,6 +1021,7 @@
     const prev = state.settings;
     state.settings = applySettings(prev, data);
     applyDom();
+    if (prev.channel !== "photos" && state.settings.channel === "photos") pollCover();
     if (prev.shuffle !== state.settings.shuffle && state.order.length) {
       const o = state.currentId === null
         ? resumeOrder(ids(), state.resumeId, state.settings.shuffle)
