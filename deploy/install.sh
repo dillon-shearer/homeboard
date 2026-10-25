@@ -389,7 +389,8 @@ if [ "$PAIR_SPEAKER" -eq 1 ]; then
     fi
     SPEAKER_MAC="${FOUND[$((CHOICE - 1))]%% *}"
     SPEAKER_INFO="$(bluetoothctl info "$SPEAKER_MAC" || true)"
-    if [[ "$SPEAKER_INFO" != *"Paired: yes"* ]]; then
+    if [[ "$SPEAKER_INFO" != *"Bonded: yes"* ]]; then
+        bluetoothctl pairable on >/dev/null
         if ! timeout 60 bluetoothctl pair "$SPEAKER_MAC"; then
             echo "Pairing failed. Put the soundbar in Bluetooth pairing mode with its remote and run: sudo bash $APP_DIR/deploy/install.sh --pair-speaker" >&2
             exit 1

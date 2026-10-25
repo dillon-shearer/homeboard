@@ -255,3 +255,6 @@ def test_install_sets_up_bluetooth_audio():
     assert "printf 'SPEAKER_MAC=%s\\n'" in text
     assert "AutoEnable=true" in text
     assert "pairing mode with its remote" in text
+    pair = text.split("== Pairing the speaker", 1)[1]
+    assert pair.index("bluetoothctl pairable on") < pair.index('bluetoothctl pair "$SPEAKER_MAC"')
+    assert '*"Bonded: yes"*' in pair
