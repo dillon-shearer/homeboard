@@ -356,7 +356,10 @@ def test_soloist_service():
     assert p["Install"]["WantedBy"] == "multi-user.target"
     run = (DEPLOY / "soloist.sh").read_text(encoding="utf-8")
     assert '"$CREDENTIALS_DIRECTORY/soloist"' in run
-    assert 'exec /opt/soloist/soloist "${ARGS[@]}"' in run
+    assert 'exec /opt/soloist/soloist "$@"' in run
+    assert "--api-key" not in run
+    assert "LD_PRELOAD=/opt/soloist/soloist-key.so" in run
+    assert 'SOLOIST_API_KEY_FILE="$CREDENTIALS_DIRECTORY/soloist"' in run
 
 
 def test_soloist_events_service():
