@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>homeboard</title>
+<link rel="stylesheet" href="{{ static_url('win95.css') }}">
 <link rel="stylesheet" href="{{ static_url('display.css') }}">
 {% set boot = splash() %}
 <style>{{ boot.css | safe }}</style>
@@ -31,6 +32,55 @@
 <div id="cell-bottom-right" class="cell row-bottom col-right"><div id="clock"></div><div id="date"></div></div>
 </div>
 <iframe id="channel" title="TV channel"></iframe>
+<div id="control-panel" class="w95-window cp" role="dialog" aria-labelledby="cp-title" hidden>
+<div class="w95-titlebar">
+<span id="cp-title" class="w95-title-text">Control Panel</span>
+<button type="button" id="cp-close" class="title-close" aria-label="Close"><span class="w95-close" aria-hidden="true"></span></button>
+</div>
+<div class="w95-body cp-body">
+<section class="w95-group cp-screens" aria-labelledby="cp-screens-title">
+<h2 id="cp-screens-title" class="w95-legend">Screens</h2>
+<ul id="cp-screens" class="w95-icons"></ul>
+</section>
+<div class="cp-side">
+<section class="w95-group" aria-labelledby="cp-speaker-title">
+<h2 id="cp-speaker-title" class="w95-legend">Speaker</h2>
+<div class="cp-row">
+<button type="button" id="cp-speaker" class="cp-switch" role="switch" aria-checked="false" aria-labelledby="cp-speaker-title"><span class="cp-knob"></span></button>
+<span id="cp-speaker-state">...</span>
+</div>
+</section>
+<section class="w95-group" aria-labelledby="cp-brightness-title">
+<h2 id="cp-brightness-title" class="w95-legend">Brightness</h2>
+<div class="cp-row">
+<input id="cp-brightness" class="cp-slider" type="range" min="10" max="100" step="1" aria-labelledby="cp-brightness-title">
+<span id="cp-brightness-value" class="cp-value"></span>
+</div>
+</section>
+<section class="w95-group" aria-labelledby="cp-board-title">
+<h2 id="cp-board-title" class="w95-legend">Board</h2>
+<div class="cp-row">
+<button type="button" id="cp-restart" class="w95-btn">Restart board</button>
+</div>
+</section>
+</div>
+</div>
+<div id="cp-confirm" class="cp-modal" hidden>
+<div class="w95-window dialog cp-dialog" role="alertdialog" aria-labelledby="cp-confirm-title" aria-describedby="cp-confirm-text">
+<div class="w95-titlebar">
+<span id="cp-confirm-title" class="w95-title-text">Restart board</span>
+</div>
+<div class="w95-body">
+<p id="cp-confirm-text">Restart the board? It takes about a minute.</p>
+<p id="cp-confirm-error" class="cp-error" hidden></p>
+<div class="buttons">
+<button type="button" id="cp-restart-yes" class="w95-btn default">Restart</button>
+<button type="button" id="cp-restart-no" class="w95-btn">Cancel</button>
+</div>
+</div>
+</div>
+</div>
+</div>
 <div id="dim"></div>
 <div id="brightness"></div>
 <div id="edge"></div>
