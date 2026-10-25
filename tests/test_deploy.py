@@ -60,7 +60,11 @@ def test_api_service():
 def test_kiosk_service():
     p = load("homeboard-kiosk.service")
     s, u = p["Service"], p["Unit"]
-    assert "homeboard-api.service" in u["After"].split()
+    for name in ["homeboard-api.service", "nginx.service"]:
+        assert name not in u["After"].split()
+        assert name in u["Wants"].split()
+    assert "Before" not in u
+    assert "plymouth" not in (DEPLOY / "homeboard-kiosk.service").read_text(encoding="utf-8")
     assert s["Restart"] == "always"
     assert s["RestartSec"] == "3"
     assert s["User"] == "dillon"
@@ -179,11 +183,14 @@ def test_boot_page_is_self_contained():
         assert needle not in text
 
 
-def test_kiosk_opens_boot_page_without_waiting():
+def test_kiosk_waits_for_port_80_only_under_the_cover():
     text = (DEPLOY / "kiosk.sh").read_text(encoding="utf-8")
     assert "file:///opt/homeboard/deploy/splash/boot.html" in text
-    assert "seq 1 60" not in text
+    assert "for _ in $(seq 1 150); do\n" in text
+    assert "    sleep 0.2\n" in text
     assert "curl" not in text
+    assert "healthz" not in text
+    assert text.index("swayimg") < text.index("seq 1 150") < text.index("exec chromium")
     for flag in [
         "--kiosk",
         "--noerrdialogs",
@@ -194,3 +201,27 @@ def test_kiosk_opens_boot_page_without_waiting():
         "--ozone-platform=wayland",
     ]:
         assert flag in text
+
+
+def test_install_drops_plymouth():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    packages = text.split("apt-get install -y \\\n", 1)[1].split("\n", 1)[0].split()
+    assert "swayimg" in packages
+    assert not [p for p in packages if "plymouth" in p]
+    assert "plymouth-set-default-theme" not in text
+    assert "deploy/plymouth" not in text
+    assert not (DEPLOY / "plymouth").exists()
+    loop = "for unit in plymouth-quit plymouth-halt plymouth-poweroff plymouth-reboot; do\n"
+    assert loop in text
+    assert '    rm -f "/etc/systemd/system/$unit.service.d/homeboard.conf"\n' in text
+    assert "THEME_DIR=/usr/share/plymouth/themes/homeboard\n" in text
+    assert 'if [ -d "$THEME_DIR" ]; then\n' in text
+    assert '    rm -rf "$THEME_DIR"\n' in text
+
+
+def test_install_cmdline_words_drop_splash():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    line = next(x for x in text.splitlines() if x.strip().startswith("SPLASH_WORDS=("))
+    words = line.split("(", 1)[1].rstrip(")").split()
+    assert words == ["quiet", "loglevel=0", "logo.nologo", "vt.global_cursor_default=0"]
+    assert "loglevel=* | splash | plymouth.*) continue ;;" in text

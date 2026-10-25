@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 set -u
 
-STILL=/var/cache/homeboard/boot.png
+COVER=/var/cache/homeboard/boot.gif
 
 if [ "${1:-}" != session ]; then
     exec cage -- /bin/bash "$0" session
 fi
 
-if [ -r "$STILL" ]; then
-    swayimg --fullscreen --scale=fit --no-sway "$STILL" &
+if [ -r "$COVER" ]; then
+    swayimg --fullscreen --scale=fit --no-sway "$COVER" &
     sleep 0.5
 fi
 
 BOOT=file:///opt/homeboard/deploy/splash/boot.html
-if (exec 3<>/dev/tcp/127.0.0.1/80) 2>/dev/null; then
-    BOOT=http://localhost/boot.html
-fi
+for _ in $(seq 1 150); do
+    if (exec 3<>/dev/tcp/127.0.0.1/80) 2>/dev/null; then
+        BOOT=http://localhost/
+        break
+    fi
+    sleep 0.2
+done
 
 exec chromium \
     --kiosk \

@@ -4,7 +4,7 @@ set -u
 PROGRAMS=(/usr/bin/swayimg /usr/bin/cage /usr/lib/aarch64-linux-gnu/libgallium-*.so /usr/lib/chromium/chromium)
 
 {
-    printf '%s\n' /var/cache/homeboard/boot.png
+    printf '%s\n' /var/cache/homeboard/boot.gif
     for program in "${PROGRAMS[@]}"; do
         printf '%s\n' "$program"
         ldd "$program" 2>/dev/null | awk '$3 ~ /^\// {print $3}'
