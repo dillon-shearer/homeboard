@@ -269,11 +269,12 @@ def control(data_dir, method: str, path: str, payload=None, query=None) -> dict:
         except SpotifyError as e:
             if e.detail != "no active device":
                 raise
-            device = _take_over(data_dir, path == "/me/player/play")
+            play = path == "/me/player/play"
+            device = _take_over(data_dir, play)
             try:
                 api(data_dir, method, path, payload, {**(query or {}), "device_id": device})
             except SpotifyError:
-                if path != "/me/player/pause":
+                if path != "/me/player/pause" and not (play and payload is None):
                     raise
     finally:
         with _now_lock:
