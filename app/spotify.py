@@ -35,7 +35,8 @@ _now_lock = threading.Lock()
 _token: dict = {}
 _now: dict = {}
 _profile: dict = {}
-_settle = {"gen": 0}
+_settle: dict = {"job": None, "worker": None}
+_settle_cv = threading.Condition()
 _states: dict[str, float] = {}
 _limit: dict = {}
 
@@ -409,33 +410,61 @@ def seen_now() -> tuple:
 def settle(data_dir, publish, last=None) -> None:
     delays = tuple(SETTLE_S)
     with _now_lock:
-        _settle["gen"] += 1
-        gen = _settle["gen"]
         if last is None:
             last = _seen(_now.get("data"))
-    if not delays:
-        return
+    with _settle_cv:
+        start = time.monotonic()
+        _settle["job"] = (
+            {
+                "data_dir": data_dir,
+                "publish": publish,
+                "last": last,
+                "due": [start + at for at in delays],
+            }
+            if delays
+            else None
+        )
+        if _settle["job"] is not None and _settle.get("worker") is None:
+            _settle["worker"] = threading.Thread(
+                target=_settle_loop, name="spotify-settle", daemon=True
+            )
+            _settle["worker"].start()
+        _settle_cv.notify_all()
 
-    def run():
-        nonlocal last
-        waited = 0.0
-        for at in delays:
-            time.sleep(max(0.0, at - waited))
-            waited = at
-            if _settle["gen"] != gen:
-                return
-            try:
-                now = now_playing(data_dir, True)
-            except NotLinked:
-                return
-            if now.get("stale"):
-                continue
-            seen = _seen(now)
-            if seen != last:
-                last = seen
-                publish("spotify_changed")
 
-    threading.Thread(target=run, daemon=True).start()
+def _settle_loop() -> None:
+    while True:
+        with _settle_cv:
+            while True:
+                job = _settle.get("job")
+                if job is None:
+                    _settle["worker"] = None
+                    return
+                wait = job["due"][0] - time.monotonic()
+                if wait <= 0:
+                    break
+                _settle_cv.wait(wait)
+            job["due"].pop(0)
+            if not job["due"]:
+                _settle["job"] = None
+        if not _settle_check(job):
+            with _settle_cv:
+                if _settle.get("job") is job:
+                    _settle["job"] = None
+
+
+def _settle_check(job) -> bool:
+    try:
+        now = now_playing(job["data_dir"], True)
+    except NotLinked:
+        return False
+    if now.get("stale"):
+        return True
+    seen = _seen(now)
+    if seen != job["last"]:
+        job["last"] = seen
+        job["publish"]("spotify_changed")
+    return True
 
 
 def profile(data_dir) -> dict:
