@@ -62,7 +62,10 @@ def test_screen_dialogs_return_focus(server, tmp_path):  # noqa: F811
         chrome.eval(_escape())
         assert chrome.eval(_is("screen-delete"))
         chrome.eval(_click("screen-backdrop"))
-        _wait(chrome, f"{ACTIVE} === document.querySelector('[data-edit-screen=\"{sid}\"]').children[1]")
+        _wait(
+            chrome,
+            f"{ACTIVE} === document.querySelector('[data-edit-screen=\"{sid}\"]').children[1]",
+        )
     finally:
         chrome.close()
 
@@ -90,7 +93,10 @@ def test_calendar_dialogs_return_focus_and_hold_reload(server, tmp_path):  # noq
     try:
         _open(chrome, server, "/admin/calendar")
         today = chrome.eval(TODAY)
-        httpx.post(f"{server}/api/events", json={"title": "Dentist", "date": today, "time": None, "repeat": "never"})
+        httpx.post(
+            f"{server}/api/events",
+            json={"title": "Dentist", "date": today, "time": None, "repeat": "never"},
+        )
         _wait(chrome, "document.querySelectorAll('#day-events li').length === 1")
 
         chrome.eval(_click("add-event"))
@@ -105,7 +111,10 @@ def test_calendar_dialogs_return_focus_and_hold_reload(server, tmp_path):  # noq
         chrome.eval(_click("confirm-cancel"))
         assert chrome.eval(_is("event-delete"))
 
-        httpx.post(f"{server}/api/events", json={"title": "Vet", "date": today, "time": None, "repeat": "never"})
+        httpx.post(
+            f"{server}/api/events",
+            json={"title": "Vet", "date": today, "time": None, "repeat": "never"},
+        )
         time.sleep(0.5)
         assert chrome.eval("document.querySelectorAll('#day-events li').length") == 1
         chrome.eval(_click("event-close"))

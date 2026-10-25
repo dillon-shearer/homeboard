@@ -1,6 +1,7 @@
 :root {
   --clock-size: 5vh;
   --caption-size: 5vh;
+  --date-size: 3vh;
 }
 
 html, body {
@@ -145,6 +146,13 @@ html, body {
   white-space: nowrap;
   font-size: var(--clock-size);
   font-weight: 600;
+  text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
+  opacity: 0.85;
+}
+
+#date {
+  white-space: nowrap;
+  font-size: var(--date-size);
   text-shadow: 0 0 1vh #000, 0 0 0.4vh #000;
   opacity: 0.85;
 }

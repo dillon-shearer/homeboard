@@ -49,7 +49,7 @@
 </section>
 {% set spots = [("top-left", "Top left"), ("top-center", "Top center"), ("top-right", "Top right"), ("middle-left", "Middle left"), ("middle-center", "Middle center"), ("middle-right", "Middle right"), ("bottom-left", "Bottom left"), ("bottom-center", "Bottom center"), ("bottom-right", "Bottom right")] %}
 <section class="w95-group settings" aria-labelledby="group-overlay">
-<h2 id="group-overlay" class="w95-legend">Clock and caption</h2>
+<h2 id="group-overlay" class="w95-legend">Clock, date and caption</h2>
 <div class="form">
 <label for="clock-size">Clock size</label>
 <div class="stepper">
@@ -63,8 +63,14 @@
 <input id="caption-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Caption size">
 <button type="button" id="caption-size-plus" class="w95-btn step" aria-label="Bigger caption">+</button>
 </div>
+<label for="date-size">Date size</label>
+<div class="stepper">
+<button type="button" id="date-size-minus" class="w95-btn step" aria-label="Smaller date">&minus;</button>
+<input id="date-size" type="number" min="2" max="12" step="1" inputmode="numeric" class="w95-input" aria-label="Date size">
+<button type="button" id="date-size-plus" class="w95-btn step" aria-label="Bigger date">+</button>
+</div>
 <div class="spot-pair">
-{% for key, title in [("clock_pos", "Clock spot"), ("caption_pos", "Caption spot")] %}
+{% for key, title in [("clock_pos", "Clock spot"), ("caption_pos", "Caption spot"), ("date_pos", "Date spot")] %}
 <div class="spot-field">
 <span id="{{ key }}-label">{{ title }}</span>
 <div class="spots" role="radiogroup" aria-labelledby="{{ key }}-label">
@@ -82,8 +88,16 @@
 <label class="w95-check w95-radio"><input type="radio" name="clock_on_top" value="false"> Caption on top</label>
 </div>
 </div>
+<div id="date-stack-row" class="stack-row" hidden>
+<span id="date-stack-label">When the date shares a spot:</span>
+<div class="choices" role="radiogroup" aria-labelledby="date-stack-label">
+<label class="w95-check w95-radio"><input type="radio" name="date_on_top" value="true"> Date above</label>
+<label class="w95-check w95-radio"><input type="radio" name="date_on_top" value="false"> Date below</label>
+</div>
+</div>
 <div class="checks">
 <label class="w95-check"><input type="checkbox" data-key="captions"><span>Show captions on the TV</span></label>
+<label class="w95-check"><input type="checkbox" data-key="date_show"><span>Show the date</span></label>
 </div>
 </div>
 </section>
