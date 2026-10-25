@@ -28,35 +28,6 @@ def _node(body):
     return json.loads(out.stdout)
 
 
-@needs_node
-def test_js_packer_matches_the_server_rule():
-    r = _node(
-        """
-        const s = (list) => list.map((x, i) => ({ id: i + 1, w: +x[0], h: +x[2] }));
-        console.log(JSON.stringify({
-          ok: T.pack(s(["2x1", "1x1", "1x1"])),
-          bad: T.pack(s(["2x1", "1x2"])),
-          quarters: T.sizeOptions(s(["1x1", "1x1", "1x1", "1x1"]), 0),
-          alone: T.sizeOptions(s(["1x1"]), 0),
-          beside: T.sizeOptions(s(["1x1", "1x2"]), 0),
-          empty: T.addSize([]),
-          afterQuarter: T.addSize(s(["1x1"])),
-          full: T.addSize(s(["2x2"])),
-        }));
-        """
-    )
-    assert r["ok"] == [
-        {"id": 1, "col": 0, "row": 0, "w": 2, "h": 1},
-        {"id": 2, "col": 0, "row": 1, "w": 1, "h": 1},
-        {"id": 3, "col": 1, "row": 1, "w": 1, "h": 1},
-    ]
-    assert r["bad"] is None
-    assert r["quarters"] == ["1x1"]
-    assert r["alone"] == ["2x2", "2x1", "1x2", "1x1"]
-    assert r["beside"] == ["1x2", "1x1"]
-    assert (r["empty"], r["afterQuarter"], r["full"]) == ("2x2", "1x2", None)
-
-
 def test_screen_window_markup(client):
     page = client.get("/admin").text
     start = page.index('<div id="screen-dialog" class="modal" hidden>')
@@ -75,6 +46,8 @@ def test_screen_window_markup(client):
     assert 'id="screen-delete" class="w95-btn del"' in buttons
     confirm = page[page.index('<div id="screen-delete-dialog" class="modal" hidden>') :]
     assert ">Delete</button>" in confirm and ">Cancel</button>" in confirm
+    for gone in ("Move left", "Move right", "widget-left", "widget-right"):
+        assert gone not in page
 
 
 def _wait(fn, tries=200):
@@ -128,7 +101,7 @@ def test_screen_window_in_headless_chrome(server, tmp_path):  # noqa: F811
         _wait(lambda: _widgets(server, "Test") == [("clock", 0, 0, 2, 1)])
         _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Clock")
         sizes = "[...document.getElementById('widget-size').options].map((o) => o.value)"
-        assert chrome.eval(sizes) == ["2x2", "2x1", "1x2", "1x1"]
+        assert chrome.eval(sizes) == ["2x1", "1x1"]
 
         chrome.eval(
             "const s = document.getElementById('widget-size');"
@@ -136,12 +109,16 @@ def test_screen_window_in_headless_chrome(server, tmp_path):  # noqa: F811
         )
         _wait(lambda: _widgets(server, "Test") == [("clock", 0, 0, 1, 1)])
         _wait(lambda: chrome.eval("document.querySelectorAll('#screen-layout .empty').length") == 3)
+        assert chrome.eval(f"{q}('#screen-layout .empty').textContent") == "Move here"
+        chrome.eval(f"{q}('#screen-layout .cell.on').click()")
+        assert chrome.eval(f"{q}('#screen-layout .empty').textContent") == "+"
         chrome.eval(f"{q}('#screen-layout .empty').click(); {q}('[data-kind=weather]').click()")
         _wait(lambda: len(_widgets(server, "Test")) == 2)
         assert _widgets(server, "Test") == [("clock", 0, 0, 1, 1), ("weather", 1, 0, 1, 2)]
         _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Weather")
         assert chrome.eval(shown.format(_js("widget-list-field"))) is False
 
+        chrome.eval(f"{q}('#screen-layout .cell.on').click()")
         chrome.eval(f"{q}('#screen-layout .empty').click(); {q}('[data-kind=lists]').click()")
         _wait(lambda: len(_widgets(server, "Test")) == 3)
         lists_widget = _screen(server, "Test")["widgets"][2]
@@ -156,6 +133,7 @@ def test_screen_window_in_headless_chrome(server, tmp_path):  # noqa: F811
         _wait(lambda: _screen(server, "Test")["widgets"][2]["list_id"] == extra["id"])
         _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Hall jobs")
 
+        chrome.eval(f"{q}('#screen-layout .cell.on').click()")
         chrome.eval(f"{q}('#screen-layout [data-widget-id]').click()")
         _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Clock")
         chrome.eval("document.getElementById('widget-remove').click()")
@@ -194,5 +172,68 @@ def test_screen_window_in_headless_chrome(server, tmp_path):  # noqa: F811
                 chrome.eval(f"{q}('[data-channel=photos]').getAttribute('aria-pressed')") == "true"
             )
         )
+    finally:
+        chrome.close()
+
+
+def _open_window(chrome, server, sid):  # noqa: F811
+    q = "document.querySelector"
+    name_button = f"{q}('[data-edit-screen=\"{sid}\"] .w95-btn:nth-child(2)')"
+    chrome.send("Page.navigate", {"url": f"{server}/admin"})
+    _wait(lambda: chrome.eval("document.querySelectorAll('[data-screen-id]').length") > 0)
+    chrome.eval("document.getElementById('screens-edit').click()")
+    chrome.eval(f"{name_button}.click()")
+    _wait(lambda: chrome.eval("!document.getElementById('screen-dialog').hidden"))
+
+
+@needs_chrome
+def test_screen_window_adds_at_a_cell_moves_and_swaps(server, tmp_path):  # noqa: F811
+    sid = httpx.post(f"{server}/api/screens", json={"name": "Grid"}).json()["id"]
+    httpx.post(
+        f"{server}/api/screens/{sid}/widgets",
+        json={"kind": "clock", "col": 0, "row": 0, "w": 1, "h": 1},
+    )
+    chrome = _Chrome(tmp_path / "chrome", 412, 900)
+    q = "document.querySelector"
+    sizes = "[...document.getElementById('widget-size').options].map((o) => o.value)"
+    kinds = (
+        "[...document.querySelectorAll('#widget-add [data-kind]')]"
+        ".filter((b) => !b.hidden).map((b) => b.getAttribute('data-kind'))"
+    )
+    try:
+        _open_window(chrome, server, sid)
+        _wait(lambda: chrome.eval("document.querySelectorAll('#screen-layout .empty').length") == 3)
+        assert chrome.eval("!document.getElementById('widget-add').hidden") is False
+        chrome.eval(f"{q}('[data-cell=\"0,1\"]').click()")
+        assert chrome.eval("!document.getElementById('widget-add').hidden") is True
+        assert chrome.eval(kinds) == ["clock", "weather", "calendar", "lists"]
+        chrome.eval(f"{q}('[data-kind=weather]').click()")
+        _wait(lambda: _widgets(server, "Grid") == [("clock", 0, 0, 1, 1), ("weather", 0, 1, 2, 1)])
+        _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Weather")
+        assert chrome.eval(sizes) == ["2x1", "1x1"]
+
+        chrome.eval(
+            "const s = document.getElementById('widget-size');"
+            "s.value = '1x1'; s.dispatchEvent(new Event('change'))"
+        )
+        _wait(lambda: ("weather", 0, 1, 1, 1) in _widgets(server, "Grid"))
+        chrome.eval(f"{q}('#screen-layout .cell.on').click()")
+        chrome.eval(f"{q}('#screen-layout [data-widget-id]').click()")
+        _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Clock")
+        assert chrome.eval(sizes) == ["2x1", "1x1"]
+        targets = (
+            "[...document.querySelectorAll('#screen-layout .empty')].map((e) => e.textContent)"
+        )
+        assert chrome.eval(targets) == ["Move here", "Move here"]
+
+        chrome.eval(f"{q}('[data-cell=\"1,0\"]').click()")
+        _wait(lambda: _widgets(server, "Grid") == [("clock", 1, 0, 1, 1), ("weather", 0, 1, 1, 1)])
+        _wait(lambda: chrome.eval(f"{q}('#screen-layout .cell.on').textContent") == "Clock")
+        assert chrome.eval(sizes) == ["1x1"]
+
+        weather = _screen(server, "Grid")["widgets"][1]["id"]
+        chrome.eval(f"{q}('[data-widget-id=\"{weather}\"]').click()")
+        _wait(lambda: _widgets(server, "Grid") == [("clock", 0, 1, 1, 1), ("weather", 1, 0, 1, 1)])
+        assert chrome.eval("document.getElementById('screen-error').hidden") is True
     finally:
         chrome.close()

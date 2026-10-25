@@ -526,6 +526,8 @@ button, input {
 .layout .cell.on {
   color: var(--w95-light);
   background: var(--w95-select);
+  border-color: var(--w95-dark) var(--w95-light) var(--w95-light) var(--w95-dark);
+  box-shadow: inset 1px 1px 0 var(--w95-shadow);
 }
 
 .layout .cell.empty {
@@ -535,6 +537,16 @@ button, input {
   border-style: dotted;
   border-color: var(--w95-dark);
   box-shadow: none;
+}
+
+.layout .cell.empty.on {
+  color: var(--w95-light);
+  background: var(--w95-select);
+}
+
+.layout .cell.empty.target {
+  font-size: 12px;
+  font-weight: normal;
 }
 
 .widget-row, .widget-kinds {

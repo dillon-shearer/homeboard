@@ -3,47 +3,16 @@
 
   var COLS = 2;
   var ROWS = 2;
-  var SIZES = [[2, 2], [2, 1], [1, 2], [1, 1]];
 
-  function pack(widgets) {
-    var taken = {};
-    var placed = [];
-    for (var i = 0; i < widgets.length; i++) {
-      var w = widgets[i].w;
-      var h = widgets[i].h;
-      var spot = null;
-      for (var r = 0; r < ROWS && !spot; r++) {
-        for (var c = 0; c < COLS && !spot; c++) if (!taken[c + "," + r]) spot = [c, r];
-      }
-      if (!spot || spot[0] + w > COLS || spot[1] + h > ROWS) return null;
-      for (var dc = 0; dc < w; dc++) {
-        for (var dr = 0; dr < h; dr++) {
-          var key = (spot[0] + dc) + "," + (spot[1] + dr);
-          if (taken[key]) return null;
-          taken[key] = true;
-        }
-      }
-      placed.push({ id: widgets[i].id, col: spot[0], row: spot[1], w: w, h: h });
-    }
-    return placed;
+  function fits(widgets, widget, col, row, w, h) {
+    if (col < 0 || row < 0 || col + w > COLS || row + h > ROWS) return false;
+    return widgets.every(function (o) {
+      if (widget && o.id === widget.id) return true;
+      return col + w <= o.col || o.col + o.w <= col || row + h <= o.row || o.row + o.h <= row;
+    });
   }
 
-  function sizeOptions(widgets, index) {
-    return SIZES.filter(function (s) {
-      return pack(widgets.map(function (wd, i) {
-        return i === index ? { id: wd.id, w: s[0], h: s[1] } : wd;
-      })) !== null;
-    }).map(function (s) { return s[0] + "x" + s[1]; });
-  }
-
-  function addSize(widgets) {
-    for (var i = 0; i < SIZES.length; i++) {
-      if (pack(widgets.concat([{ id: null, w: SIZES[i][0], h: SIZES[i][1] }]))) return SIZES[i][0] + "x" + SIZES[i][1];
-    }
-    return null;
-  }
-
-  var TvAdmin = { SIZES: SIZES, pack: pack, sizeOptions: sizeOptions, addSize: addSize };
+  var TvAdmin = { fits: fits };
   root.TvAdmin = TvAdmin;
   if (typeof module !== "undefined" && module.exports) module.exports = TvAdmin;
   if (typeof document === "undefined") return;
@@ -62,6 +31,7 @@
   var current = {};
   var win = null;
   var lists = [];
+  var allowed = {};
   var KIND_NAMES = { clock: "Clock", weather: "Weather", calendar: "Calendar", lists: "Lists" };
   var SIZE_NAMES = { "2x2": "Full (2x2)", "2x1": "Wide (2x1)", "1x2": "Tall (1x2)", "1x1": "Quarter (1x1)" };
 
@@ -76,7 +46,11 @@
       body: JSON.stringify(body),
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (out) {
-        if (!r.ok) throw new Error(typeof out.detail === "string" ? out.detail : "Could not save");
+        if (!r.ok) {
+          var err = new Error(typeof out.detail === "string" ? out.detail : "Could not save");
+          err.status = r.status;
+          throw err;
+        }
         return out;
       });
     });
@@ -285,17 +259,14 @@
     return -1;
   }
 
-  function swapped(i, j) {
-    var out = win.widgets.slice();
-    var t = out[i];
-    out[i] = out[j];
-    out[j] = t;
-    return out;
+  function fitting(kind, widget, col, row) {
+    return (allowed[kind] || []).filter(function (s) {
+      return fits(win.widgets, widget, col, row, s[0], s[1]);
+    }).map(function (s) { return s[0] + "x" + s[1]; });
   }
 
-  function canMove(i, step) {
-    var j = i + step;
-    return j >= 0 && j < win.widgets.length && pack(swapped(i, j)) !== null;
+  function addKinds(col, row) {
+    return Object.keys(KIND_NAMES).filter(function (kind) { return fitting(kind, null, col, row).length > 0; });
   }
 
   function showScreenError(msg) {
@@ -329,7 +300,7 @@
       b.setAttribute("aria-pressed", on ? "true" : "false");
       b.style.gridColumn = (wd.col + 1) + " / span " + wd.w;
       b.style.gridRow = (wd.row + 1) + " / span " + wd.h;
-      b.addEventListener("click", function () { selectWidget(wd.id); });
+      b.addEventListener("click", function () { tapWidget(wd); });
       for (var dc = 0; dc < wd.w; dc++) {
         for (var dr = 0; dr < wd.h; dr++) taken[(wd.col + dc) + "," + (wd.row + dr)] = true;
       }
@@ -338,12 +309,18 @@
     for (var r = 0; r < ROWS; r++) {
       for (var c = 0; c < COLS; c++) {
         if (taken[c + "," + r]) continue;
-        var add = cell("cell empty", "+");
-        add.setAttribute("aria-label", "Add widget");
+        var moving = win.selected !== null;
+        if (!moving && !addKinds(c, r).length) continue;
+        var picked = !moving && win.cell !== null && win.cell[0] === c && win.cell[1] === r;
+        var add = cell(picked ? "cell empty on" : moving ? "cell empty target" : "cell empty", moving ? "Move here" : "+");
+        if (!moving) {
+          add.setAttribute("aria-label", "Add widget");
+          add.setAttribute("aria-pressed", picked ? "true" : "false");
+        }
         add.setAttribute("data-cell", c + "," + r);
         add.style.gridColumn = String(c + 1);
         add.style.gridRow = String(r + 1);
-        add.addEventListener("click", openAdd);
+        add.addEventListener("click", tapCell.bind(null, c, r));
         box.appendChild(add);
       }
     }
@@ -354,11 +331,18 @@
     var i = selectedIndex();
     var wd = win.widgets[i];
     $("widget-row").hidden = !wd;
-    $("widget-add").hidden = !win.adding;
+    $("widget-add").hidden = win.cell === null;
+    if (win.cell !== null) {
+      var kinds = addKinds(win.cell[0], win.cell[1]);
+      var buttons = document.querySelectorAll("[data-kind]");
+      for (var k = 0; k < buttons.length; k++) buttons[k].hidden = kinds.indexOf(buttons[k].getAttribute("data-kind")) === -1;
+    }
     if (!wd) return;
     var size = $("widget-size");
     size.textContent = "";
-    sizeOptions(win.widgets, i).forEach(function (s) { size.appendChild(option(s, SIZE_NAMES[s])); });
+    var sizes = fitting(wd.kind, wd, wd.col, wd.row);
+    if (sizes.indexOf(wd.w + "x" + wd.h) === -1) sizes.push(wd.w + "x" + wd.h);
+    sizes.forEach(function (s) { size.appendChild(option(s, SIZE_NAMES[s])); });
     size.value = wd.w + "x" + wd.h;
     var single = wd.kind === "lists" && wd.w === 1 && wd.h === 1;
     $("widget-list-field").hidden = !single;
@@ -370,8 +354,6 @@
       lists.forEach(function (l) { sel.appendChild(option(String(l.id), l.name)); });
       sel.value = known ? String(wd.list_id) : "";
     }
-    $("widget-left").disabled = !canMove(i, -1);
-    $("widget-right").disabled = !canMove(i, 1);
   }
 
   function applyScreen(s, selected) {
@@ -379,6 +361,7 @@
     win.widgets = Array.isArray(s.widgets) ? s.widgets : [];
     if (selected !== undefined) win.selected = selected;
     if (selectedIndex() === -1) win.selected = null;
+    if (win.cell !== null && !addKinds(win.cell[0], win.cell[1]).length) win.cell = null;
     renderLayout();
   }
 
@@ -397,7 +380,7 @@
     });
   }
 
-  function windowCall(method, url, body, msg, pickNew) {
+  function windowCall(method, url, body, msg, pickNew, fitMsg) {
     var ed = win;
     var before = win.widgets.map(function (wd) { return wd.id; });
     showScreenError("");
@@ -406,15 +389,15 @@
       if (!s || !Array.isArray(s.widgets)) return refreshScreen();
       var added = pickNew ? s.widgets.filter(function (wd) { return before.indexOf(wd.id) === -1; })[0] : null;
       applyScreen(s, added ? added.id : undefined);
-    }).catch(function () {
+    }).catch(function (err) {
       if (win !== ed) return;
-      showScreenError(msg);
+      showScreenError(fitMsg && err.status === 422 ? fitMsg : msg);
       refreshScreen();
     });
   }
 
   function openScreen(screen) {
-    win = { id: screen.id, name: screen.name, widgets: [], selected: null, adding: false };
+    win = { id: screen.id, name: screen.name, widgets: [], selected: null, cell: null };
     $("screen-name").value = screen.name;
     showScreenError("");
     $("screen-layout").textContent = "";
@@ -423,7 +406,11 @@
     $("screen-delete-dialog").hidden = true;
     $("screen-dialog").hidden = false;
     var ed = win;
-    getJSON("/api/lists").then(function (data) {
+    getJSON("/api/widget-sizes").then(function (data) {
+      if (data && typeof data === "object") allowed = data;
+    }).catch(function () {}).then(function () {
+      return getJSON("/api/lists");
+    }).then(function (data) {
       if (Array.isArray(data)) lists = data.map(function (l) { return { id: l.id, name: l.name }; });
     }).catch(function () {}).then(function () {
       if (win === ed) return refreshScreen();
@@ -446,38 +433,35 @@
     });
   }
 
-  function selectWidget(id) {
-    win.selected = id;
-    win.adding = false;
+  function tapWidget(wd) {
+    if (win.selected === wd.id) win.selected = null;
+    else if (win.selected !== null) {
+      var me = win.widgets[selectedIndex()];
+      windowCall("PATCH", "/api/widgets/" + me.id, { col: wd.col, row: wd.row }, "Could not move the widget. Try again.");
+      return;
+    } else win.selected = wd.id;
+    win.cell = null;
     renderLayout();
   }
 
-  function openAdd() {
-    win.selected = null;
-    win.adding = true;
-    renderLayout();
-  }
-
-  function freeCell() {
-    var taken = {};
-    win.widgets.forEach(function (wd) {
-      for (var dc = 0; dc < wd.w; dc++) {
-        for (var dr = 0; dr < wd.h; dr++) taken[(wd.col + dc) + "," + (wd.row + dr)] = true;
-      }
-    });
-    for (var r = 0; r < ROWS; r++) {
-      for (var c = 0; c < COLS; c++) if (!taken[c + "," + r]) return [c, r];
+  function tapCell(col, row) {
+    if (win.selected !== null) {
+      var me = win.widgets[selectedIndex()];
+      windowCall("PATCH", "/api/widgets/" + me.id, { col: col, row: row }, "Could not move the widget. Try again.");
+      return;
     }
-    return [0, 0];
+    var same = win.cell !== null && win.cell[0] === col && win.cell[1] === row;
+    win.cell = same ? null : [col, row];
+    renderLayout();
   }
 
   function addWidget(e) {
-    if (!win) return;
+    if (!win || win.cell === null) return;
     var kind = e.currentTarget.getAttribute("data-kind");
-    var cell = freeCell();
-    var body = { kind: kind, col: cell[0], row: cell[1] };
-    if (kind === "lists" && addSize(win.widgets) === "1x1" && lists.length) body.list_id = lists[0].id;
-    win.adding = false;
+    var at = win.cell;
+    var body = { kind: kind, col: at[0], row: at[1] };
+    if (kind === "lists" && fitting(kind, null, at[0], at[1])[0] === "1x1" && lists.length) body.list_id = lists[0].id;
+    win.cell = null;
     windowCall("POST", "/api/screens/" + win.id + "/widgets", body, "Could not add the widget. Try again.", true);
   }
 
@@ -485,7 +469,7 @@
     var wd = win && win.widgets[selectedIndex()];
     if (!wd) return;
     var parts = $("widget-size").value.split("x");
-    windowCall("PATCH", "/api/widgets/" + wd.id, { w: Number(parts[0]), h: Number(parts[1]) }, "Could not change the size. Try again.");
+    windowCall("PATCH", "/api/widgets/" + wd.id, { w: Number(parts[0]), h: Number(parts[1]) }, "Could not change the size. Try again.", false, "That size does not fit here.");
   }
 
   function onListChange() {
@@ -493,14 +477,6 @@
     var v = $("widget-list").value;
     if (!wd || !v) return;
     windowCall("PATCH", "/api/widgets/" + wd.id, { list_id: Number(v) }, "Could not pick that list. Try again.");
-  }
-
-  function moveWidget(step) {
-    if (!win) return;
-    var i = selectedIndex();
-    if (i === -1 || !canMove(i, step)) return;
-    var other = win.widgets[i + step];
-    windowCall("PATCH", "/api/widgets/" + win.widgets[i].id, { col: other.col, row: other.row }, "Could not move the widget. Try again.");
   }
 
   function removeWidget() {
@@ -727,8 +703,6 @@
     $("screen-delete-backdrop").addEventListener("click", closeDeleteScreen);
     $("widget-size").addEventListener("change", onSizeChange);
     $("widget-list").addEventListener("change", onListChange);
-    $("widget-left").addEventListener("click", function () { moveWidget(-1); });
-    $("widget-right").addEventListener("click", function () { moveWidget(1); });
     $("widget-remove").addEventListener("click", removeWidget);
     var kinds = document.querySelectorAll("[data-kind]");
     for (var k = 0; k < kinds.length; k++) kinds[k].addEventListener("click", addWidget);
