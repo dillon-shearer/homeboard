@@ -67,6 +67,14 @@ def _open(server, tmp_path):  # noqa: F811
     return chrome
 
 
+SAVED = """(() => {{
+  const x = new XMLHttpRequest();
+  x.open('GET', '/api/spotify/shown', false);
+  x.send();
+  return JSON.parse(x.responseText).map(r => r.id).join(',') === '{}';
+}})()"""
+
+
 def _sent(chrome):
     return json.loads(chrome.eval("JSON.stringify(window.__sent)"))
 
@@ -102,6 +110,7 @@ def test_ticking_two_playlists_puts_them_in_page_order(server, tmp_path, monkeyp
         count = chrome.eval("document.getElementById('shown-count').textContent")
         _wait(chrome, "window.__sent.length === 2")
         sent = _sent(chrome)
+        _wait(chrome, SAVED.format("p1,p3"))
         chrome.send("Page.reload")
         _wait(chrome, "document.querySelectorAll('#playlists input').length === 3")
         checked = chrome.eval(

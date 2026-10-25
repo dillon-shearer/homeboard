@@ -12,6 +12,7 @@
   var playlists = [];
   var idle = null;
   var busy = false;
+  var saving = Promise.resolve();
 
   function $(id) {
     return document.getElementById(id);
@@ -215,7 +216,9 @@
     shownIds = {};
     body.forEach(function (p) { shownIds[p.id] = true; });
     renderCount();
-    send("PUT", "/api/spotify/shown", body).then(function () {
+    saving = saving.then(function () {
+      return send("PUT", "/api/spotify/shown", body);
+    }).then(function () {
       showError("");
     }).catch(function (err) {
       showError(err.message + ". Try again.");
