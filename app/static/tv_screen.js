@@ -772,14 +772,15 @@
     var live = kind !== "idle";
     var here = !live && !!now && !now.device;
     var cover = spotImage("sp-cover", coverUrl(now));
-    box.appendChild(cover);
+    var left = layout === "full" ? box.appendChild(el("div", "sp-left")) : box;
+    left.appendChild(cover);
     if (layout === "tile") {
       if (live) cover.appendChild(toggleButton(kind));
       if (here) cover.appendChild(playHere());
       box.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
     } else {
       var info = el("div", "sp-info");
-      var head = info.appendChild(el("div", "sp-head"));
+      var head = (layout === "full" ? left : info).appendChild(el("div", "sp-head"));
       var controls = info.appendChild(el("div", "sp-controls"));
       head.appendChild(el("div", "sp-track", live ? now.track : IDLE_TEXT));
       if (live && now.artist) head.appendChild(el("div", "sp-artist", now.artist));
