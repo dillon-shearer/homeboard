@@ -26,6 +26,7 @@
     brightness: 100,
   };
   const MAX_BACKOFF_S = 30;
+  const MAX_POLL_MS = 120000;
   const SWIPE_PX = 80;
   const FLING_PX = 30;
   const FLING_V = 0.5;
@@ -307,6 +308,11 @@
     return Math.min(seconds * 2, MAX_BACKOFF_S);
   }
 
+  function pollDelay(base, fails) {
+    if (!fails) return base;
+    return Math.min(MAX_POLL_MS, base * Math.pow(2, fails - 1));
+  }
+
   function formatClock(d) {
     const h = d.getHours() % 12 || 12;
     const m = String(d.getMinutes()).padStart(2, "0");
@@ -334,6 +340,7 @@
     orderAround: orderAround,
     resumeOrder: resumeOrder,
     nextBackoff: nextBackoff,
+    pollDelay: pollDelay,
     formatClock: formatClock,
     formatDate: formatDate,
     CHANNELS: CHANNELS,
@@ -471,6 +478,9 @@
   let nowQueue = Promise.resolve();
   let speakerSeq = 0;
   let coverSeq = 0;
+  let coverFails = 0;
+  let coverSkip = 0;
+  let nowFails = 0;
   let kioskData = null;
   let kioskSeq = 0;
   let kioskPending = 0;
@@ -581,14 +591,29 @@
     }
     return fetchJson("/api/spotify/now").then(function (now) {
       if (mine !== coverSeq) return;
+      coverFailed(now && now.stale);
       state.now = now;
       coverAtEnd(now);
       showCover();
     }, function () {
       if (mine !== coverSeq) return;
+      coverFailed(true);
       state.now = null;
       showCover();
     });
+  }
+
+  function coverFailed(failed) {
+    coverFails = failed ? coverFails + 1 : 0;
+    coverSkip = pollDelay(COVER_POLL_MS, coverFails) / COVER_POLL_MS - 1;
+  }
+
+  function coverTick() {
+    if (coverSkip > 0) {
+      coverSkip--;
+      return;
+    }
+    pollCover();
   }
 
   function coverAtEnd(now) {
@@ -1045,13 +1070,16 @@
     const mine = ++nowSeq;
     if (!speakerBusy) loadSpeaker();
     return fetchJson("/api/spotify/now").then(function (now) {
-      if (mine === nowSeq) renderNow(now);
+      if (mine !== nowSeq) return;
+      nowFails = now && now.stale ? nowFails + 1 : 0;
+      renderNow(now);
     }, function () {
       if (mine !== nowSeq) return;
+      nowFails++;
       renderNow(nowLast && nowLast.linked !== false ? Object.assign({}, nowLast, { stale: true, reason: "unreachable" })
         : { linked: true, stale: true, reason: "unreachable" });
     }).then(function () {
-      if (mine === nowSeq) nowLater(NOW_POLL_MS);
+      if (mine === nowSeq) nowLater(pollDelay(NOW_POLL_MS, nowFails));
     });
   }
 
@@ -1642,7 +1670,7 @@
     coverEl.addEventListener("touchmove", onCoverMove, { passive: true });
     coverEl.addEventListener("touchend", onCoverEnd, { passive: true });
     coverEl.addEventListener("touchcancel", function () { coverTouch = null; }, { passive: true });
-    setInterval(pollCover, COVER_POLL_MS);
+    setInterval(coverTick, COVER_POLL_MS);
     setInterval(checkIdle, IDLE_CHECK_MS);
     Promise.all([loadResume(), loadSettings(), loadScreens()]).then(function () {
       pollCover();
