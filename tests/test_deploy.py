@@ -283,3 +283,36 @@ def test_setup_guide_has_spotify_steps():
     assert "https://homeboard.datawithdillon.com/api/spotify/callback" in text
     assert "sudo bash /opt/homeboard/deploy/install.sh --spotify" in text
     assert "--new-spotify" in text
+
+
+def test_install_sets_up_raspotify():
+    text = (DEPLOY / "install.sh").read_text(encoding="utf-8")
+    assert "https://dtcooper.github.io/raspotify/key.asc -o /usr/share/keyrings/raspotify_key.asc" in text
+    assert (
+        'echo "deb [signed-by=/usr/share/keyrings/raspotify_key.asc] https://dtcooper.github.io/raspotify'
+        ' raspotify main" > /etc/apt/sources.list.d/raspotify.list'
+    ) in text
+    assert "apt-get install -y -o Dpkg::Options::=--force-confold raspotify\n" in text
+    assert 'install -m 644 "$APP_DIR"/deploy/raspotify.conf /etc/raspotify/conf\n' in text
+    assert "User=%s\\nGroup=%s\\nProtectHome=no" in text
+    assert "/etc/systemd/system/raspotify.service.d/homeboard.conf" in text
+    enable = text.split("systemctl enable \\\n", 1)[1].split("\n\n", 1)[0]
+    assert "    raspotify.service \\\n" in enable
+    assert "systemctl restart raspotify.service" in text
+    assert text.index("raspotify.service.d/homeboard.conf") < text.index("systemctl daemon-reload")
+
+
+def test_raspotify_conf():
+    raw = (DEPLOY / "raspotify.conf").read_bytes()
+    assert b"\r\n" not in raw
+    conf = dict(line.split("=", 1) for line in raw.decode().splitlines() if line)
+    assert conf["LIBRESPOT_NAME"] == '"Home Board"'
+    assert conf["LIBRESPOT_DEVICE_TYPE"] == '"speaker"'
+    assert conf["LIBRESPOT_BACKEND"] == '"pulseaudio"'
+    assert conf["LIBRESPOT_BITRATE"] == '"320"'
+    assert conf["LIBRESPOT_INITIAL_VOLUME"] == '"50"'
+    assert conf["LIBRESPOT_ONEVENT"] == '"/opt/homeboard/deploy/raspotify-event.sh"'
+    assert conf["PULSE_SERVER"] == "unix:/run/user/1000/pulse/native"
+    event = (DEPLOY / "raspotify-event.sh").read_bytes()
+    assert event.startswith(b"#!/usr/bin/env bash\n")
+    assert b"\r\n" not in event

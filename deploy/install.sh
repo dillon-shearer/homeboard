@@ -109,6 +109,12 @@ if [ "$TUNNEL" -eq 1 ]; then
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y cloudflared
 fi
+install -d -m 755 /usr/share/keyrings
+curl -fsSL https://dtcooper.github.io/raspotify/key.asc -o /usr/share/keyrings/raspotify_key.asc
+chmod 644 /usr/share/keyrings/raspotify_key.asc
+echo "deb [signed-by=/usr/share/keyrings/raspotify_key.asc] https://dtcooper.github.io/raspotify raspotify main" > /etc/apt/sources.list.d/raspotify.list
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold raspotify
 
 echo "== Creating the homeboard user"
 if ! id homeboard >/dev/null 2>&1; then
@@ -362,6 +368,12 @@ if id "$KIOSK_USER" >/dev/null 2>&1; then
     systemctl --machine="$KIOSK_USER@.host" --user restart wireplumber.service || true
 fi
 
+echo "== Spotify Connect speaker"
+install -d -m 755 /etc/raspotify /etc/systemd/system/raspotify.service.d
+install -m 644 "$APP_DIR"/deploy/raspotify.conf /etc/raspotify/conf
+printf '[Unit]\nWants=user@1000.service\nAfter=user@1000.service\n\n[Service]\nUser=%s\nGroup=%s\nProtectHome=no\n' \
+    "$KIOSK_USER" "$KIOSK_USER" > /etc/systemd/system/raspotify.service.d/homeboard.conf
+
 echo "== Enabling services"
 systemctl daemon-reload
 systemctl disable getty@tty1.service || true
@@ -370,6 +382,7 @@ systemctl enable \
     homeboard-kiosk.service \
     homeboard-preload.service \
     homeboard-helper.service \
+    raspotify.service \
     bluetooth.service \
     wifi-powersave-off.service \
     homeboard-kiosk-restart.timer \
@@ -447,6 +460,7 @@ if [ "$PAIR_SPEAKER" -eq 1 ]; then
     fi
 fi
 systemctl restart homeboard-helper.service
+systemctl restart raspotify.service
 
 echo
 echo "Install finished. reboot now: sudo reboot"
