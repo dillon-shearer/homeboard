@@ -24,6 +24,10 @@ SETTINGS_FIELDS = (
     "date_pos",
     "date_on_top",
     "date_show",
+    "cover_size",
+    "cover_pos",
+    "cover_on_top",
+    "cover_show",
     "brightness",
     "weather_location",
     "speaker_idle_minutes",
@@ -227,14 +231,14 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
         v = fields["channel_timeout_min"]
         if isinstance(v, bool) or v not in CHANNEL_TIMEOUTS:
             raise ValueError("channel_timeout_min must be one of 0, 2, 5, 10, 30")
-    for k in ("clock_size", "caption_size", "date_size"):
+    for k in ("clock_size", "caption_size", "date_size", "cover_size"):
         if k in fields:
             v = fields[k]
             if isinstance(v, bool) or not isinstance(v, int):
                 raise ValueError(f"{k} must be an integer")
             if not OVERLAY_SIZE_MIN <= v <= OVERLAY_SIZE_MAX:
                 raise ValueError(f"{k} must be from {OVERLAY_SIZE_MIN} to {OVERLAY_SIZE_MAX}")
-    for k in ("clock_pos", "caption_pos", "date_pos"):
+    for k in ("clock_pos", "caption_pos", "date_pos", "cover_pos"):
         if k in fields and fields[k] not in POSITIONS:
             raise ValueError(f"{k} must be one of {', '.join(POSITIONS)}")
     if "brightness" in fields:
@@ -253,7 +257,16 @@ def update_settings(conn: sqlite3.Connection, **fields) -> sqlite3.Row:
             raise ValueError("weather_location must be text")
         fields["weather_location"] = _clean_text(v, WEATHER_LOCATION_MAX, "weather_location")
         fields.update(weather_lat=None, weather_lon=None, weather_name=None)
-    for k in ("transition", "shuffle", "captions", "clock_on_top", "date_on_top", "date_show"):
+    for k in (
+        "transition",
+        "shuffle",
+        "captions",
+        "clock_on_top",
+        "date_on_top",
+        "date_show",
+        "cover_on_top",
+        "cover_show",
+    ):
         if k in fields:
             fields[k] = int(fields[k])
     fields["updated_at"] = _now()

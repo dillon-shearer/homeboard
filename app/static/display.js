@@ -19,12 +19,17 @@
     date_pos: "bottom-right",
     date_on_top: false,
     date_show: true,
+    cover_size: 3,
+    cover_pos: "top-right",
+    cover_on_top: true,
+    cover_show: true,
     brightness: 100,
   };
   const MAX_BACKOFF_S = 30;
   const SWIPE_PX = 80;
   const FLING_PX = 30;
   const FLING_V = 0.5;
+  const TAP_PX = 10;
   const BRIGHTNESS_MIN = 10;
   const BRIGHTNESS_MAX = 100;
   const CHANNELS = ["photos", "screen"];
@@ -61,6 +66,10 @@
     if (POSITIONS.indexOf(s.date_pos) !== -1) out.date_pos = s.date_pos;
     if ("date_on_top" in s) out.date_on_top = !!s.date_on_top;
     if ("date_show" in s) out.date_show = !!s.date_show;
+    if (validSize(s.cover_size)) out.cover_size = s.cover_size;
+    if (POSITIONS.indexOf(s.cover_pos) !== -1) out.cover_pos = s.cover_pos;
+    if ("cover_on_top" in s) out.cover_on_top = !!s.cover_on_top;
+    if ("cover_show" in s) out.cover_show = !!s.cover_show;
     if (typeof s.brightness === "number" && isFinite(s.brightness)) out.brightness = clampBrightness(s.brightness);
     return out;
   }
@@ -83,12 +92,31 @@
     const order = s.clock_on_top ? ["clock", "caption"] : ["caption", "clock"];
     const anchor = s.date_pos !== s.clock_pos && s.date_pos === s.caption_pos ? "caption" : "clock";
     order.splice(order.indexOf(anchor) + (s.date_on_top ? 0 : 1), 0, "date");
+    if (s.cover_on_top) order.unshift("cover");
+    else order.push("cover");
     return {
       clockCell: s.clock_pos,
       captionCell: s.caption_pos,
       dateCell: s.date_pos,
+      coverCell: s.cover_pos,
       order: order,
     };
+  }
+
+  function spotifyScreenId(screens) {
+    const list = Array.isArray(screens) ? screens : [];
+    for (let i = 0; i < list.length; i++) {
+      const screen = list[i];
+      if (!screen || !Number.isInteger(screen.id) || !Array.isArray(screen.widgets)) continue;
+      if (screen.widgets.some(function (w) { return w && w.kind === "spotify"; })) return screen.id;
+    }
+    return null;
+  }
+
+  function coverVisible(now, screens) {
+    if (!now || now.linked !== true || now.playing !== true || now.on_board !== true) return false;
+    if (typeof now.cover !== "string" || !now.cover) return false;
+    return spotifyScreenId(screens) !== null;
   }
 
   function formatDate(d) {
@@ -233,6 +261,8 @@
     DEFAULTS: DEFAULTS,
     applySettings: applySettings,
     overlayLayout: overlayLayout,
+    spotifyScreenId: spotifyScreenId,
+    coverVisible: coverVisible,
     POSITIONS: POSITIONS,
     shuffleIds: shuffleIds,
     buildOrder: buildOrder,
@@ -270,12 +300,14 @@
   const VELOCITY_MS = 100;
   const SPLASH_FADE_MS = 500;
   const READOUT_HIDE_MS = 800;
+  const COVER_POLL_MS = 5000;
 
   const layerA = document.getElementById("layer-a");
   const layerB = document.getElementById("layer-b");
   const captionEl = document.getElementById("caption");
   const clockEl = document.getElementById("clock");
   const dateEl = document.getElementById("date");
+  const coverEl = document.getElementById("cover");
   const channelEl = document.getElementById("channel");
   const overlayEl = document.getElementById("overlay");
   const splashEl = document.getElementById("splash");
@@ -290,6 +322,8 @@
     pos: -1,
     settings: applySettings(null, null),
     stops: buildStops([]),
+    screens: [],
+    now: null,
     currentId: null,
     resumeId: null,
     reportedId: null,
@@ -315,6 +349,7 @@
   let shownId = null;
   let edgeDrag = null;
   let readoutTimer = null;
+  let coverTouch = null;
 
   function ids() {
     return state.photos.map(function (p) { return p.id; });
@@ -416,13 +451,16 @@
     rootStyle.setProperty("--clock-size", settings.clock_size + "vh");
     rootStyle.setProperty("--caption-size", settings.caption_size + "vh");
     rootStyle.setProperty("--date-size", settings.date_size + "vh");
+    rootStyle.setProperty("--cover-size", String(settings.cover_size));
     dateEl.hidden = !settings.date_show;
+    showCover();
     const layout = overlayLayout(settings);
-    const nodes = { clock: clockEl, caption: captionEl, date: dateEl };
+    const nodes = { clock: clockEl, caption: captionEl, date: dateEl, cover: coverEl };
     const cells = {
       clock: document.getElementById("cell-" + layout.clockCell),
       caption: document.getElementById("cell-" + layout.captionCell),
       date: document.getElementById("cell-" + layout.dateCell),
+      cover: document.getElementById("cell-" + layout.coverCell),
     };
     const placed = layout.order.every(function (name, i) {
       if (nodes[name].parentNode !== cells[name]) return false;
@@ -433,6 +471,55 @@
     layout.order.forEach(function (name) {
       cells[name].appendChild(nodes[name]);
     });
+  }
+
+  function showCover() {
+    const on = state.settings.cover_show && coverVisible(state.now, state.screens);
+    if (on && coverEl.getAttribute("src") !== state.now.cover) coverEl.src = state.now.cover;
+    coverEl.hidden = !on;
+  }
+
+  function pollCover() {
+    if (state.settings.channel !== "photos") return;
+    if (!state.settings.cover_show || spotifyScreenId(state.screens) === null) {
+      state.now = null;
+      showCover();
+      return;
+    }
+    return fetchJson("/api/spotify/now").then(function (now) {
+      state.now = now;
+    }, function () {
+      state.now = null;
+    }).then(showCover);
+  }
+
+  function openSpotify() {
+    const id = spotifyScreenId(state.screens);
+    if (id === null || sliding || dragging || state.settings.channel !== "photos") return;
+    markActivity();
+    const stop = { channel: "screen", screen_id: id };
+    showStop(tvScreen(), stop);
+    slideChannel(0, function () { setChannel(stop); });
+  }
+
+  function onCoverStart(e) {
+    const t = e.changedTouches[0];
+    coverTouch = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+  }
+
+  function onCoverMove(e) {
+    const t = e.changedTouches[0];
+    if (!coverTouch || !t) return;
+    if (Math.abs(t.clientX - coverTouch.x) > TAP_PX || Math.abs(t.clientY - coverTouch.y) > TAP_PX) coverTouch = null;
+  }
+
+  function onCoverEnd(e) {
+    const t = e.changedTouches[0];
+    const start = coverTouch;
+    coverTouch = null;
+    if (!start || !t) return;
+    if (Math.abs(t.clientX - start.x) > TAP_PX || Math.abs(t.clientY - start.y) > TAP_PX) return;
+    openSpotify();
   }
 
   function applyChannel() {
@@ -663,6 +750,8 @@
   function loadScreens() {
     return fetchJson("/api/screens").then(function (list) {
       state.stops = buildStops(list);
+      state.screens = Array.isArray(list) ? list : [];
+      showCover();
     }, function () {});
   }
 
@@ -958,8 +1047,16 @@
     edgeEl.addEventListener("touchmove", onEdgeMove, { passive: true });
     edgeEl.addEventListener("touchend", onEdgeEnd, { passive: true });
     edgeEl.addEventListener("touchcancel", onEdgeEnd, { passive: true });
+    coverEl.addEventListener("touchstart", onCoverStart, { passive: true });
+    coverEl.addEventListener("touchmove", onCoverMove, { passive: true });
+    coverEl.addEventListener("touchend", onCoverEnd, { passive: true });
+    coverEl.addEventListener("touchcancel", function () { coverTouch = null; }, { passive: true });
+    setInterval(pollCover, COVER_POLL_MS);
     setInterval(checkIdle, IDLE_CHECK_MS);
-    Promise.all([loadResume(), loadSettings(), loadScreens()]).then(loadPhotos).then(function () {
+    Promise.all([loadResume(), loadSettings(), loadScreens()]).then(function () {
+      pollCover();
+      return loadPhotos();
+    }).then(function () {
       if (state.currentId === null && !state.loading) schedule(0);
       connect();
     });

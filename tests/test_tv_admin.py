@@ -102,6 +102,7 @@ for (const id of ["display-state", "channel-timeout", "name-dialog", "name-form"
   "weather-location", "weather-name", "clock-size", "clock-size-minus", "clock-size-plus",
   "caption-size", "caption-size-minus", "caption-size-plus", "stack-row", "screen-dialog",
   "date-size", "date-size-minus", "date-size-plus", "date-stack-row",
+  "cover-size", "cover-size-minus", "cover-size-plus", "cover-stack-row",
   "screen-form", "screen-name", "screen-error", "screen-layout", "screen-close", "screen-backdrop",
   "screens-hint", "screen-delete", "screen-delete-dialog", "screen-delete-text",
   "screen-confirm-delete", "screen-confirm-cancel", "screen-delete-close",

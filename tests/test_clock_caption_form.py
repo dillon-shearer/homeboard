@@ -56,11 +56,12 @@ var settings = {
   interval_s: 20, transition: true, fit: "contain", shuffle: false, captions: true,
   clock_size: 5, caption_size: 4, clock_pos: "bottom-right", caption_pos: "bottom-left", clock_on_top: true,
   date_size: 3, date_pos: "bottom-right", date_on_top: false, date_show: true,
+  cover_size: 3, cover_pos: "top-right", cover_on_top: true, cover_show: true,
 };
 var radios = {};
-["fit", "clock_pos", "caption_pos", "clock_on_top", "date_pos", "date_on_top"].forEach(function (key) {
+["fit", "clock_pos", "caption_pos", "clock_on_top", "date_pos", "date_on_top", "cover_pos", "cover_on_top"].forEach(function (key) {
   radios[key] = [];
-  var flag = key === "clock_on_top" || key === "date_on_top";
+  var flag = key === "clock_on_top" || key === "date_on_top" || key === "cover_on_top";
   var values = key === "fit" ? ["contain", "cover"] : flag ? ["true", "false"] : [
     "top-left", "top-center", "top-right", "middle-left", "middle-center", "middle-right",
     "bottom-left", "bottom-center", "bottom-right",
