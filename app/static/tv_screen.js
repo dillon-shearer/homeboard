@@ -1002,6 +1002,9 @@
     if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
   });
   var volumeChain = P.volumeChain({
+    shown: function () {
+      return spot.now ? spot.now.volume : null;
+    },
     fresh: function () {
       spot.seq++;
       clearTimeout(spot.timer);
@@ -1012,7 +1015,9 @@
       if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
     },
     set: function (next) {
-      if (spot.now) spot.now.volume = next;
+      if (!spot.now) return;
+      spot.now.volume = next;
+      renderSpotifyCards();
     },
     put: function (next) {
       return spotifyCall("PUT", "/api/spotify/volume", { percent: next });
@@ -1152,7 +1157,7 @@
     var jobs = [getJSON("/api/spotify/now").then(function (now) {
       if (seq !== spot.seq) return;
       spot.fails = now.stale ? spot.fails + 1 : 0;
-      spot.now = now;
+      spot.now = volumeChain.hold(now);
       spot.at = Date.now();
     }, function () {
       if (seq !== spot.seq) return;
@@ -1225,8 +1230,6 @@
 
   function volumeTap(delta) {
     volumeChain(delta);
-    spot.now.volume = volumeStep(spot.now.volume, delta);
-    renderSpotifyCards();
   }
 
   function spotifyTap(btn) {

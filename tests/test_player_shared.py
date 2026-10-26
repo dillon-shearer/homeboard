@@ -133,38 +133,211 @@ console.log(JSON.stringify([before, calls.map(function (c) { return c.url; }), n
     assert afters == 4
 
 
-@needs_node
-def test_volume_chains_from_the_value_just_sent():
-    out = _node("""
-replies["/api/spotify/now?fresh=1"] = { status: 200, body: { volume: 50 } };
-const sent = [];
-const set = [];
+CHAIN = """
+const notes = [];
+const shown = { volume: %s };
 let skips = 0;
-const call = P.commands(function () {}, function () {});
+const call = P.commands(function (t) { notes.push(t); }, function () {});
 const tap = P.volumeChain({
+  shown: function () { return shown.volume; },
   fresh: function () { return P.freshVolume(); },
   skip: function () { skips++; },
-  set: function (v) { set.push(v); },
-  put: function (v) { sent.push(v); return call("PUT", "/api/spotify/volume", { percent: v }); },
+  set: function (v) { shown.volume = v; },
+  put: function (v) { return call("PUT", "/api/spotify/volume", { percent: v }); },
 });
-tap(5);
-tap(5);
-await tap(-20);
-const fresh = calls.filter(function (c) { return c.url.indexOf("fresh") !== -1; }).length;
+let release;
+function close() { gate = new Promise(function (r) { release = r; }); }
+function open() { gate = null; release(); }
+function puts() {
+  return calls.filter(function (c) { return c.url === "/api/spotify/volume"; })
+    .map(function (c) { return JSON.parse(c.body).percent; });
+}
+function urls() { return calls.map(function (c) { return c.url; }); }
 const realNow = Date.now;
-Date.now = function () { return realNow() + 5000; };
-replies["/api/spotify/now?fresh=1"] = { status: 200, body: { volume: 98 } };
+function ago(ms) { Date.now = function () { return realNow() - ms; }; P.volumeSeen(); Date.now = realNow; }
+"""
+
+
+def _chain(volume, body):
+    return _node(CHAIN % json.dumps(volume) + body)
+
+
+@needs_node
+def test_taps_step_a_local_target_with_one_put_in_flight():
+    out = _chain(
+        50,
+        """
+ago(0);
+close();
+const done = tap(5); tap(5); tap(5);
+await flush();
+const during = [shown.volume, puts()];
+open();
+await done;
+console.log(JSON.stringify([during, puts(), shown.volume, urls().indexOf("/api/spotify/now?fresh=1")]));
+""",
+    )
+    during, sent, final, fresh = out
+    assert during == [65, [55]]
+    assert sent == [55, 65]
+    assert final == 65
+    assert fresh == -1
+
+
+@needs_node
+def test_a_burst_lands_on_the_sum_of_every_tap():
+    out = _chain(
+        50,
+        """
+ago(0);
+close();
+const steps = [5, 5, 5, -5, 5, -5, 5];
+let i = 0;
+let last = tap(steps[i++]);
+await flush();
+const running = [];
+while (i < steps.length) {
+  last = tap(steps[i++]);
+  running.push(shown.volume);
+  if (i === 4) { open(); await flush(); close(); }
+}
+open();
+const end = await last;
+console.log(JSON.stringify([puts(), shown.volume, end, running]));
+""",
+    )
+    sent, final, last, running = out
+    assert sent[-1] == 65 and final == 65 and last == 65
+    assert len(sent) <= 3
+    assert running == [60, 65, 60, 65, 60, 65]
+
+
+@needs_node
+def test_puts_never_overshoot_the_running_target():
+    out = _chain(
+        50,
+        """
+ago(0);
+close();
+const seen = [];
+const done = tap(5);
+seen.push(shown.volume);
+tap(5); seen.push(shown.volume);
+open(); await flush(); close();
+tap(-5); seen.push(shown.volume);
+open();
+await done;
+console.log(JSON.stringify([puts(), seen, shown.volume]));
+""",
+    )
+    sent, seen, final = out
+    assert sent == [55, 60, 55]
+    assert seen == [55, 60, 55]
+    assert final == 55
+
+
+@needs_node
+def test_recent_volume_skips_the_fresh_read():
+    out = _chain(
+        50,
+        """
+ago(2000);
 await tap(5);
+console.log(JSON.stringify([urls(), puts()]));
+""",
+    )
+    assert out == [["/api/spotify/volume"], [55]]
+
+
+@needs_node
+@pytest.mark.parametrize("age,volume", [(11000, 50), (None, None)])
+def test_old_or_unknown_volume_reads_fresh_first(age, volume):
+    out = _chain(
+        volume,
+        """
+replies["/api/spotify/now?fresh=1"] = { status: 200, body: { volume: 70 } };
+%s
+const v = await tap(5);
+console.log(JSON.stringify([urls(), puts(), v]));
+"""
+        % (f"ago({age});" if age else ""),
+    )
+    assert out == [["/api/spotify/now?fresh=1", "/api/spotify/volume"], [75], 75]
+
+
+@needs_node
+def test_unreadable_volume_skips_the_tap():
+    out = _chain(
+        None,
+        """
 replies["/api/spotify/now?fresh=1"] = "down";
-Date.now = function () { return realNow() + 10000; };
-const none = await tap(5);
-console.log(JSON.stringify([sent, set, fresh, none, skips]));
-""")
-    sent, set_, fresh, none, skips = out
-    assert sent == [55, 60, 40, 100]
-    assert set_ == sent
-    assert fresh == 1
-    assert none is None and skips == 1
+const v = await tap(5);
+console.log(JSON.stringify([v, skips, puts()]));
+""",
+    )
+    assert out == [None, 1, []]
+
+
+@needs_node
+def test_renders_hold_the_target_until_the_last_put_settles():
+    out = _chain(
+        50,
+        """
+ago(0);
+close();
+const done = tap(5); tap(5); tap(5);
+await flush();
+const held = tap.hold({ volume: 50, track: "t" });
+open();
+await done;
+const after = tap.hold({ volume: 50, track: "t" });
+console.log(JSON.stringify([held, after]));
+""",
+    )
+    held, after = out
+    assert held == {"volume": 65, "track": "t"}
+    assert after == {"volume": 50, "track": "t"}
+
+
+@needs_node
+def test_failed_put_notes_and_shows_the_server_volume_next():
+    out = _chain(
+        50,
+        """
+ago(0);
+replies["/api/spotify/volume"] = "down";
+const v = await tap(5);
+replies["/api/spotify/volume"] = undefined;
+replies["/api/spotify/now?fresh=1"] = { status: 200, body: { volume: 50 } };
+await tap(5);
+const next = tap.hold({ volume: 50 });
+console.log(JSON.stringify([v, notes, next, urls()]));
+""",
+    )
+    v, notes, nxt, urls = out
+    assert v is None
+    assert notes == ["Could not reach Spotify"]
+    assert nxt == {"volume": 50}
+    assert urls == ["/api/spotify/volume", "/api/spotify/now?fresh=1", "/api/spotify/volume"]
+
+
+@needs_node
+def test_slider_value_joins_a_pending_burst():
+    out = _chain(
+        50,
+        """
+ago(0);
+close();
+const done = tap(5);
+await flush();
+tap.to(20);
+tap(5);
+open();
+await done;
+console.log(JSON.stringify([puts(), shown.volume]));
+""",
+    )
+    assert out == [[55, 25], 25]
 
 
 @needs_node

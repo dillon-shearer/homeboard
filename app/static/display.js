@@ -483,6 +483,9 @@
     nowLater(NOW_AFTER_TAP_MS);
   });
   const volumeChain = P.volumeChain({
+    shown: function () {
+      return nowData ? nowData.volume : null;
+    },
     fresh: function () {
       nowSeq++;
       clearTimeout(nowTimer);
@@ -492,7 +495,9 @@
       nowLater(NOW_AFTER_TAP_MS);
     },
     set: function (next) {
-      if (nowData) nowData.volume = next;
+      if (!nowData) return;
+      nowData.volume = next;
+      renderNow(nowData);
     },
     put: function (next) {
       return nowSend("PUT", "/api/spotify/volume", { percent: next });
@@ -1078,7 +1083,7 @@
     return fetchJson("/api/spotify/now").then(function (now) {
       if (mine !== nowSeq) return;
       nowFails = now && now.stale ? nowFails + 1 : 0;
-      renderNow(now);
+      renderNow(volumeChain.hold(now));
     }, function () {
       if (mine !== nowSeq) return;
       nowFails++;
@@ -1115,8 +1120,6 @@
     markActivity();
     if (!nowData || typeof nowData.volume !== "number") return;
     volumeChain(delta);
-    nowData.volume = volumeStep(nowData.volume, delta);
-    renderNow(nowData);
   }
 
   function askRestart() {

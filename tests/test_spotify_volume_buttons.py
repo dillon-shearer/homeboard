@@ -86,12 +86,12 @@ def test_unknown_volume_disables_buttons(chrome, server, sp):
 
 
 @needs_chrome
-def test_volume_down_reads_fresh_then_steps(chrome, server, sp):
+def test_volume_down_steps_the_just_loaded_volume(chrome, server, sp):
     _open(chrome, server, sp, 80)
     assert json.loads(chrome.eval(BUTTONS)) == [False, False]
     chrome.eval("document.querySelector('.sp-vol-down').click()")
     assert _until(lambda: _puts(sp), bool) == [75]
-    assert sp.calls.index(FRESH) < sp.calls.index(sp.sent("PUT", "/api/spotify/volume")[0])
+    assert FRESH not in sp.calls
     card = _sp_card(chrome, "Music 2x2", lambda o: o["vol"] == "75%")
     assert card["vol"] == "75%"
     assert chrome.eval("document.querySelector('.sp-volbar i').style.width") == "75%"
@@ -108,6 +108,6 @@ def test_two_quick_taps_step_from_the_sent_value(chrome, server, sp):
         "document.querySelector('.sp-vol-down').click()"
     )
     assert _until(lambda: _puts(sp), lambda v: len(v) >= 2) == [75, 70]
-    assert sp.calls.count(FRESH) == 1
+    assert sp.calls.count(FRESH) == 0
     card = _sp_card(chrome, "Music 2x2", lambda o: o["vol"] == "70%")
     assert card["vol"] == "70%"
