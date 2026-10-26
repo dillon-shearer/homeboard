@@ -604,6 +604,21 @@ HEIGHTS = """JSON.stringify((() => {
 })())"""
 
 
+READY = (
+    "window.__test.settle().then(() => new Promise(r =>"
+    " requestAnimationFrame(() => requestAnimationFrame(() => r(true)))))"
+)
+
+
+def _rendered(chrome, row, lists_seen=0):
+    chrome.wait(
+        "window.__test && __test.heard('hello') > 0"
+        f" && __test.heard('lists_changed') >= {lists_seen} && window.__inflight === 0"
+    )
+    chrome.run(READY)
+    return _json(chrome, row)
+
+
 def _done(base, item_id):
     for lst in api.get(f"{base}/api/lists").json():
         for item in lst["items"]:
@@ -630,20 +645,23 @@ def test_tapping_tv_rows_ticks_items_and_swipes_do_not(chrome, server):
     chrome.size(1024, 600)
     chrome.touch()
     chrome.send("Page.navigate", {"url": f"{server}/tv"})
-    first = _until(lambda: _json(chrome, row), bool)
+    _until(lambda: _json(chrome, row), bool)
+    first = _rendered(chrome, row)
     full = _json(chrome, HEIGHTS)
+    seen = chrome.eval("__test.heard('lists_changed')")
     _tap(chrome, first["x"], first["y"])
     start = time.monotonic()
     ticked = _until(lambda: _json(chrome, row), lambda r: r and r["done"])
     ticked_s = time.monotonic() - start
     api_on = _until(lambda: _done(server, item["id"]), bool)
-    again = _json(chrome, row)
+    again = _rendered(chrome, row, seen + 1)
+    seen = chrome.eval("__test.heard('lists_changed')")
     _tap(chrome, again["x"], again["y"])
     unticked = _until(lambda: _json(chrome, row), lambda r: r and not r["done"])
     api_off = _until(lambda: _done(server, item["id"]), lambda v: v is False)
-    here = _json(chrome, row)
+    here = _rendered(chrome, row, seen + 1)
     _swipe(chrome, [{"x": here["x"] + 15 * i, "y": here["y"]} for i in range(11)])
-    there = _json(chrome, ROW % other["id"])
+    there = _rendered(chrome, ROW % other["id"])
     _tap(chrome, there["x"], there["y"])
     _until(lambda: _done(server, other["id"]), bool)
     after_swipe = _json(chrome, row)
