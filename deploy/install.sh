@@ -101,9 +101,58 @@ if [ -n "$HOST" ]; then
     esac
 fi
 
+STAGE="$(mktemp -d /var/tmp/homeboard-install.XXXXXX)"
+PREV_REV=""
+ROLLBACK=1
+keep() {
+    local f
+    for f in "$@"; do
+        if grep -qxF "$f" "$STAGE/kept" 2>/dev/null; then
+            continue
+        fi
+        echo "$f" >> "$STAGE/kept"
+        if [ -e "$f" ] || [ -L "$f" ]; then
+            mkdir -p "$STAGE/keep$(dirname "$f")"
+            cp -a "$f" "$STAGE/keep$f"
+        fi
+    done
+}
+finish() {
+    local status=$? f
+    set +e
+    if [ "$ROLLBACK" -eq 1 ] && [ "$status" -ne 0 ]; then
+        echo "== Install did not finish; putting the previous version back" >&2
+        if [ -n "$PREV_REV" ]; then
+            git -C "$APP_DIR" reset -q --keep "$PREV_REV" \
+                || echo "Warning: could not put the code back to $PREV_REV" >&2
+        fi
+        if [ -d "$APP_DIR/.venv.prev" ]; then
+            rm -rf "$APP_DIR/.venv"
+            mv "$APP_DIR/.venv.prev" "$APP_DIR/.venv"
+        fi
+        if [ -f "$STAGE/kept" ]; then
+            while read -r f; do
+                rm -rf "$f"
+                if [ -e "$STAGE/keep$f" ] || [ -L "$STAGE/keep$f" ]; then
+                    cp -a "$STAGE/keep$f" "$f"
+                fi
+            done < "$STAGE/kept"
+            systemctl daemon-reload
+            if nginx -t 2>/dev/null; then
+                systemctl reload-or-restart nginx.service
+            fi
+        fi
+    fi
+    rm -rf "$APP_DIR/.venv.prev" "$STAGE"
+    systemctl start homeboard-api.service || true
+    exit "$status"
+}
+
 echo "== Installing packages"
 systemctl stop homeboard-api.service 2>/dev/null || true
-trap 'systemctl start homeboard-api.service || true' EXIT
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git python3-venv cage chromium fonts-noto libheif1 curl iw nginx rsync swayimg patchelf \
@@ -149,6 +198,7 @@ fi
 
 echo "== Getting the code"
 if [ -d "$APP_DIR/.git" ]; then
+    PREV_REV="$(git -C "$APP_DIR" rev-parse HEAD)"
     git -C "$APP_DIR" remote set-url origin "$REPO_URL"
     git -C "$APP_DIR" pull --ff-only
 elif [ -e "$APP_DIR" ]; then
@@ -159,11 +209,38 @@ else
 fi
 
 echo "== Setting up Python"
+REQ_SUM="$(sha256sum "$APP_DIR/requirements.txt" | cut -d' ' -f1)"
+rm -rf "$APP_DIR/.venv.prev"
+NEW_VENV=0
 if [ ! -x "$APP_DIR/.venv/bin/python" ]; then
     python3 -m venv "$APP_DIR/.venv"
+    NEW_VENV=1
 fi
-"$APP_DIR/.venv/bin/pip" install --upgrade pip
-"$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
+if [ "$REQ_SUM" != "$(cat "$APP_DIR/.venv/.requirements.sum" 2>/dev/null || true)" ]; then
+    if [ "$NEW_VENV" -eq 0 ]; then
+        cp -a "$APP_DIR/.venv" "$APP_DIR/.venv.prev"
+    fi
+    rm -f "$APP_DIR/.venv/.requirements.sum"
+    "$APP_DIR/.venv/bin/pip" install --upgrade pip
+    "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements.txt"
+    echo "$REQ_SUM" > "$APP_DIR/.venv/.requirements.sum"
+fi
+
+echo "== Checking the new version"
+mkdir -p "$STAGE/data"
+if ! (cd "$APP_DIR" && HOMEBOARD_DATA="$STAGE/data" .venv/bin/python -c "import app.main"); then
+    echo "The new version does not start; nothing else was changed" >&2
+    exit 1
+fi
+keep /etc/udev/rules.d/90-homeboard-ignore-cec-input.rules \
+    /etc/nginx/snippets/homeboard-proxy.conf /etc/nginx/conf.d/homeboard-map.conf \
+    /etc/nginx/sites-enabled/default /etc/nginx/sites-available/homeboard \
+    /etc/nginx/sites-enabled/homeboard /etc/nginx/sites-available/homeboard-tunnel \
+    /etc/nginx/sites-enabled/homeboard-tunnel "$API_DROPIN_DIR/homeboard-host.conf" \
+    "$API_DROPIN_DIR/homeboard-tunnel.conf" "$API_DROPIN_DIR/homeboard-spotify.conf"
+for f in "$APP_DIR"/deploy/*.service "$APP_DIR"/deploy/*.timer; do
+    keep "/etc/systemd/system/${f##*/}"
+done
 
 echo "== Creating the data folders"
 mkdir -p "$DATA_DIR/photos" "$DATA_DIR/thumbs"
@@ -440,6 +517,7 @@ if [ -n "$HOST" ]; then
     systemctl enable --now certbot.timer
 fi
 systemctl restart homeboard-api.service nginx.service
+ROLLBACK=0
 if [ "$TUNNEL" -eq 1 ]; then
     systemctl enable homeboard-tunnel.service
     systemctl restart homeboard-tunnel.service
