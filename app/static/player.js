@@ -2,10 +2,11 @@
   "use strict";
 
   var MAX_BACKOFF_S = 30;
-  var CHAIN_MS = 1000;
+  var TRUST_MS = 10000;
   var HOLD_DELAY_MS = 400;
   var HOLD_REPEAT_MS = 80;
   var SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
+  var trustedAt = 0;
 
   function getJSON(url) {
     return fetch(url, { cache: "no-store" }).then(function (r) {
@@ -51,12 +52,15 @@
       }
       queue = queue.then(function () {
         return fetch(url, opts).then(function (r) {
-          if (!r.ok) return errorText(r, SPOTIFY_DOWN_TEXT).then(note);
+          if (!r.ok) return errorText(r, SPOTIFY_DOWN_TEXT).then(note).then(function () { return false; });
+          return true;
         }, function () {
           note(SPOTIFY_DOWN_TEXT);
+          return false;
         });
-      }).then(function () {
+      }).then(function (ok) {
         after();
+        return ok;
       });
       return queue;
     };
@@ -76,24 +80,108 @@
     return Math.max(0, Math.min(100, volume + delta));
   }
 
+  function volumeSeen(n) {
+    if (n === undefined || (n && typeof n.volume === "number" && !n.stale)) trustedAt = Date.now();
+  }
+
+  function volumeTrusted() {
+    return Date.now() - trustedAt < TRUST_MS;
+  }
+
   function volumeChain(o) {
-    var last = null;
-    return function (delta) {
-      var chained = last && Date.now() - last.at < CHAIN_MS;
-      var sent = (chained ? last.sent : o.fresh()).then(function (volume) {
-        var next = volumeStep(volume, delta);
-        if (next === null) {
-          o.skip();
-          return null;
+    var target = null;
+    var moves = null;
+    var guess = null;
+    var done = null;
+
+    function finish(value) {
+      var d = done;
+      target = null;
+      done = null;
+      d.resolve(value);
+    }
+
+    function push() {
+      var value = target;
+      o.put(value).then(function (ok) {
+        if (ok === false) {
+          trustedAt = 0;
+          finish(null);
+          return;
         }
-        o.set(next);
-        return o.put(next).then(function () {
-          return next;
-        });
+        volumeSeen();
+        if (target !== value) push();
+        else finish(value);
       });
-      last = { sent: sent, at: Date.now() };
-      return sent;
+    }
+
+    function begin(base) {
+      var list = moves;
+      moves = null;
+      target = list.reduce(function (v, fn) { return fn(v); }, base);
+      if (typeof target !== "number") {
+        target = null;
+        o.skip();
+        finish(null);
+        return;
+      }
+      o.set(target);
+      push();
+    }
+
+    function move(fn, needsBase) {
+      if (!done) {
+        done = {};
+        done.promise = new Promise(function (resolve) { done.resolve = resolve; });
+      }
+      var p = done.promise;
+      if (moves) {
+        moves.push(fn);
+        guess = fn(guess);
+        if (typeof guess === "number") o.set(guess);
+        return p;
+      }
+      if (target !== null) {
+        target = fn(target);
+        o.set(target);
+        return p;
+      }
+      var shown = o.shown ? o.shown() : null;
+      moves = [fn];
+      if (!needsBase || (typeof shown === "number" && volumeTrusted())) {
+        begin(shown);
+        return p;
+      }
+      guess = fn(shown);
+      if (typeof guess === "number") o.set(guess);
+      o.fresh().then(function (v) {
+        if (typeof v === "number") volumeSeen();
+        begin(v);
+      });
+      return p;
+    }
+
+    function tap(delta) {
+      return move(function (v) { return volumeStep(v, delta); }, true);
+    }
+
+    tap.to = function (percent) {
+      return move(function () { return volumeStep(percent, 0); }, false);
     };
+
+    tap.pending = function () {
+      return target !== null || !!moves;
+    };
+
+    tap.hold = function (n) {
+      if (target === null) {
+        volumeSeen(n);
+        return n;
+      }
+      return n && typeof n.volume === "number" ? Object.assign({}, n, { volume: target }) : n;
+    };
+
+    return tap;
   }
 
   function formatMs(ms) {
@@ -196,6 +284,7 @@
     freshVolume: freshVolume,
     volumeStep: volumeStep,
     volumeChain: volumeChain,
+    volumeSeen: volumeSeen,
     formatMs: formatMs,
     progressAt: progressAt,
     nextPollMs: nextPollMs,

@@ -90,7 +90,7 @@ def test_now_playing_row(chrome, server, sp):
 
     chrome.eval("document.getElementById('cp-now-up').click()")
     puts = _until(lambda: sp.sent("PUT", "/api/spotify/volume"), bool)
-    fresh_first = sp.calls.index(FRESH) < sp.calls.index(puts[0])
+    fresh = FRESH in sp.calls
     chrome.wait("window.__inflight === 0")
     sent = json.loads(chrome.eval("JSON.stringify(window.__sent)"))
 
@@ -108,7 +108,7 @@ def test_now_playing_row(chrome, server, sp):
     assert shown["volume"] == "50%" and shown["up"] is False
     assert optimistic == "Play"
     assert puts[0][2] == {"volume_percent": 55}
-    assert fresh_first
+    assert fresh is False
     assert {"method": "PUT", "url": "/api/spotify/volume", "body": {"percent": 55}} in sent
     assert not [c for c in sp.calls if c[1] == "/api/sound/volume"]
     assert changed["line"] == "Let It Be - The Beatles"

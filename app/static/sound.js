@@ -7,7 +7,6 @@
   var progressAt = P.progressAt;
   var staleText = P.staleText;
   var deviceText = P.deviceText;
-  var volumeStep = P.volumeStep;
   var POLL_MS = 5000;
   var END_MS = 1000;
   var AFTER_TAP_MS = 1000;
@@ -38,6 +37,9 @@
     schedule(AFTER_TAP_MS);
   });
   var volumeTap = P.volumeChain({
+    shown: function () {
+      return now ? now.volume : null;
+    },
     fresh: function () {
       seq++;
       clearTimeout(timer);
@@ -196,7 +198,7 @@
   }
 
   function apply(n) {
-    now = n;
+    now = volumeTap.hold(n);
     at = Date.now();
     setLinked(n.linked !== false);
     render();
@@ -243,9 +245,7 @@
     sendTimer = null;
     if (!ui || ui.slider.disabled) return;
     touchedAt = Date.now();
-    var v = Number(ui.slider.value);
-    if (now) now.volume = v;
-    call("PUT", "/api/spotify/volume", { percent: v }).then(function () {
+    volumeTap.to(Number(ui.slider.value)).then(function () {
       touchedAt = Date.now();
     });
   }
@@ -253,8 +253,6 @@
   function stepVolume(delta) {
     touchedAt = Date.now();
     volumeTap(delta);
-    var guess = volumeStep(now.volume, delta);
-    if (guess !== null) showVolume(guess);
   }
 
   function tap(btn) {

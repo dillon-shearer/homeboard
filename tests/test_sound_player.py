@@ -89,13 +89,13 @@ def test_next_posts_next(chrome, server, fake):
 
 
 @needs_chrome
-def test_volume_up_reads_fresh_then_puts(chrome, server, fake):
+def test_volume_up_puts_from_the_just_loaded_volume(chrome, server, fake):
     _playing_page(chrome, server, fake, volume=50)
     chrome.eval("document.querySelector('[data-sp=\"vol-up\"]').click()")
     _sp_until(lambda: fake.sent("PUT", "/api/spotify/volume"), "the volume call")
     put = fake.sent("PUT", "/api/spotify/volume")[0]
     assert put[2] == {"volume_percent": 55}
-    assert fake.calls.index(FRESH) < fake.calls.index(put)
+    assert FRESH not in fake.calls
     sent = json.loads(chrome.eval("JSON.stringify(window.__sent)"))
     assert sent == [{"method": "PUT", "url": "/api/spotify/volume", "body": {"percent": 55}}]
     assert _player(chrome)["vol"] == "55%"
