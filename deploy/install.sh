@@ -118,10 +118,11 @@ keep() {
     done
 }
 finish() {
-    local status=$? f
+    local status=$? f start=start
     set +e
     if [ "$ROLLBACK" -eq 1 ] && [ "$status" -ne 0 ]; then
         echo "== Install did not finish; putting the previous version back" >&2
+        start=restart
         if [ -n "$PREV_REV" ]; then
             git -C "$APP_DIR" reset -q --keep "$PREV_REV" \
                 || echo "Warning: could not put the code back to $PREV_REV" >&2
@@ -144,7 +145,7 @@ finish() {
         fi
     fi
     rm -rf "$APP_DIR/.venv.prev" "$STAGE"
-    systemctl start homeboard-api.service || true
+    systemctl "$start" homeboard-api.service || true
     exit "$status"
 }
 
@@ -517,6 +518,10 @@ if [ -n "$HOST" ]; then
     systemctl enable --now certbot.timer
 fi
 systemctl restart homeboard-api.service nginx.service
+if ! curl -fsS -m 5 --retry 20 --retry-delay 1 --retry-connrefused -o /dev/null http://127.0.0.1:8000/healthz; then
+    echo "The board did not answer http://127.0.0.1:8000/healthz after the restart" >&2
+    exit 1
+fi
 ROLLBACK=0
 if [ "$TUNNEL" -eq 1 ]; then
     systemctl enable homeboard-tunnel.service

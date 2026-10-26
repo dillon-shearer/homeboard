@@ -35,7 +35,7 @@ STUBS = {
     "usermod": "",
     "chown": "",
     "loginctl": "",
-    "curl": "exit 1\n",
+    "curl": 'echo "curl $*" >> "$CALLS"\n[ "$FAIL" = health ] && exit 22\nexit 0\n',
     "rfkill": "",
     "python3": "exit 1\n",
 }
@@ -154,7 +154,7 @@ def first_install(pi):
     return pi.snapshot()
 
 
-@pytest.mark.parametrize("fail", ["pip", "import", "term", "nginx", "restart"])
+@pytest.mark.parametrize("fail", ["pip", "import", "term", "nginx", "restart", "health"])
 def test_interrupted_install_leaves_the_previous_version(pi, fail):
     before = first_install(pi)
     pi.release()
@@ -162,7 +162,7 @@ def test_interrupted_install_leaves_the_previous_version(pi, fail):
     assert done.returncode != 0
     assert "putting the previous version back" in done.stderr
     assert pi.snapshot() == before
-    assert calls[-1] == "start homeboard-api.service"
+    assert calls[-1] == "restart homeboard-api.service"
     assert not (pi.app / ".venv.prev").exists()
     assert list((pi.root / "var" / "tmp").iterdir()) == []
 
@@ -170,8 +170,11 @@ def test_interrupted_install_leaves_the_previous_version(pi, fail):
 def test_finished_install_keeps_the_new_version(pi):
     first_install(pi)
     new = pi.release()
-    done, _ = pi()
+    done, calls = pi()
     assert done.returncode == 0, done.stderr
+    restart = calls.index("restart homeboard-api.service nginx.service")
+    assert "http://127.0.0.1:8000/healthz" in calls[restart + 1]
+    assert calls[-1] == "start homeboard-api.service"
     assert git(pi.app, "rev-parse", "HEAD") == new
     assert "extra==1.0" in (pi.app / ".venv" / "installed").read_text()
     unit = pi.root / "etc" / "systemd" / "system" / "homeboard-api.service"
