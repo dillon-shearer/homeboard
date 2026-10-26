@@ -1,6 +1,13 @@
 (function () {
   "use strict";
 
+  var P = typeof Player !== "undefined" ? Player : require("./player.js");
+  var getJSON = P.getJSON;
+  var formatMs = P.formatMs;
+  var progressAt = P.progressAt;
+  var staleText = P.staleText;
+  var deviceText = P.deviceText;
+  var volumeStep = P.volumeStep;
   var POLL_MS = 5000;
   var END_MS = 1000;
   var AFTER_TAP_MS = 1000;
@@ -10,11 +17,8 @@
   var SEND_MS = 250;
   var HOLD_MS = 2500;
   var STEP = 5;
-  var CHAIN_MS = 1000;
-  var MAX_BACKOFF_S = 30;
   var MAX_POLL_MS = 60000;
   var IDLE_TEXT = "Nothing playing";
-  var SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
   var SPEAKER_DOWN_TEXT = "Could not reach the speaker";
 
   var now = null;
@@ -26,13 +30,31 @@
   var noteTimer = null;
   var sendTimer = null;
   var touchedAt = 0;
-  var vol = null;
   var sound = null;
   var busy = false;
   var ui = null;
-  var backoff = 1;
   var fails = 0;
-  var queue = Promise.resolve();
+  var send = P.commands(note, function () {
+    schedule(AFTER_TAP_MS);
+  });
+  var volumeTap = P.volumeChain({
+    fresh: function () {
+      seq++;
+      clearTimeout(timer);
+      return P.freshVolume(note);
+    },
+    skip: function () {
+      schedule(AFTER_TAP_MS);
+    },
+    set: function (next) {
+      touchedAt = Date.now();
+      if (now) now.volume = next;
+      if (ui) showVolume(next);
+    },
+    put: function (next) {
+      return call("PUT", "/api/spotify/volume", { percent: next });
+    },
+  });
 
   function $(id) {
     return document.getElementById(id);
@@ -45,55 +67,8 @@
     return n;
   }
 
-  function getJSON(url) {
-    return fetch(url, { cache: "no-store" }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (out) {
-        if (!r.ok) {
-          var err = new Error("HTTP " + r.status);
-          err.status = r.status;
-          throw err;
-        }
-        return out;
-      });
-    });
-  }
-
-  function formatMs(ms) {
-    var s = Math.max(0, Math.floor((ms || 0) / 1000));
-    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-  }
-
-  function progressAt(n, sinceMs) {
-    if (!n || typeof n.progress_ms !== "number") return 0;
-    var ms = n.progress_ms + (n.playing && !n.stale ? Math.max(0, sinceMs || 0) : 0);
-    return n.duration_ms ? Math.min(ms, n.duration_ms) : ms;
-  }
-
-  function nextPollMs(n) {
-    if (!n || !n.playing || typeof n.progress_ms !== "number" || !n.duration_ms) return POLL_MS;
-    var left = n.duration_ms - n.progress_ms + END_MS;
-    return Math.max(END_MS, Math.min(POLL_MS, left));
-  }
-
   function backoffMs(n) {
-    if (!fails) return nextPollMs(n);
-    return Math.min(MAX_POLL_MS, POLL_MS * Math.pow(2, fails - 1));
-  }
-
-  function staleText(n) {
-    if (!n || !n.stale) return "";
-    var why = n.reason === "rate limited" ? "Could not reach Spotify (too many requests)." : "Could not reach Spotify.";
-    return n.track ? why + " Showing the last known song." : why;
-  }
-
-  function deviceText(n) {
-    if (!n || !n.device) return "";
-    return n.on_board ? "Playing on Home Board" : "Playing on " + n.device;
-  }
-
-  function volumeStep(volume, delta) {
-    if (typeof volume !== "number") return null;
-    return Math.max(0, Math.min(100, volume + delta));
+    return P.backoffMs(n, fails, POLL_MS, MAX_POLL_MS, END_MS);
   }
 
   function live() {
@@ -260,26 +235,7 @@
   function call(method, url, body) {
     seq++;
     clearTimeout(timer);
-    var opts = { method: method };
-    if (body) {
-      opts.headers = { "Content-Type": "application/json" };
-      opts.body = JSON.stringify(body);
-    }
-    queue = queue.then(function () {
-      return fetch(url, opts).then(function (r) {
-        if (!r.ok) {
-          return r.json().catch(function () { return {}; }).then(function (out) {
-            var said = (r.status === 409 || r.status === 429) && typeof out.detail === "string";
-            note(said ? out.detail : SPOTIFY_DOWN_TEXT);
-          });
-        }
-      }, function () {
-        note(SPOTIFY_DOWN_TEXT);
-      });
-    }).then(function () {
-      schedule(AFTER_TAP_MS);
-    });
-    return queue;
+    return send(method, url, body);
   }
 
   function sendSlider() {
@@ -294,34 +250,9 @@
     });
   }
 
-  function freshVolume() {
-    seq++;
-    clearTimeout(timer);
-    return getJSON("/api/spotify/now?fresh=1").then(function (n) {
-      return n.volume;
-    }, function () {
-      note(SPOTIFY_DOWN_TEXT);
-      return null;
-    });
-  }
-
-  function volumeTap(delta) {
+  function stepVolume(delta) {
     touchedAt = Date.now();
-    var chained = vol && Date.now() - vol.at < CHAIN_MS;
-    var sent = (chained ? vol.sent : freshVolume()).then(function (volume) {
-      var next = volumeStep(volume, delta);
-      if (next === null) {
-        schedule(AFTER_TAP_MS);
-        return null;
-      }
-      touchedAt = Date.now();
-      if (now) now.volume = next;
-      if (ui) showVolume(next);
-      return call("PUT", "/api/spotify/volume", { percent: next }).then(function () {
-        return next;
-      });
-    });
-    vol = { sent: sent, at: Date.now() };
+    volumeTap(delta);
     var guess = volumeStep(now.volume, delta);
     if (guess !== null) showVolume(guess);
   }
@@ -342,7 +273,7 @@
       call("POST", "/api/spotify/" + action);
     } else if (action === "vol-down" || action === "vol-up") {
       if (typeof now.volume !== "number") return;
-      volumeTap(action === "vol-up" ? STEP : -STEP);
+      stepVolume(action === "vol-up" ? STEP : -STEP);
     }
   }
 
@@ -415,29 +346,6 @@
     });
   }
 
-  function connectEvents() {
-    if (typeof EventSource === "undefined") return;
-    var es;
-    try {
-      es = new EventSource("/api/events");
-    } catch (e) {
-      retryEvents();
-      return;
-    }
-    es.onopen = function () { backoff = 1; };
-    es.addEventListener("hello", poll);
-    es.addEventListener("spotify_changed", poll);
-    es.onerror = function () {
-      es.close();
-      retryEvents();
-    };
-  }
-
-  function retryEvents() {
-    setTimeout(connectEvents, backoff * 1000);
-    backoff = Math.min(backoff * 2, MAX_BACKOFF_S);
-  }
-
   document.addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("[data-sp], [data-playlist]") : null;
     if (!b) return;
@@ -455,7 +363,7 @@
   });
   setInterval(tick, TICK_MS);
 
-  connectEvents();
+  P.events({ "hello": poll, "spotify_changed": poll });
   loadSpeaker();
   poll();
 })();

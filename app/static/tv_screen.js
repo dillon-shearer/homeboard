@@ -2,7 +2,14 @@
   "use strict";
 
   var C = root.Calendar || require("./calendar_util.js");
-  var MAX_BACKOFF_S = 30;
+  var P = root.Player || require("./player.js");
+  var formatMs = P.formatMs;
+  var progressAt = P.progressAt;
+  var staleText = P.staleText;
+  var deviceText = P.deviceText;
+  var volumeStep = P.volumeStep;
+  var getJSON = P.getJSON;
+  var errorText = P.errorText;
   var UPCOMING_DAYS = 7;
   var FORECAST_DAYS = 7;
   var MAX_UPCOMING = 10;
@@ -30,12 +37,10 @@
   var SPOTIFY_EXTRA_EVERY = 2;
   var SPOTIFY_NOTE_MS = 3000;
   var VOLUME_STEP = 5;
-  var VOLUME_CHAIN_MS = 1000;
   var SPOTIFY_LAYOUTS = { "2x2": "full", "2x1": "wide", "1x2": "tall", "1x1": "tile" };
   var NOT_LINKED_TEXT = "Spotify not linked";
   var IDLE_TEXT = "Nothing playing";
   var NO_PLAYLISTS_TEXT = "Pick playlists on your phone: Settings.";
-  var SPOTIFY_DOWN_TEXT = "Could not reach Spotify";
   var SPEAKER_DOWN_TEXT = "Could not reach the speaker";
 
   function placement(widget) {
@@ -312,11 +317,6 @@
     return isNaN(d.getTime()) ? "" : "as of " + formatClock(d);
   }
 
-  function formatMs(ms) {
-    var s = Math.max(0, Math.floor((ms || 0) / 1000));
-    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-  }
-
   function spotifyLayout(widget) {
     return SPOTIFY_LAYOUTS[sizeOf(widget)] || "tile";
   }
@@ -333,37 +333,12 @@
     return typeof now.cover === "string" && now.cover ? now.cover : null;
   }
 
-  function progressAt(now, sinceMs) {
-    if (!now || typeof now.progress_ms !== "number") return 0;
-    var ms = now.progress_ms + (now.playing && !now.stale ? Math.max(0, sinceMs || 0) : 0);
-    return now.duration_ms ? Math.min(ms, now.duration_ms) : ms;
-  }
-
   function nextPollMs(now) {
-    if (!now || !now.playing || typeof now.progress_ms !== "number" || !now.duration_ms) return SPOTIFY_POLL_MS;
-    var left = now.duration_ms - now.progress_ms + SPOTIFY_END_MS;
-    return Math.max(SPOTIFY_END_MS, Math.min(SPOTIFY_POLL_MS, left));
+    return P.nextPollMs(now, SPOTIFY_POLL_MS, SPOTIFY_END_MS);
   }
 
   function backoffMs(now, fails) {
-    if (!fails) return nextPollMs(now);
-    return Math.min(SPOTIFY_MAX_POLL_MS, SPOTIFY_POLL_MS * Math.pow(2, fails - 1));
-  }
-
-  function staleText(now) {
-    if (!now || !now.stale) return null;
-    var why = now.reason === "rate limited" ? "Could not reach Spotify (too many requests)." : "Could not reach Spotify.";
-    return now.track ? why + " Showing the last known song." : why;
-  }
-
-  function deviceText(now) {
-    if (!now || !now.device) return null;
-    return now.on_board ? "Playing on Home Board" : "Playing on " + now.device;
-  }
-
-  function volumeStep(volume, delta) {
-    if (typeof volume !== "number") return null;
-    return Math.max(0, Math.min(100, volume + delta));
+    return P.backoffMs(now, fails, SPOTIFY_POLL_MS, SPOTIFY_MAX_POLL_MS, SPOTIFY_END_MS);
   }
 
   function speakerOn(sound) {
@@ -1016,13 +991,33 @@
   var state = { screens: [], settings: null, data: {}, failed: {} };
   var builtKey = null;
   var loadSeq = 0;
-  var backoff = 1;
   var touchFrom = null;
   var lastSwipe = 0;
   var drag = null;
   var sliding = false;
   var spot = { on: false, seq: 0, polls: 0, timer: null, tick: null, now: null, at: 0, shown: [], sound: null,
-    note: null, noteTimer: null, connecting: false, vol: null, fails: 0, queue: Promise.resolve() };
+    note: null, noteTimer: null, connecting: false, fails: 0 };
+  var spotifySend = P.commands(spotifyNote, function () {
+    clearTimeout(spot.timer);
+    if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
+  });
+  var volumeChain = P.volumeChain({
+    fresh: function () {
+      spot.seq++;
+      clearTimeout(spot.timer);
+      return P.freshVolume(spotifyNote);
+    },
+    skip: function () {
+      clearTimeout(spot.timer);
+      if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
+    },
+    set: function (next) {
+      if (spot.now) spot.now.volume = next;
+    },
+    put: function (next) {
+      return spotifyCall("PUT", "/api/spotify/volume", { percent: next });
+    },
+  });
 
   function context() {
     var now = new Date();
@@ -1110,13 +1105,6 @@
       if (!def || !card || failedFor(w)) return;
       card.querySelector("h2").textContent = def.title(w, ctx);
       def.update(card, w, ctx);
-    });
-  }
-
-  function getJSON(url) {
-    return fetch(url, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error(r.status);
-      return r.json();
     });
   }
 
@@ -1209,32 +1197,11 @@
     renderSpotifyCards();
   }
 
-  function errorText(r, fallback) {
-    return r.json().catch(function () { return {}; }).then(function (out) {
-      return (r.status === 409 || r.status === 429) && typeof out.detail === "string" ? out.detail : fallback;
-    });
-  }
-
   function spotifyCall(method, url, body) {
     spot.seq++;
     clearTimeout(spot.timer);
     renderSpotifyCards();
-    var opts = { method: method };
-    if (body) {
-      opts.headers = { "Content-Type": "application/json" };
-      opts.body = JSON.stringify(body);
-    }
-    spot.queue = spot.queue.then(function () {
-      return fetch(url, opts).then(function (r) {
-        if (!r.ok) return errorText(r, SPOTIFY_DOWN_TEXT).then(spotifyNote);
-      }, function () {
-        spotifyNote(SPOTIFY_DOWN_TEXT);
-      });
-    }).then(function () {
-      clearTimeout(spot.timer);
-      if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
-    });
-    return spot.queue;
+    return spotifySend(method, url, body);
   }
 
   function toggleSpeaker() {
@@ -1256,32 +1223,8 @@
     });
   }
 
-  function freshVolume() {
-    spot.seq++;
-    clearTimeout(spot.timer);
-    return getJSON("/api/spotify/now?fresh=1").then(function (now) {
-      return now.volume;
-    }, function () {
-      spotifyNote(SPOTIFY_DOWN_TEXT);
-      return null;
-    });
-  }
-
   function volumeTap(delta) {
-    var chained = spot.vol && Date.now() - spot.vol.at < VOLUME_CHAIN_MS;
-    var sent = (chained ? spot.vol.sent : freshVolume()).then(function (volume) {
-      var next = volumeStep(volume, delta);
-      if (next === null) {
-        clearTimeout(spot.timer);
-        if (spot.on) spot.timer = setTimeout(pollSpotify, SPOTIFY_AFTER_TAP_MS);
-        return null;
-      }
-      if (spot.now) spot.now.volume = next;
-      return spotifyCall("PUT", "/api/spotify/volume", { percent: next }).then(function () {
-        return next;
-      });
-    });
-    spot.vol = { sent: sent, at: Date.now() };
+    volumeChain(delta);
     spot.now.volume = volumeStep(spot.now.volume, delta);
     renderSpotifyCards();
   }
@@ -1344,25 +1287,14 @@
   }
 
   function connect() {
-    var es;
-    try {
-      es = new EventSource("/api/events");
-    } catch (e) {
-      setTimeout(connect, backoff * 1000);
-      backoff = Math.min(backoff * 2, MAX_BACKOFF_S);
-      return;
-    }
-    es.onopen = function () { backoff = 1; };
-    ["hello", "settings_changed", "lists_changed", "events_changed", "weather_changed"].forEach(function (name) {
-      es.addEventListener(name, load);
+    P.events({
+      "hello": [load, onHello],
+      "settings_changed": load,
+      "lists_changed": load,
+      "events_changed": load,
+      "weather_changed": load,
+      "spotify_changed": onSpotifyChanged,
     });
-    es.addEventListener("hello", onHello);
-    es.addEventListener("spotify_changed", onSpotifyChanged);
-    es.onerror = function () {
-      es.close();
-      setTimeout(connect, backoff * 1000);
-      backoff = Math.min(backoff * 2, MAX_BACKOFF_S);
-    };
   }
 
   function updateClock() {

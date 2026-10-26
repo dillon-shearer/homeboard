@@ -1,8 +1,11 @@
 (function () {
   "use strict";
 
+  var P = typeof Player !== "undefined" ? Player : require("./player.js");
+  var send = P.send;
+  var getJSON = P.getJSON;
+  var holdStep = P.holdStep;
   var STATUS_MS = 10000;
-  var MAX_BACKOFF_S = 30;
   var STEP_DEBOUNCE_MS = 400;
   var BRIGHTNESS_MIN = 10;
   var BRIGHTNESS_MAX = 100;
@@ -14,30 +17,6 @@
 
   function $(id) {
     return document.getElementById(id);
-  }
-
-  function send(method, url, body) {
-    return fetch(url, {
-      method: method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (out) {
-        if (!r.ok) {
-          var err = new Error(typeof out.detail === "string" ? out.detail : "Could not save");
-          err.status = r.status;
-          throw err;
-        }
-        return out;
-      });
-    });
-  }
-
-  function getJSON(url) {
-    return fetch(url, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    });
   }
 
   function showSettingsError(msg) {
@@ -156,30 +135,6 @@
     });
   }
 
-  function holdStep(btn, step) {
-    var delay = null;
-    var repeat = null;
-    function stop() {
-      clearTimeout(delay);
-      clearInterval(repeat);
-      delay = repeat = null;
-    }
-    btn.addEventListener("pointerdown", function (e) {
-      if (e.button !== 0) return;
-      stop();
-      step();
-      delay = setTimeout(function () {
-        repeat = setInterval(step, 80);
-      }, 400);
-    });
-    btn.addEventListener("pointerup", stop);
-    btn.addEventListener("pointerleave", stop);
-    btn.addEventListener("pointercancel", stop);
-    btn.addEventListener("click", function (e) {
-      if (e.detail === 0) step();
-    });
-  }
-
   function setSetting(key, value) {
     var patch = {};
     patch[key] = value;
@@ -257,34 +212,7 @@
     loadSettings().catch(function () {});
   }
 
-  var backoff = 1;
   var everConnected = false;
-
-  function retryEvents() {
-    setTimeout(connectEvents, backoff * 1000);
-    backoff = Math.min(backoff * 2, MAX_BACKOFF_S);
-  }
-
-  function connectEvents() {
-    if (typeof EventSource === "undefined") return;
-    var es;
-    try {
-      es = new EventSource("/api/events");
-    } catch (e) {
-      retryEvents();
-      return;
-    }
-    es.onopen = function () { backoff = 1; };
-    es.addEventListener("hello", function () {
-      if (everConnected) onSettingsChanged();
-      everConnected = true;
-    });
-    es.addEventListener("settings_changed", onSettingsChanged);
-    es.onerror = function () {
-      es.close();
-      retryEvents();
-    };
-  }
 
   function init() {
     makeStepper("interval", "interval_s", 5, 600);
@@ -320,7 +248,13 @@
     });
     loadStatus();
     setInterval(loadStatus, STATUS_MS);
-    connectEvents();
+    P.events({
+      "hello": function () {
+        if (everConnected) onSettingsChanged();
+        everConnected = true;
+      },
+      "settings_changed": onSettingsChanged,
+    });
   }
 
   init();
