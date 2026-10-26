@@ -174,7 +174,7 @@ def test_api_service_is_sandboxed():
 def test_install_restarts_api_when_it_fails_after_the_stop():
     lines = (DEPLOY / "install.sh").read_text(encoding="utf-8").splitlines()
     stop = lines.index("systemctl stop homeboard-api.service 2>/dev/null || true")
-    assert lines[stop + 1] == "trap 'systemctl start homeboard-api.service || true' EXIT"
+    assert lines[stop + 1] == "trap finish EXIT"
     assert stop < lines.index("apt-get update")
 
 
@@ -288,7 +288,9 @@ def test_install_sets_up_spotify_credential():
         ' > "$API_DROPIN_DIR/homeboard-spotify.conf"'
     ) in text
     assert 'rm -f "$API_DROPIN_DIR/homeboard-spotify.conf"' in text
-    assert text.index("homeboard-spotify.conf") < text.index("systemctl daemon-reload")
+    assert text.index('> "$API_DROPIN_DIR/homeboard-spotify.conf"') < text.index(
+        "systemctl daemon-reload", text.index("== Enabling services")
+    )
 
 
 def test_setup_guide_has_spotify_steps():
