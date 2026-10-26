@@ -80,7 +80,7 @@ def test_photo_cover_fetches_now_on_spotify_changed(chrome, server, counted):
     chrome.send("Page.navigate", {"url": f"{server}/"})
     c = _cover_until(lambda: _js(chrome, COVER), lambda v: v and v["shown"])
     assert c["shown"]
-    chrome.wait("window.__inflight === 0")
+    chrome.wait("window.__test.heard('hello') > 0 && window.__inflight === 0")
     counted["now"] = _playing(cover=_png((40, 200, 40), 200))
     assert _publish_and_time(lambda: counted["calls"]) < 1
     src = counted["now"]["cover"]
